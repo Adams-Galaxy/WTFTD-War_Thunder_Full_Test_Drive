@@ -191,6 +191,13 @@ breaks, and records the flight: live curves, a flight report, a cockpit window f
   units. A key mutes the alarms, another hides the overlay. A line can also show **the name of what you're in**, and **your
   stats**: kills per death, win rate and battles from *My battles*, and your kills and deaths in the battle under way. It reads the game's local data about your own
   vehicle and your own line of the battle log only, nothing is added to the game
+- **Fighter HUD** (My overlay → HUD, Windows): a fighter's head-up display over the game, drawn from your own aircraft's numbers:
+  heading, a pitch ladder that turns with the bank, the flight path marker, speed and altitude, vertical speed, G, Mach, angle
+  of attack, throttle and fuel. Three styles, picked by the aircraft's nation: **American / NATO** (knots and feet, scrolling
+  scales), **Russian** (km/h and metres in the corners, a moving horizon, angle of attack and G scales) and **Chinese**. Every other
+  nation gets the NATO style; any aircraft can have another one. On jets and helicopters unless you say otherwise; units, colour,
+  size, place and each part are yours. It has two places, one for the cockpit view and one for the outside view, and a key switches
+  them: the game doesn't say which view you're in. A speed alarm lights its speed. Inspired by real HUDs, not a copy of one
 - **Flight data** (Windows): live curves of what the game reports, in flight and in tanks and ships (speed, altitude, G, turn time, fuel use...),
   and a recorder: CSV logs for Excel, replayed in the app, with a **flight report** (top speed, best climb, best
   sustained turn, time to climb, fuel used) and an **export for Tacview**; saved views, and the curves as a picture
@@ -202,7 +209,8 @@ breaks, and records the flight: live curves, a flight report, a cockpit window f
   version, as curves you can lay over each other, next to the stat card's numbers. They show in *Compare* and in the vehicle panel, and a
   run opens in Flight data with its report and Tacview file. Every result states its fuel, loadout, altitude and modifications; a custom
   vehicle or a run with cheats is marked as not comparable and stays out of Compare
-- **Cockpit window** (Windows): your aircraft's instruments as dials, in a window of their own for a second screen
+- **Cockpit window** (Windows): your aircraft's instruments as dials, or the fighter HUD filling it, in a window of their own for a
+  second screen
 - **Battle**: the game's chat and battle log, live, in their own tab, with a filter, and saved to a text file if you like
 - **Economy**: what a vehicle costs and earns, for the game mode you choose: repair cost stock and with all upgrades, Silver Lions and
   Research Points rewards, free repairs, research and purchase cost. In the vehicle panel, as sort and range filters, in the comparison
@@ -437,6 +445,9 @@ corrections are very welcome — see [CONTRIBUTING.md](CONTRIBUTING.md#translati
   in test flights: helicopters, propeller aircraft, real battles and the other game languages are less tested
   ([checklist](docs/ingame-checklist.md)). Variable-sweep wings show the swept-back limit (the game doesn't send the wing
   position), and thrust/weight reads a little high when loaded (the game doesn't tell the weapons' mass).
+- Fighter HUD: it isn't lined up with the game's horizon or its sights. The overlay can't know where the game's camera looks or how
+  far it zooms, so the pitch ladder and the flight path marker are drawn at a fixed scale around the middle of the HUD. Its size
+  brings them closer. Not tried in a real flight yet: the in-game checklist has the list
 - Test bench: helicopters get top speed, climb and acceleration only. Its stall speed is where level flight at idle gives way, not the
   wing's stall: the game's instructor can hold the nose up. It hasn't been flown in the game yet ([checklist](docs/ingame-checklist.md)).
 - macOS support is new and less tested than Windows. The packaged app is built for Apple silicon; on an Intel
@@ -459,6 +470,7 @@ wtftd/                      Python backend (stdlib only)
   armament.py               Weapons page data (missiles, bombs, rockets, torpedoes)
   cdk.py + builder.py       sensors, engines, avionics, weapons on pylons of any kind
   alarms.py / flightlog.py  in-flight values, alarms and overlay (Windows) / CSV flight logs, report, Tacview export
+  hud.py                    the fighter HUD's three styles, drawn as shapes for the overlay and the cockpit window
   battle.py                 the game's chat and battle log
   replays.py                My battles: the player's own results, from the game's replay files
   patches.py                What changed: the comparison of two game versions, kept in user/patches.json
@@ -472,6 +484,7 @@ wtftd/                      Python backend (stdlib only)
 web/                        UI (HTML/CSS/JS, no build step), web/locales = translations, stats.js = stats & search,
                             weapons.js / myweapons.js = Weapons and My weapons, loadout.js = pylon editor,
                             overlay.js / flight.js / battle.js / history.js = In flight, cockpit.html = the cockpit window,
+                            hud.js = the HUD's drawing in the page and the cockpit window,
                             changes.js = What changed, hangar.js = My hangar, mods.js = Skins and sounds, bench.js = Test bench,
                             challenges.js = Challenges,
                             editor.js = scenario editor, model3d.js / map3d.js / lzdecode.js = the 3D views

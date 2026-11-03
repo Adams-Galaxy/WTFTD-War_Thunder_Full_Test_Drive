@@ -56,8 +56,36 @@ function show(now) {
   }
 }
 
+// the HUD: the overlay's style for this aircraft, drawn by the server for the size of this window
+let hudOn = false;
+try { hudOn = localStorage.getItem('wtftd.cockpitHud') === '1'; } catch { /* no storage: the instruments */ }
+function setHud(on) {
+  hudOn = on;
+  try { localStorage.setItem('wtftd.cockpitHud', on ? '1' : '0'); } catch { /* kept for this window only */ }
+  $('#mode').classList.toggle('on', on);
+  document.body.classList.toggle('hud', on);
+}
+$('#mode').addEventListener('click', () => setHud(!hudOn));
+setHud(hudOn);
+
+async function pollHud() {
+  const st = await (await fetch(`/api/hud/${innerWidth}x${innerHeight}`)).json();
+  $('#off').hidden = st.flying;
+  $('#gauges').hidden = $('#strip').hidden = true;
+  $('#hud').hidden = !st.flying;
+  $('#plane').textContent = st.aircraft || '';
+  $('#msg').textContent = '';
+  $('#hud').setAttribute('viewBox', `0 0 ${innerWidth} ${innerHeight}`);
+  hudDraw($('#hud'), st.shapes, st.color, st.alert, Date.now() % 1000 < 500);
+}
+
 async function poll() {
   try {
+    if (hudOn) {
+      await pollHud();
+      return setTimeout(poll, 100);
+    }
+    $('#hud').hidden = true;
     const st = await (await fetch('/api/flight/999999999')).json();  // no trace rows: only the latest reading
     const flying = st.flying && st.now && Object.keys(st.now).length;
     $('#off').hidden = !!flying;

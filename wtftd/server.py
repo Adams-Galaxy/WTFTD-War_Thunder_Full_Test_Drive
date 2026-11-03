@@ -20,7 +20,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
-from . import DONATE, REPO, __version__, alarms, battle, bench, builder, cdk, challenges, flightlog, game, hangar, maptex, mission, models, mods, patches, replays, sights, \
+from . import DONATE, REPO, __version__, alarms, battle, bench, builder, cdk, challenges, flightlog, game, hangar, hud, maptex, mission, models, mods, patches, replays, sights, \
     terrain, uninstall, vromfs, waveout
 from .paths import CACHE, DATA, HOME, USER, WEB
 
@@ -654,6 +654,8 @@ class Handler(BaseHTTPRequestHandler):
         if route.startswith("changes/"):
             rows = patches.rows(route.split("/", 1)[1])
             return self.send_json(rows) if rows is not None else self.send_json({"error": "not found"}, 404)
+        if route.startswith("hud/"):  # the cockpit window's HUD, filling a window of that size: hud/<width>x<height>
+            return self.send_json(hud_status(route.split("/", 1)[1]))
         if route.startswith("flight/"):
             return self.send_json(flight_status(int(route.split("/", 1)[1]) if route.split("/", 1)[1].isdecimal() else 0))
         if route == "bench":
@@ -936,7 +938,7 @@ class Handler(BaseHTTPRequestHandler):
             STATE.save_settings(s)
             apply_alarm_settings()
             if WATCH.preview:
-                WATCH.set_preview(WATCH.profiles.get(key, WATCH.base))
+                WATCH.set_preview(WATCH.profiles.get(key, WATCH.base), key)
             return self.send_json(overlay_status(key))
         if route == "overlay-profile-delete":
             s = STATE.settings()
@@ -962,7 +964,7 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json({"ok": True})
         if route == "overlay-preview":  # show it on the screen now, without the game
             on = alarms.available() and body.get("on") is True
-            WATCH.set_preview(WATCH.profiles.get(str(body.get("profile") or ""), WATCH.base) if on else None)
+            WATCH.set_preview(WATCH.profiles.get(str(body.get("profile") or ""), WATCH.base) if on else None, str(body.get("profile") or ""))
             return self.send_json(overlay_status(str(body.get("profile") or "")))
         if route == "overlay-test":  # hear an alarm, or a line's own alert
             cfg, line = WATCH.profiles.get(str(body.get("profile") or ""), WATCH.base), body.get("line")
@@ -1325,6 +1327,7 @@ LOGS, SOUNDS = USER / "logs", USER / "sounds"
 ARCHIVE = battle.Archive(LOGS)
 WATCH = alarms.Watch(_wt_get, STATE.get_details, mission_on_map, logs=LOGS, sounds=SOUNDS,
                      kind=lambda vid: (STATE.get_vehicles().get(vid) or {}).get("k"),
+                     nation=lambda vid: (STATE.get_vehicles().get(vid) or {}).get("n"),
                      crash_words=lambda: read_json(DATA / "battle_words.json", {}).get("crashed", []),
                      stats=lambda: replays.summary(battles()["rows"]), log_words=lambda: read_json(DATA / "battle_words.json", {}),
                      name=STATE.unit_name)
@@ -1351,11 +1354,22 @@ def flight_status(after: int) -> dict:
             "log": WATCH.log.name if WATCH.log else None, "units": alarms.units(), "now": WATCH.last}
 
 
+def hud_status(size: str) -> dict:
+    """The HUD of the aircraft flown, drawn for the cockpit window whatever the overlay's own settings say of showing it."""
+    WATCH.viewed = time.monotonic()  # keeps the readings coming, as the Flight data tab does
+    w, _, h = size.partition("x")
+    width, height = (min(int(n), 20000) for n in (w, h)) if w.isdecimal() and h.isdecimal() else (960, 560)
+    cfg, flying = WATCH.cfg, WATCH.flying and "ias" in WATCH.last  # an aircraft: a tank has no airspeed
+    shapes = hud.draw(WATCH.last, cfg, WATCH.nation(WATCH.current), (width, height), "window", WATCH.on) if flying else []
+    return {"shapes": shapes, "color": cfg["hudColor"], "alert": cfg["alert"], "flying": flying, "aircraft": WATCH.current}
+
+
 def overlay_status(profile: str = "") -> dict:
     """The My overlay tab: an overlay (the one for all aircraft, or a profile), the screen it's placed on, its lines with
     sample values."""
     cfg = WATCH.profiles.get(profile, WATCH.base)
     return {"cfg": cfg, "screen": alarms.screen(), "lines": WATCH.sample(cfg), "onScreen": WATCH.preview is not None,
+            "hud": {place: WATCH.sample_hud(cfg, profile, place) for place in hud.PLACES},
             "enabled": STATE.settings().get("alarms") is True, "profile": profile if profile in WATCH.profiles else "",
             "profiles": sorted(WATCH.profiles), "active": WATCH.profile, "aircraft": WATCH.current,
             "sounds": alarms.sound_list(SOUNDS), "devices": waveout.devices(), "device": alarms.OUTPUT["device"]}

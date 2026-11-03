@@ -3,7 +3,7 @@
    lines back filled with sample values, so the preview here is what the window draws. */
 'use strict';
 
-const OV = { cfg: null, screen: [3840, 2160], lines: [], input: null, timer: 0, profile: '', keys: new Map(), sounds: [] };
+const OV = { cfg: null, screen: [3840, 2160], lines: [], input: null, timer: 0, profile: '', keys: new Map(), sounds: [], hud: {}, hudPlace: 'cockpit' };
 const OV_MAX_BLOCKS = 3, OV_MAX_TESTS = 4;
 const OV_SOUND_RATE = 22050, OV_SOUND_S = 15;  // what a sound is kept as: enough for an alarm, and it fits a request
 const OV_TYPES = ['fighter', 'assault', 'bomber', 'helicopter', 'jet', 'prop', 'tank', 'ship'];
@@ -22,7 +22,19 @@ const OV_VALUES = {
 function ovShow(st) {
   OV.lines = st.lines;
   OV.screen = st.screen;
+  OV.hud = st.hud || {};
   ovDraw();
+  ovDrawHud();
+}
+
+// the HUD of the place picked under Where, as the server drew it with the sample values
+function ovDrawHud() {
+  const svg = $('#ovHudLive'), c = OV.cfg;
+  svg.setAttribute('viewBox', `0 0 ${OV.screen[0]} ${OV.screen[1]}`);
+  svg.style.opacity = c.opacity / 100;
+  hudDraw(svg, OV.hud[OV.hudPlace] || [], c.hudColor, c.alert);
+  $$('#ovHudPlace button').forEach(b => b.classList.toggle('active', b.dataset.place === OV.hudPlace));
+  $$('#view-overlay [data-hudplace]').forEach(row => row.classList.toggle('hidden', row.dataset.hudplace !== OV.hudPlace));
 }
 
 // saved a moment after the last change, not at every key
@@ -471,4 +483,12 @@ function bindOverlay() {
     ovSave();
   }));
   addEventListener('resize', () => { if (OV.cfg && !$('#view-overlay').classList.contains('hidden')) ovDraw(); });
+  $('#ovHudPlace').addEventListener('click', e => {
+    const b = e.target.closest('[data-place]');
+    if (!b) return;
+    OV.hudPlace = b.dataset.place;
+    store.set('overlayHudPlace', OV.hudPlace);
+    ovDrawHud();
+  });
+  OV.hudPlace = store.get('overlayHudPlace', 'cockpit') === 'outside' ? 'outside' : 'cockpit';
 }

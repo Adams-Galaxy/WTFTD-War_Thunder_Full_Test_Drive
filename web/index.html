@@ -11,7 +11,8 @@
   <link rel="manifest" href="manifest.webmanifest?v=3">
   <meta name="theme-color" content="#0a0d11">
   <link rel="stylesheet" href="app.css">
-  <script src="boot.js"></script>
+  <script src="hud.js"></script>
+<script src="boot.js"></script>
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
@@ -251,6 +252,7 @@
               <g class="ov-hud-line"><circle cx="3573" cy="246" r="173"/><circle cx="1922" cy="902" r="42"/><rect x="1252" y="1978" width="1340" height="172" rx="8"/></g>
               <g class="ov-hud-green"><circle cx="355" cy="1081" r="227"/><rect x="3024" y="1012" width="624" height="607"/></g>
             </svg>
+              <svg class="ov-hud-live" id="ovHudLive" aria-hidden="true"></svg>
               <div class="ov-text" id="ovText" data-b="0"></div>
             </div>
             <div class="ov-zoom" id="ovZoom"></div>
@@ -263,7 +265,7 @@
           </div>
       </div>
       <div class="seg ov-tabs" id="ovTabs" role="tablist">
-        <button data-tab="lines" data-i18n="ov.lines"></button><button data-tab="blocks" data-i18n="ov.blocks"></button><button data-tab="look" data-i18n="ov.look"></button><button data-tab="alarms" data-i18n="ov.alarms"></button><button data-tab="behaviour" data-i18n="ov.behaviour"></button>
+        <button data-tab="lines" data-i18n="ov.lines"></button><button data-tab="blocks" data-i18n="ov.blocks"></button><button data-tab="look" data-i18n="ov.look"></button><button data-tab="hud" data-i18n="ov.hud"></button><button data-tab="alarms" data-i18n="ov.alarms"></button><button data-tab="behaviour" data-i18n="ov.behaviour"></button>
       </div>
       <section class="ov-panel" data-panel="lines">
           <div class="ov-style">
@@ -309,6 +311,41 @@
             <div class="field"><label for="ovOutlineColor" data-i18n="ov.outlineColor"></label><input id="ovOutlineColor" type="color" data-ov="outlineColor"></div>
           </div>
           <div class="field"><label for="ovOpacity" data-i18n="ov.opacity"></label><input id="ovOpacity" type="number" data-ov="opacity" min="10" max="100"></div>
+        </div>
+      </div></section>
+      <section class="ov-panel hidden" data-panel="hud"><div class="ov-cards">
+        <div class="ov-card">
+          <h3 class="ov-h" data-i18n="ov.hudCard"></h3>
+          <small class="muted" data-i18n="ov.hudHint"></small>
+          <div class="field"><label for="ovHudMode" data-i18n="ov.hudMode"></label><select id="ovHudMode" data-ov="hudMode"><option value="auto" data-i18n="ov.hudMode.auto"></option><option value="on" data-i18n="ov.hudMode.on"></option><option value="off" data-i18n="ov.hudMode.off"></option></select></div>
+          <div class="field"><label for="ovHudStyle" data-i18n="ov.hudStyle"></label><select id="ovHudStyle" data-ov="hudStyle"><option value="auto" data-i18n="ov.hudStyle.auto"></option><option value="nato" data-i18n="ov.hudStyle.nato"></option><option value="russian" data-i18n="ov.hudStyle.russian"></option><option value="chinese" data-i18n="ov.hudStyle.chinese"></option></select></div>
+          <div class="field"><label for="ovHudUnits" data-i18n="ov.hudUnits"></label><select id="ovHudUnits" data-ov="hudUnits"><option value="auto" data-i18n="ov.hudUnits.auto"></option><option value="metric" data-i18n="ov.hudUnits.metric"></option><option value="imperial" data-i18n="ov.hudUnits.imperial"></option></select></div>
+          <div class="field"><label for="ovHudColor" data-i18n="ov.hudColor"></label><input id="ovHudColor" type="color" data-ov="hudColor"></div>
+        </div>
+        <div class="ov-card">
+          <h3 class="ov-h" data-i18n="ov.hudPlaces"></h3>
+          <div class="seg" id="ovHudPlace"><button data-place="cockpit" data-i18n="ov.hudCockpit"></button><button data-place="outside" data-i18n="ov.hudOutside"></button></div>
+          <div class="field-row ov-hud-place" data-hudplace="cockpit">
+            <div class="field"><label for="ovHudCockpitX" data-i18n="ov.hudX"></label><input id="ovHudCockpitX" type="number" data-ov="hudCockpitX" min="-20000" max="20000" step="10"></div>
+            <div class="field"><label for="ovHudCockpitY" data-i18n="ov.hudY"></label><input id="ovHudCockpitY" type="number" data-ov="hudCockpitY" min="-20000" max="20000" step="10"></div>
+            <div class="field"><label for="ovHudCockpitScale" data-i18n="ov.hudScale"></label><input id="ovHudCockpitScale" type="number" data-ov="hudCockpitScale" min="20" max="300" step="5"></div>
+          </div>
+          <div class="field-row ov-hud-place" data-hudplace="outside">
+            <div class="field"><label for="ovHudOutsideX" data-i18n="ov.hudX"></label><input id="ovHudOutsideX" type="number" data-ov="hudOutsideX" min="-20000" max="20000" step="10"></div>
+            <div class="field"><label for="ovHudOutsideY" data-i18n="ov.hudY"></label><input id="ovHudOutsideY" type="number" data-ov="hudOutsideY" min="-20000" max="20000" step="10"></div>
+            <div class="field"><label for="ovHudOutsideScale" data-i18n="ov.hudScale"></label><input id="ovHudOutsideScale" type="number" data-ov="hudOutsideScale" min="20" max="300" step="5"></div>
+          </div>
+          <div class="field"><label for="ovHudKey" data-i18n="ov.hudKey"></label>
+            <input id="ovHudKey" type="text" readonly data-ovkey="hudKey" data-i18n-ph="ov.hotkeyPh"><small class="muted" data-i18n="ov.hudKeyHint"></small></div>
+        </div>
+        <div class="ov-card">
+          <h3 class="ov-h" data-i18n="ov.hudParts"></h3>
+          <label class="switch"><input type="checkbox" data-ov="hudHeading"><span class="sw"></span><span data-i18n="ov.hudHeading"></span></label>
+          <label class="switch"><input type="checkbox" data-ov="hudLadder"><span class="sw"></span><span data-i18n="ov.hudLadder"></span></label>
+          <label class="switch"><input type="checkbox" data-ov="hudFpm"><span class="sw"></span><span data-i18n="ov.hudFpm"></span></label>
+          <label class="switch"><input type="checkbox" data-ov="hudSpeed"><span class="sw"></span><span data-i18n="ov.hudSpeed"></span></label>
+          <label class="switch"><input type="checkbox" data-ov="hudAlt"><span class="sw"></span><span data-i18n="ov.hudAlt"></span></label>
+          <label class="switch"><input type="checkbox" data-ov="hudData"><span class="sw"></span><span data-i18n="ov.hudData"></span></label>
         </div>
       </div></section>
       <section class="ov-panel hidden" data-panel="alarms">

@@ -621,6 +621,23 @@ under Single missions → User missions, titled `Challenge: <name> (<difficulty>
 - [ ] A truck dropped from too high or stuck in the ground: note the map and the distance.
 - [ ] Hard: 10 gates, 200 m wide: reachable?
 
+## 2ab. Fighter HUD (new)
+
+**What was built.** My overlay → HUD draws a fighter's HUD in the overlay window from /state and /indicators. Checked without the game:
+shapes for the three styles, the Tk drawing on a hidden window, the cockpit window's HUD button, the settings. The signs come from
+a recorded F-15A flight (pitch > 0 nose up, bank > 0 left wing down). Nothing has been flown with it yet. Turn the overlay on.
+
+- [ ] **A jet, cockpit view** (F-15A or any): the HUD shows, small, in the middle. Heading, speed in knots, altitude in feet.
+- [ ] Bank left then right: the horizon line turns the same way as the game's horizon, not the other way.
+- [ ] Climb and dive: the ladder moves the right way; the flight path marker drops below the nose as the angle of attack grows.
+- [ ] Press the HUD key: it moves to its outside place. Go to the outside view: is the size right? Set both places to taste.
+- [ ] **A MiG-29 or Su-27**: the Russian style, km/h and metres. **A J-10**: the Chinese style.
+- [ ] A propeller aircraft: no HUD. Set *Show it* to *Always*: it shows.
+- [ ] A tank: no HUD.
+- [ ] Over the gear's speed with the gear down: the speed turns to the alert colour and flashes.
+- [ ] Does drawing it every 100 ms cost frames in the game? Try *Read the game every* at 50 ms (Behaviour): smoother, and still fine?
+- [ ] Cockpit window on a second screen, HUD button: the HUD fills it and moves with the aircraft.
+
 ## 3. Ammunition icons (UI only)
 
 Shell icons (tanks), belt icons (aircraft, helicopters, ships) and flare / chaff icons come from the game's own

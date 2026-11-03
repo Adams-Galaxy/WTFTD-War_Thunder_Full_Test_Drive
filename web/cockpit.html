@@ -28,13 +28,20 @@
   .cell.on b { color: var(--accent); }
   .cell.alert b { color: var(--red); }
   #off { text-align: center; color: var(--muted); padding: 60px 10px; }
+  #mode { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 2px 10px; font: inherit; cursor: pointer; }
+  #mode.on { color: var(--accent); border-color: var(--accent); }
+  body.hud { background: #000; }
+  #hud { position: fixed; inset: 0; width: 100vw; height: 100vh; font-family: Consolas, "Courier New", monospace; font-weight: 700; }
+  body.hud header { position: relative; z-index: 1; }
 </style>
 </head>
 <body>
-<header><b id="plane"></b><span id="msg"></span></header>
+<header><b id="plane"></b><span><span id="msg"></span> <button id="mode" title="Instruments or HUD">HUD</button></span></header>
+<svg id="hud" hidden aria-hidden="true"></svg>
 <div id="off">Not flying. The instruments start with the next flight.</div>
 <div id="gauges" hidden></div>
 <div id="strip" hidden></div>
+<script src="hud.js"></script>
 <script src="cockpit.js"></script>
 </body>
 </html>
