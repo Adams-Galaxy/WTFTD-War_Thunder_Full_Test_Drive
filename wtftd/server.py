@@ -1356,11 +1356,11 @@ def flight_status(after: int) -> dict:
 
 def hud_status(size: str) -> dict:
     """The HUD of the aircraft flown, drawn for the cockpit window whatever the overlay's own settings say of showing it."""
-    WATCH.viewed = time.monotonic()  # keeps the readings coming, as the Flight data tab does
+    WATCH.viewed = WATCH.hud_viewed = time.monotonic()  # keeps the readings coming, and fast
     w, _, h = size.partition("x")
     width, height = (min(int(n), 20000) for n in (w, h)) if w.isdecimal() and h.isdecimal() else (960, 560)
     cfg, flying = WATCH.cfg, WATCH.flying and "ias" in WATCH.last  # an aircraft: a tank has no airspeed
-    shapes = hud.draw(WATCH.last, cfg, WATCH.nation(WATCH.current), (width, height), "window", WATCH.on) if flying else []
+    shapes = WATCH.hud_frame((width, height), "window", cfg) if flying else []
     return {"shapes": shapes, "color": cfg["hudColor"], "alert": cfg["alert"], "flying": flying, "aircraft": WATCH.current}
 
 

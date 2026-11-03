@@ -12,7 +12,11 @@ Versions follow `major.minor.patch`; "beta" until 1.0.
   **Chinese** (km/h and metres); the other nations get the NATO style, and any aircraft can have another one. On jets and
   helicopters unless you say otherwise. Units, colour, size and place, and each part, are yours. One place for the cockpit view,
   one for the outside view, and a key to switch them: the game doesn't say which view you're in. A speed alarm lights the speed.
-  It isn't lined up with the game's horizon: the overlay can't know where the camera looks. Not flown in the game yet.
+  It isn't lined up with the game's horizon: the overlay can't know where the camera looks. Its words follow the style
+  (English, Russian, Chinese) or the language you pick. It reads the game about 40 times a second and draws between readings:
+  the scales scroll smoothly, and the window no longer flashes black (it was resized at every image). Where the game sends no
+  pitch or bank (the J-16 and other aircraft without an artificial horizon), they're worked out from the climb, the angle of
+  attack, the roll rate and the turn: within 1° most of the time on a recorded F-15A flight.
 - **Cockpit window**: a HUD button fills it with the same HUD, for a second screen.
 
 ## 0.23.1 — 2026-11-01

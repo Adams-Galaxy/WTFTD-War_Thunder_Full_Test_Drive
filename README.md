@@ -197,7 +197,10 @@ breaks, and records the flight: live curves, a flight report, a cockpit window f
   scales), **Russian** (km/h and metres in the corners, a moving horizon, angle of attack and G scales) and **Chinese**. Every other
   nation gets the NATO style; any aircraft can have another one. On jets and helicopters unless you say otherwise; units, colour,
   size, place and each part are yours. It has two places, one for the cockpit view and one for the outside view, and a key switches
-  them: the game doesn't say which view you're in. A speed alarm lights its speed. Inspired by real HUDs, not a copy of one
+  them: the game doesn't say which view you're in. A speed alarm lights its speed. Its words are in the style's language,
+  or in English, Russian or Chinese if you prefer. It reads the game about 40 times a second and draws between readings, so
+  the scales scroll smoothly. On aircraft whose cockpit has no artificial horizon the game doesn't send (the J-16, for one),
+  pitch and bank are worked out from the climb, the angle of attack, the roll rate and the turn. Inspired by real HUDs, not a copy of one
 - **Flight data** (Windows): live curves of what the game reports, in flight and in tanks and ships (speed, altitude, G, turn time, fuel use...),
   and a recorder: CSV logs for Excel, replayed in the app, with a **flight report** (top speed, best climb, best
   sustained turn, time to climb, fuel used) and an **export for Tacview**; saved views, and the curves as a picture

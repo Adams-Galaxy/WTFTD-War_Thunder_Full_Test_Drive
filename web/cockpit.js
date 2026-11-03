@@ -83,7 +83,7 @@ async function poll() {
   try {
     if (hudOn) {
       await pollHud();
-      return setTimeout(poll, 100);
+      return setTimeout(poll, 33);
     }
     $('#hud').hidden = true;
     const st = await (await fetch('/api/flight/999999999')).json();  // no trace rows: only the latest reading

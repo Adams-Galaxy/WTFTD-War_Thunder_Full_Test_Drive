@@ -86,6 +86,56 @@ class Styles(unittest.TestCase):
         self.assertAlmostEqual((min(xs) + max(xs)) / 2, 400, delta=60)
 
 
+class Languages(unittest.TestCase):
+    def test_the_style_speaks_its_language(self):
+        self.assertIn("ТОПЛ 2851 кг", texts(hud.draw(READING, CFG, "ussr", SCREEN, "outside")))
+        self.assertIn("FUEL 2851 kg", texts(hud.draw(READING, CFG, "usa", SCREEN, "outside")))
+
+    def test_or_the_one_picked(self):
+        self.assertIn("燃油 2851 公斤", texts(hud.draw(READING, {**CFG, "hudLang": "zh"}, "usa", SCREEN, "outside")))
+        self.assertIn("FUEL 2851 kg", texts(hud.draw(READING, {**CFG, "hudLang": "en"}, "ussr", SCREEN, "outside")))
+        self.assertEqual(alarms.clean({"hudLang": "xx"}, WORDS)["hudLang"], "auto")
+
+
+class Attitude(unittest.TestCase):
+    """For aircraft whose /indicators has no artificial horizon (the J-16 on 2.59)."""
+
+    def run_for(self, seconds: float, **v) -> dict:
+        att, out, turn = hud.Attitude(), {}, v.pop("turn", 0)
+        for i in range(int(seconds * 40)):
+            out = att.fill(i / 40, {**v, "heading": (i / 40 * turn) % 360})
+        return out
+
+    def test_pitch_is_the_climb_angle_plus_the_angle_of_attack(self):
+        out = self.run_for(1, tas=360, vy=10, aoa=3, g=1, roll=0)
+        self.assertAlmostEqual(out["pitch"], 5.74 + 3, delta=0.05)
+
+    def test_rolling_right_lowers_the_right_wing(self):
+        self.assertLess(self.run_for(1, tas=720, vy=0, aoa=2, g=1, roll=30)["bank"], -20)  # bank > 0 is the left wing down
+        self.assertGreater(self.run_for(1, tas=720, vy=0, aoa=2, g=1, roll=-30)["bank"], 20)
+
+    def test_a_steady_turn_settles_on_its_bank(self):
+        out = self.run_for(30, tas=720, vy=0, aoa=5, g=2.04, roll=0, turn=5)  # 5°/s at 200 m/s: a level turn at 60.7° to the right
+        self.assertAlmostEqual(out["bank"], -60.7, delta=2)
+
+    def test_what_the_game_gives_is_kept(self):
+        v = {**READING, "pitch": 3.0, "bank": -40.0}
+        self.assertIs(hud.Attitude().fill(0, v), v)
+
+
+class Glide(unittest.TestCase):
+    def test_between_two_readings(self):
+        g = hud.Glide()
+        self.assertEqual(g.at(0), {})
+        g.add(0.0, {"ias": 100, "heading": 350, "bank": 170})
+        g.add(1.0, {"ias": 200, "heading": 10, "bank": -170})
+        mid = g.at(1.5)
+        self.assertAlmostEqual(mid["ias"], 150)
+        self.assertAlmostEqual(mid["heading"], 0)  # through north, not round the other way
+        self.assertAlmostEqual(abs(mid["bank"]), 180)
+        self.assertAlmostEqual(g.at(9)["ias"], 200)
+
+
 class Settings(unittest.TestCase):
     def test_defaults(self):
         self.assertEqual((CFG["hudMode"], CFG["hudStyle"], CFG["hudUnits"], CFG["hudCockpitScale"]), ("auto", "auto", "auto", 60))
@@ -116,18 +166,18 @@ class Watched(unittest.TestCase):
     def test_a_jet_gets_its_hud(self):
         self.watch.tick()
         self.assertEqual(self.watch.current, "f_15a")
-        self.assertIn("09", texts(self.watch.hud))  # the heading tape at 090
-        self.assertIn("270", texts(self.watch.hud))  # 500 km/h in knots
+        self.assertIn("09", texts(self.watch.hud_frame()))  # the heading tape at 090
+        self.assertIn("270", texts(self.watch.hud_frame()))  # 500 km/h in knots
 
     def test_a_propeller_aircraft_has_none_unless_asked(self):
         self.indicators = json.dumps({"valid": True, "type": "p_51d", "compass": 90}).encode()
         self.reply = json.dumps(state(**{"Mfuel0, kg": 600})).encode()
         self.watch.tick()
-        self.assertEqual((self.watch.current, self.watch.hud), ("p_51d", []))
+        self.assertEqual((self.watch.current, self.watch.hud_frame()), ("p_51d", []))
         self.watch.set_config(alarms.clean({"hudMode": "on"}, WORDS), {})
         self.watch._key = None
         self.watch.tick()
-        self.assertTrue(self.watch.hud)
+        self.assertTrue(self.watch.hud_frame())
 
     def test_the_preview_shows_the_sample(self):
         watch = alarms.Watch(lambda path: None, dict, save=lambda: None, nation=lambda vid: "china")
@@ -139,7 +189,9 @@ class Watched(unittest.TestCase):
 
 class CockpitWindow(unittest.TestCase):
     def watch(self, **attrs):
-        values = {"flying": True, "last": READING, "cfg": CFG, "current": "f_15a", "on": [], "nation": lambda vid: "usa", **attrs}
+        glide = hud.Glide()
+        glide.add(0, attrs.get("last", READING))
+        values = {"flying": True, "last": READING, "glide": glide, "cfg": CFG, "current": "f_15a", "on": [], "nation": lambda vid: "usa", **attrs}
         return mock.patch.multiple(server.WATCH, **values)
 
     def test_the_hud_fills_the_window(self):

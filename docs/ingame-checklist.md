@@ -635,7 +635,10 @@ a recorded F-15A flight (pitch > 0 nose up, bank > 0 left wing down). Nothing ha
 - [ ] A propeller aircraft: no HUD. Set *Show it* to *Always*: it shows.
 - [ ] A tank: no HUD.
 - [ ] Over the gear's speed with the gear down: the speed turns to the alert colour and flashes.
-- [ ] Does drawing it every 100 ms cost frames in the game? Try *Read the game every* at 50 ms (Behaviour): smoother, and still fine?
+- [ ] With the HUD it reads the game every 25 ms and draws at about 60 images a second: does the game lose frames? Does the HUD still flash black?
+- [ ] **A J-16** (no artificial horizon in /indicators): the ladder shows. Roll left and right, hold a turn: does it follow the real horizon
+  within a few degrees, and settle back after a fast roll?
+- [ ] HUD language: Russian and Chinese words show, Chinese characters included, in the overlay and the cockpit window.
 - [ ] Cockpit window on a second screen, HUD button: the HUD fills it and moves with the aircraft.
 
 ## 3. Ammunition icons (UI only)

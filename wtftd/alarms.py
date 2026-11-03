@@ -39,6 +39,8 @@ from .paths import WEB
 
 ALARMS = {"airframe": (93, 1400), "gear": (90, 1000), "flaps": (90, 700)}  # default: % of the limit, beep in Hz
 POLL_S = 0.1
+HUD_POLL_S = 0.025  # with the HUD: the game sends a new reading about every 22 ms
+HUD_FRAME_MS = 16  # and the window draws it between readings, at about 60 images a second
 IDLE_S = 1.0  # not flying: nothing to read fast
 REPEAT_MS = 300
 BEEP_MS = 150
@@ -151,7 +153,8 @@ def labels(lang: str) -> dict:
 
 
 # the fighter HUD (hud.py): on jets and helicopters unless the player says otherwise, in its family's style
-HUD_CHOICES = {"hudMode": ("auto", "on", "off"), "hudStyle": ("auto", *hud.STYLES), "hudUnits": ("auto", "metric", "imperial")}
+HUD_CHOICES = {"hudMode": ("auto", "on", "off"), "hudStyle": ("auto", *hud.STYLES), "hudUnits": ("auto", "metric", "imperial"),
+               "hudLang": ("auto", *hud.LANGS)}
 HUD_DEFAULTS = {**{k: v[0] for k, v in HUD_CHOICES.items()}, "hudColor": "#43FF7A", "hudKey": [], "hudKeyName": "",
                 "hudCockpitX": 0, "hudCockpitY": 0, "hudCockpitScale": 60, "hudOutsideX": 0, "hudOutsideY": 0, "hudOutsideScale": 100,
                 **{f"hud{p.title()}": True for p in hud.PARTS}}
@@ -687,7 +690,10 @@ class Watch:
         self.muted = False  # the mute key
         self.mission = None  # {"id", "fuel", "unbreakable"}: set when a mission is generated
         self.display = []
-        self.hud = []  # the HUD's shapes over the game, see hud.draw
+        self.hud = []  # the HUD's shapes with the sample values, for the preview: see hud.draw
+        self.hud_live = None  # (overlay, nation) while flying an aircraft that shows its HUD: see hud_frame
+        self.attitude, self.glide = hud.Attitude(), hud.Glide()  # pitch and bank if the game has none; between readings
+        self.hud_viewed = -VIEW_S  # when the cockpit window last asked for its HUD
         self.hud_place = "cockpit"  # or outside: the HUD key switches them
         self.preview_key = ""  # the overlay shown by preview: an aircraft's own gives its HUD style
         self.on = []  # the alarms on, for the cockpit window's HUD
@@ -769,12 +775,13 @@ class Watch:
         on = active(percents(SAMPLE_LIM, SAMPLE_STATE), cfg["alarms"])
         return hud.draw(numbers(values), cfg, nation, screen_size or screen(), place, on)
 
-    def hud_shapes(self, cfg: dict, on: list) -> list:
-        """The HUD over the game for the latest reading, if this aircraft has one."""
-        jet = bool(self._lim.get("jet")) if self._lim else None
-        if not hud.wanted(cfg["hudMode"], self.kind(self.current), jet):
-            return []
-        return hud.draw(self.last, cfg, self.nation(self.current), screen(), self.hud_place, on)
+    def hud_frame(self, size: tuple | None = None, place: str | None = None, cfg: dict | None = None) -> list:
+        """The HUD to draw now: in flight, the readings glide into each other; else the preview's sample, if any.
+        The cockpit window passes its size, the place "window" and its overlay."""
+        live = (cfg, self.nation(self.current)) if cfg else self.hud_live
+        if not live:
+            return self.hud
+        return hud.draw(self.glide.at(time.monotonic()), live[0], live[1], size or screen(), place or self.hud_place, self.on)
 
     def record(self, values: dict):
         """A reading a second for the curves and the log."""
@@ -882,6 +889,7 @@ class Watch:
         if state is None:
             self.display = self.sample(self.preview) if self.preview else []
             self.hud = self.sample_hud(self.preview, self.preview_key, self.hud_place) if self.preview else []
+            self.hud_live, self.attitude, self.glide = None, hud.Attitude(), hud.Glide()
             self.warn = False
             self.last = {}
             self._key = None  # the next spawn may be another aircraft, or the same one elsewhere
@@ -903,11 +911,14 @@ class Watch:
                   "vehicle": self.vehicle(self.current or reported), **self.own_numbers()}
         self.last = numbers(values)
         self.record(values)
+        self.glide.add(time.monotonic(), self.attitude.fill(time.monotonic(), self.last))
+        fast = time.monotonic() - self.hud_viewed < VIEW_S  # the cockpit window's HUD is open
         if not self.enabled:
             self.display = self.sample(self.preview) if self.preview else []
             self.hud = self.sample_hud(self.preview, self.preview_key, self.hud_place) if self.preview else []
+            self.hud_live = None
             self.warn = False
-            return cfg["pollMs"] / 1000
+            return min(cfg["pollMs"] / 1000, HUD_POLL_S) if fast else cfg["pollMs"] / 1000
         on = active(percents(lim, state), cfg["alarms"]) if lim and not self._unbreakable and not wreck else []
         on += [] if wreck else own_alerts(cfg, values)
         self.warn, self.on = bool(on), on
@@ -916,21 +927,23 @@ class Watch:
         status = [(note, tint, cfg["size"], False, 0, [(note, tint)])] if note else []
         hidden = (wreck and cfg["hideCrash"]) or (not lim and cfg["hideUnknown"])
         self.display = [] if hidden else status + lines_for(cfg, values, on)
-        self.hud = [] if hidden or wreck else self.hud_shapes(cfg, on)
+        jet = bool(lim.get("jet")) if lim else None
+        shown = not (hidden or wreck) and hud.wanted(cfg["hudMode"], self.kind(self.current), jet)
+        self.hud, self.hud_live = [], (cfg, self.nation(self.current)) if shown else None
         rpm = _engines(state)[0]
         silent = self.muted or (cfg["soundFocus"] and not game_focused()) or (cfg["soundEngine"] and rpm and not any(rpm))
         if on and not silent and time.monotonic() - self._last_beep >= cfg["repeat"] / 1000:
             self._last_beep = time.monotonic()
             for name in on:
                 play(cfg["lines"][name]["rule"] if isinstance(name, int) else cfg["alarms"][name], cfg["volume"], self.sounds)
-        return cfg["pollMs"] / 1000
+        return min(cfg["pollMs"] / 1000, HUD_POLL_S) if self.hud_live or fast else cfg["pollMs"] / 1000
 
     def drive(self, values: dict) -> float:
         """A tank or a ship: curves, logs and its overlay ("type:tank", "type:ship": an aircraft's lines mean nothing there);
         no limits, so only the lines' own alerts."""
         values = {**values, **self.own_numbers(), "vehicle": self.vehicle(reported_type(values))}
         self.current, self.profile = None, f"type:{values['army']}" if f"type:{values['army']}" in self.profiles else ""
-        self.hud = []  # an aircraft's: not on a tank or a ship
+        self.hud, self.hud_live = [], None  # an aircraft's: not on a tank or a ship
         self._flight = str(values.get("type") or "vehicle").rsplit("/", 1)[-1]
         self.last = numbers(values)
         self.record(values)
@@ -1054,7 +1067,7 @@ def run_overlay(watch: Watch):
         user32.ShowWindow(hwnd, SW_HIDE)
         user32.ShowWindow(glow_hwnd, SW_HIDE)
         user32.SetForegroundWindow(previous)  # creating the window took the focus
-        drawn, painted, fonts = None, None, {}
+        drawn, painted, fonts, placed = None, None, {}, {}
         anchors = {"w": "w", "m": "center", "e": "e"}
 
         def pressed(keys: list) -> bool:
@@ -1068,11 +1081,21 @@ def run_overlay(watch: Watch):
                                          slant="italic" if cfg["italic"] else "roman")
             return fonts[key]
 
-        def hud_font(size: float):
-            key = "hud", round(size)
+        def hud_font(size: float, text: str):
+            wide = any(ord(c) > 0x2E80 for c in text)  # Chinese: Consolas has none of it
+            key = "hud", round(size), wide
             if key not in fonts:
-                fonts[key] = tkfont.Font(root=root, family="Consolas", size=-max(6, round(size)), weight="bold")
+                fonts[key] = tkfont.Font(root=root, family="Microsoft YaHei" if wide else "Consolas", size=-max(6, round(size)), weight="bold")
             return fonts[key]
+
+        def place(geometry: str, alpha: float):
+            """Only when it changes: each move or resize shows the window black for a moment, and with the HUD it was every image."""
+            if placed.get("geometry") != geometry:
+                placed["geometry"] = geometry
+                root.geometry(geometry)
+            if placed.get("alpha") != alpha:
+                placed["alpha"] = alpha
+                root.attributes("-alpha", alpha)
 
         def draw_hud(cfg: dict, shapes: list, lit: bool):
             """hud.draw's shapes; an alert shows in the alert colour, flashing with the lines."""
@@ -1081,7 +1104,7 @@ def run_overlay(watch: Watch):
                 if s[0] == "l":
                     canvas.create_line(*s[1:5], fill=tint, width=s[5], tags="hud")
                 elif s[0] == "t":
-                    canvas.create_text(s[1], s[2], text=s[3], fill=tint, font=hud_font(s[4]), anchor=anchors[s[5]], tags="hud")
+                    canvas.create_text(s[1], s[2], text=s[3], fill=tint, font=hud_font(s[4], s[3]), anchor=anchors[s[5]], tags="hud")
                 elif s[0] == "p":
                     canvas.create_polygon(*s[1], outline=tint, fill=tint if s[2] else "", width=1.6, tags="hud")
                 else:
@@ -1091,7 +1114,6 @@ def run_overlay(watch: Watch):
             """Each block's lines in their columns, its frame and background behind them, then the window around all of it.
             lit: the blinking lines' turn to show."""
             canvas.delete("all")
-            root.attributes("-alpha", cfg["opacity"] / 100)
             ring = [(dx * r, dy * r) for r in range(1, cfg["outline"] + 1) for dx in (-1, 0, 1) for dy in (-1, 0, 1) if dx or dy]
             dark = []
             draw_hud(cfg, shapes, lit)
@@ -1119,10 +1141,14 @@ def run_overlay(watch: Watch):
                                                              outline=spot["frameColor"] if spot["frame"] else "", tags=tag,
                                                              stipple=STIPPLE[spot["bgOpacity"]] if spot["background"] else ""))
             box = canvas.bbox("all")  # before hiding the dark lines: a blink mustn't move the window
-            if box:
+            if shapes:  # the whole screen: the HUD moves at every image, the window mustn't
+                width, height = screen()
+                canvas.configure(width=width, height=height)
+                place(f"{width}x{height}+0+0", cfg["opacity"] / 100)
+            elif box:
                 canvas.move("all", -box[0], -box[1])
                 canvas.configure(width=box[2] - box[0], height=box[3] - box[1])
-                root.geometry(f"{box[2] - box[0]}x{box[3] - box[1]}+{box[0]}+{box[1]}")
+                place(f"{box[2] - box[0]}x{box[3] - box[1]}+{box[0]}+{box[1]}", cfg["opacity"] / 100)
             for item in dark:
                 canvas.itemconfigure(item, state="hidden")
             root.update_idletasks()  # now: shown before that, a first drawing stays at (0, 0)
@@ -1132,7 +1158,7 @@ def run_overlay(watch: Watch):
             if watch.stopping.is_set():
                 root.destroy()
                 return
-            cfg, lines, shapes = watch.preview or watch.cfg, watch.display, watch.hud
+            cfg, lines, shapes = watch.preview or watch.cfg, watch.display, watch.hud_frame()
             lit = int(time.monotonic() * 2000 / cfg["flashMs"]) % 2 == 0
             state = cfg, lines, shapes, lit if any(x[3] for x in lines) or any(s[-1] for s in shapes) else None
             if state != drawn:
@@ -1155,7 +1181,7 @@ def run_overlay(watch: Watch):
                 paint_glow(glow_hwnd, screen(), glow_pixels(screen(), *painted))
             warn = watch.preview or (watch.warn and not watch.hidden and game_focused())
             user32.ShowWindow(glow_hwnd, SW_SHOWNOACTIVATE if cfg["glow"] and warn and (lit or not cfg["glowFlash"]) else SW_HIDE)
-            root.after(int(POLL_S * 1000), refresh)
+            root.after(HUD_FRAME_MS if shapes else int(POLL_S * 1000), refresh)
 
         refresh()
         root.mainloop()

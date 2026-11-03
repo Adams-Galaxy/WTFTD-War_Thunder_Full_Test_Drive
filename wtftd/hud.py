@@ -12,6 +12,7 @@ The game's signs, checked on a recorded flight (2026-11-03): pitch > 0 nose up, 
 from __future__ import annotations
 
 import math
+from collections import deque
 
 STYLES = ("nato", "russian", "chinese")
 NATIONS = {"ussr": "russian", "china": "chinese"}  # every other nation flies the NATO style
@@ -24,8 +25,91 @@ DEG = 9  # HUD units a degree of pitch. shortcut: not conformal, the overlay can
 SPEED_ALERTS = ("airframe", "gear", "flaps")  # alarms that light the speed
 
 
+LANGS = ("en", "ru", "zh")
+STYLE_LANG = {"nato": "en", "russian": "ru", "chinese": "zh"}  # "auto": the style's own
+WORDS = {
+    "en": {"thr": "THR", "fuel": "FUEL", "gear": "GEAR", "flaps": "FLAPS", "aoa": "AOA", "vv": "VV", "mach": "M", "g": "G",
+           "kt": "kt", "kmh": "km/h", "m": "m", "ft": "ft", "kg": "kg", "kgmin": "kg/min"},
+    "ru": {"thr": "РУД", "fuel": "ТОПЛ", "gear": "ШАССИ", "flaps": "ЗАКР", "aoa": "α", "vv": "Vу", "mach": "М", "g": "n",
+           "kt": "уз", "kmh": "км/ч", "m": "м", "ft": "фт", "kg": "кг", "kgmin": "кг/мин"},
+    "zh": {"thr": "油门", "fuel": "燃油", "gear": "起落架", "flaps": "襟翼", "aoa": "攻角", "vv": "升降", "mach": "马赫", "g": "过载",
+           "kt": "节", "kmh": "公里/时", "m": "米", "ft": "英尺", "kg": "公斤", "kgmin": "公斤/分"},
+}
+GRAVITY = 9.80665
+TURN_S = 2.0  # the turn rate is measured over this long
+PULL_S = 5.0  # how fast the bank worked out from the roll rate is pulled toward the one the turn asks for
+
+
 def style_of(style: str, nation: str | None) -> str:
     return style if style in STYLES else NATIONS.get(nation or "", "nato")
+
+
+class Attitude:
+    """Pitch and bank when /indicators has no artificial horizon (the J-16 and other glass cockpits send only the compass).
+    Bank: the roll rate added up, pulled toward the bank the turn rate and the G ask for; pitch: the climb angle plus the
+    angle of attack. Checked against a flight that had both (F-15A, docs: tests/test_hud.py)."""
+
+    def __init__(self):
+        self.t = self.roll = None
+        self.bank = 0.0
+        self.headings = deque()  # (time, heading unwrapped) over the last TURN_S: the turn rate without the compass's jitter
+
+    def fill(self, t: float, v: dict) -> dict:
+        if v.get("pitch") is not None and v.get("bank") is not None:
+            self.t = None
+            return v
+        dt = t - self.t if self.t is not None else 0.0
+        self.t = t
+        tas, vy, g, hdg, roll = (v.get("tas") or 0) / 3.6, v.get("vy"), v.get("g"), v.get("heading"), v.get("roll")
+        if roll is not None and 0 < dt < 1:  # Wx > 0 rolls to the right, and bank > 0 is the left wing down
+            self.bank -= (roll + (self.roll if self.roll is not None else roll)) / 2 * dt
+        self.roll = roll
+        climb = math.asin(max(-1.0, min(1.0, vy / tas))) if tas > 30 and vy is not None else 0.0
+        if hdg is not None:
+            last = self.headings[-1][1] if self.headings else hdg
+            self.headings.append((t, last + (hdg - last + 540) % 360 - 180))
+            while t - self.headings[0][0] > TURN_S:
+                self.headings.popleft()
+        span = t - self.headings[0][0] if self.headings else 0
+        if span > TURN_S / 2 and 0 < dt < 1 and tas > 30 and g and g > 0.5:  # not inverted: there the turn says nothing
+            turn = math.radians(self.headings[-1][1] - self.headings[0][1]) / span
+            asked = -math.degrees(math.asin(max(-1.0, min(1.0, turn * tas * math.cos(climb) / (GRAVITY * g)))))
+            self.bank += ((asked - self.bank + 180) % 360 - 180) * min(1.0, dt / PULL_S)
+        self.bank = (self.bank + 180) % 360 - 180
+        out = dict(v)
+        if v.get("bank") is None:
+            out["bank"] = self.bank
+        if v.get("pitch") is None and tas > 30 and vy is not None:
+            out["pitch"] = math.degrees(climb) + (v.get("aoa") or 0) * math.cos(math.radians(out["bank"]))
+        return out
+
+
+class Glide:
+    """The HUD's values between two readings: drawn a reading late, gliding from the one before to the latest, so the
+    scales scroll instead of jumping at each reading."""
+
+    def __init__(self):
+        self.before = self.latest = None
+
+    def add(self, t: float, v: dict):
+        self.before, self.latest = self.latest, (t, v)
+
+    def at(self, t: float) -> dict:
+        if not self.latest:
+            return {}
+        if not self.before:
+            return self.latest[1]
+        (t0, a), (t1, b) = self.before, self.latest
+        f = min(1.0, max(0.0, (t - t1) / max(t1 - t0, 1e-3)))
+        out = dict(b)
+        for k, y in b.items():
+            x = a.get(k)
+            if type(x) in (int, float) and type(y) in (int, float):
+                d = (y - x + 180) % 360 - 180 if k in ("heading", "bank") else y - x  # the short way round
+                out[k] = x + d * f
+        if "heading" in out:
+            out["heading"] %= 360
+        return out
 
 
 def wanted(mode: str, kind: str | None, jet: bool | None) -> bool:
@@ -38,8 +122,9 @@ def wanted(mode: str, kind: str | None, jet: bool | None) -> bool:
 class Pen:
     """Shapes in HUD units around the HUD's centre, written out in screen pixels; turned: the pitch ladder's bank."""
 
-    def __init__(self, cx: float, cy: float, k: float):
+    def __init__(self, cx: float, cy: float, k: float, lang: str = "en"):
         self.cx, self.cy, self.k, self.out, self.turn = cx, cy, k, [], 0.0
+        self.w = WORDS[lang]  # the HUD's words
         self.parts = set(PARTS)  # what the player shows
 
     def xy(self, x: float, y: float) -> list:
@@ -165,13 +250,13 @@ def nato(pen: Pen, v: dict, imperial: bool, parts: set, alert: int):
         tape(pen, -230, s, 10 if imperial else 20, 50 if imperial else 100, 60 if imperial else 120, -1)
         box(pen, -312, 0, 62, round(s), point=1, a=alert)
         pen.text(-312, 140, fmt(v.get("mach"), 2), 13, "w")
-        pen.text(-312, 158, f"AOA {fmt(v.get('aoa'), 1)}", 12, "w")
+        pen.text(-312, 158, f"{pen.w['aoa']} {fmt(v.get('aoa'), 1)}", 12, "w")
     if "alt" in parts and alt is not None:
         a = alt / FT if imperial else alt
         tape(pen, 230, a, 100 if imperial else 20, 500 if imperial else 100, 1000 if imperial else 300, 1)
         box(pen, 242, 0, 70, fmt(a), point=-1)
         if vy is not None:
-            pen.text(252, 140, f"VV {fmt(vy / FT * 60 if imperial else vy, 0, True)}", 12, "w")
+            pen.text(252, 140, f"{pen.w['vv']} {fmt(vy / FT * 60 if imperial else vy, 0, True)}", 12, "w")
     if v.get("g") is not None:
         pen.text(-312, -165, fmt(v["g"], 1), 15, "w")
     if "heading" in parts and v.get("heading") is not None:
@@ -201,14 +286,14 @@ def russian(pen: Pen, v: dict, imperial: bool, parts: set, alert: int):
         fpm(pen, v["aoa"], v.get("aos") or 0)
     if "speed" in parts and ias is not None:
         pen.text(-300, -165, round(ias / KT if imperial else ias), 22, "w", alert)
-        pen.text(-300, -142, f"М {fmt(v.get('mach'), 2)}", 14, "w")  # Cyrillic М
+        pen.text(-300, -142, f"{pen.w['mach']} {fmt(v.get('mach'), 2)}", 14, "w")
     if "alt" in parts and alt is not None:
         pen.text(300, -165, fmt(alt / FT if imperial else alt), 22, "e")
         if v.get("vy") is not None:
-            pen.text(300, -142, f"Vy {fmt(v['vy'] / FT * 60 if imperial else v['vy'], 0, True)}", 14, "e")
+            pen.text(300, -142, f"{pen.w['vv']} {fmt(v['vy'] / FT * 60 if imperial else v['vy'], 0, True)}", 14, "e")
     if "heading" in parts and v.get("heading") is not None:
         heading(pen, -200, v["heading"], lambda d: f"{d // 10}", below=False, span=100)
-    for x, lo, hi, step, val, name, side in ((-260, 0, 30, 5, v.get("aoa"), "α", 1), (260, -2, 9, 1, v.get("g"), "n", -1)):
+    for x, lo, hi, step, val, name, side in ((-260, 0, 30, 5, v.get("aoa"), pen.w["aoa"], 1), (260, -2, 9, 1, v.get("g"), pen.w["g"], -1)):
         if val is None:
             continue
         pen.line(x, -60, x, 120, 1.4)
@@ -240,15 +325,15 @@ def chinese(pen: Pen, v: dict, imperial: bool, parts: set, alert: int):
         heading(pen, -190, v["heading"], lambda d: f"{d:03d}", below=False)
     if "speed" in parts and ias is not None:
         box(pen, -300, 0, 70, round(ias / KT if imperial else ias), 17, a=alert)
-        pen.text(-265, -26, "kt" if imperial else "km/h", 11)
-        pen.text(-300, 40, f"M {fmt(v.get('mach'), 2)}", 13, "w")
-        pen.text(-300, 58, f"G {fmt(v.get('g'), 1)}", 13, "w")
-        pen.text(-300, 76, f"α {fmt(v.get('aoa'), 1)}", 13, "w")
+        pen.text(-265, -26, pen.w["kt" if imperial else "kmh"], 11)
+        pen.text(-300, 40, f"{pen.w['mach']} {fmt(v.get('mach'), 2)}", 13, "w")
+        pen.text(-300, 58, f"{pen.w['g']} {fmt(v.get('g'), 1)}", 13, "w")
+        pen.text(-300, 76, f"{pen.w['aoa']} {fmt(v.get('aoa'), 1)}", 13, "w")
     if "alt" in parts and alt is not None:
         box(pen, 225, 0, 76, fmt(alt / FT if imperial else alt), 17)
-        pen.text(263, -26, "ft" if imperial else "m", 11)
+        pen.text(263, -26, pen.w["ft" if imperial else "m"], 11)
         if v.get("vy") is not None:
-            pen.text(225, 40, f"VS {fmt(v['vy'] / FT * 60 if imperial else v['vy'], 0, True)}", 13, "w")
+            pen.text(225, 40, f"{pen.w['vv']} {fmt(v['vy'] / FT * 60 if imperial else v['vy'], 0, True)}", 13, "w")
     data(pen, v, -300, 225, 200)
 
 
@@ -256,14 +341,15 @@ def data(pen: Pen, v: dict, left: float, right: float, y: float):
     """Throttle and fuel at the bottom corners."""
     if "data" not in pen.parts:
         return
+    w = pen.w
     if v.get("throttle") is not None:
-        pen.text(left, y, f"THR {fmt(v['throttle'])} %", 12, "w")
+        pen.text(left, y, f"{w['thr']} {fmt(v['throttle'])} %", 12, "w")
     if v.get("gear") or v.get("flaps"):
-        pen.text(left, y + 16, f"GEAR {fmt(v.get('gear'))}  FLAPS {fmt(v.get('flaps'))}", 12, "w")
+        pen.text(left, y + 16, f"{w['gear']} {fmt(v.get('gear'))}  {w['flaps']} {fmt(v.get('flaps'))}", 12, "w")
     if v.get("fuel") is not None:
-        pen.text(right, y, f"FUEL {fmt(v['fuel'])} kg", 12, "w")
+        pen.text(right, y, f"{w['fuel']} {fmt(v['fuel'])} {w['kg']}", 12, "w")
         if fuel_time(v):
-            pen.text(right, y + 16, f"{fuel_time(v)}  {fmt(v.get('burn'), 1)} kg/min", 12, "w")
+            pen.text(right, y + 16, f"{fuel_time(v)}  {fmt(v.get('burn'), 1)} {w['kgmin']}", 12, "w")
 
 
 DRAW = {"nato": nato, "russian": russian, "chinese": chinese}
@@ -273,13 +359,14 @@ def draw(v: dict, cfg: dict, nation: str | None, screen: tuple, place: str, aler
     """The HUD's shapes for a reading v (alarms.numbers: ias, alt, heading, pitch, bank...). place: cockpit or outside,
     over the game where the overlay settings put it, or window: the middle of a window of that size."""
     width, height = screen
+    style = style_of(cfg["hudStyle"], nation)
+    lang = cfg["hudLang"] if cfg["hudLang"] in LANGS else STYLE_LANG[style]
     if place == "window":  # the HUD fills the window
-        pen = Pen(width / 2, height / 2, min(height / WINDOW[1], width / WINDOW[0]))
+        pen = Pen(width / 2, height / 2, min(height / WINDOW[1], width / WINDOW[0]), lang)
     else:
         x, y, scale = (cfg[f"hud{place.title()}{n}"] for n in ("X", "Y", "Scale"))
-        pen = Pen(width / 2 + x, height / 2 + y, height * scale / 100 / HEIGHT)
+        pen = Pen(width / 2 + x, height / 2 + y, height * scale / 100 / HEIGHT, lang)
     pen.parts = {p for p in PARTS if cfg[f"hud{p.title()}"]}
-    style = style_of(cfg["hudStyle"], nation)
     imperial = cfg["hudUnits"] == "imperial" or (cfg["hudUnits"] == "auto" and style == "nato")
     DRAW[style](pen, v, imperial, pen.parts, int(any(a in alerts for a in SPEED_ALERTS)))
     return pen.out
