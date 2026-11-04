@@ -102,6 +102,23 @@ def usable(place) -> bool:
         return bool(user.MonitorFromRect(ctypes.byref(rect), 0))  # MONITOR_DEFAULTTONULL
 
 
+class MonitorInfo(ctypes.Structure):  # MONITORINFO
+    _fields_ = [("size", w.DWORD), ("monitor", w.RECT), ("work", w.RECT), ("flags", w.DWORD)]
+
+
+def work_area(place: dict) -> dict | None:
+    """The screen a place is on, without its taskbar: where a maximized window goes, in the place's pixels."""
+    user = _user32()
+    user.GetMonitorInfoW.argtypes = [w.HANDLE, ctypes.POINTER(MonitorInfo)]
+    rect, info = w.RECT(place["x"], place["y"], place["x"] + place["w"], place["y"] + place["h"]), MonitorInfo(ctypes.sizeof(MonitorInfo))
+    with _real_pixels(user):
+        monitor = user.MonitorFromRect(ctypes.byref(rect), 2)  # MONITOR_DEFAULTTONEAREST
+        if not monitor or not user.GetMonitorInfoW(monitor, ctypes.byref(info)):
+            return None
+    r = info.work
+    return {"x": r.left, "y": r.top, "w": r.right - r.left, "h": r.bottom - r.top, "max": True}
+
+
 def put(window, place: dict) -> bool:
     user = _user32()
     rect = w.RECT(place["x"], place["y"], place["x"] + place["w"], place["y"] + place["h"])

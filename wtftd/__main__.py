@@ -60,8 +60,10 @@ def window_args() -> list[str]:
         place = read_json(PLACE, None)
         if tray.usable(place):
             s = tray.primary_scale()
-            return [f"--window-position={round(place['x'] / s)},{round(place['y'] / s)}",
-                    f"--window-size={round(place['w'] / s)},{round(place['h'] / s)}", *(["--start-maximized"] if place["max"] else [])]
+            # maximized: as big as its screen from the start (the browser drops --start-maximized given a place), keep_place
+            # then maximizes it, which only hides its edges
+            box = (tray.work_area(place) or place) if place["max"] else place
+            return [f"--window-position={round(box['x'] / s)},{round(box['y'] / s)}", f"--window-size={round(box['w'] / s)},{round(box['h'] / s)}"]
         try:
             import ctypes
             from ctypes import wintypes

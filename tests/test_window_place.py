@@ -69,6 +69,28 @@ class KeepPlace(unittest.TestCase):
 
 
 @unittest.skipUnless(sys.platform == "win32", "Windows")
+class Opened(unittest.TestCase):
+    """The browser is told the place, in its pixels: physical ones over the main screen's scale."""
+
+    def args(self, place):
+        from wtftd import tray
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "window.json"
+            path.write_text(json.dumps(place), encoding="utf-8")
+            with mock.patch.object(app, "PLACE", path), mock.patch.object(tray, "usable", lambda p: True), \
+                    mock.patch.object(tray, "primary_scale", lambda: 1.5), \
+                    mock.patch.object(tray, "work_area", lambda p: {"x": 3840, "y": 0, "w": 3840, "h": 2088, "max": True}):
+                return app.window_args()
+
+    def test_where_it_was(self):
+        self.assertEqual(self.args({**PLACE, "max": False}), ["--window-position=1733,27", "--window-size=1000,613"])
+
+    def test_maximized_as_big_as_its_screen(self):
+        # --start-maximized is dropped by the browser given a place: the screen's size instead, then keep_place maximizes it
+        self.assertEqual(self.args(PLACE), ["--window-position=2560,0", "--window-size=2560,1392"])
+
+
+@unittest.skipUnless(sys.platform == "win32", "Windows")
 class Usable(unittest.TestCase):
     def test_odd_places(self):
         from wtftd import tray
