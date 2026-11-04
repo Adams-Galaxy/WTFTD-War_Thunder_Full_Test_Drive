@@ -212,7 +212,8 @@ second screen, the battle log.
   green: the game doesn't say a unit's team, nor who's an AI; in an air battle the vehicles and ships are the AI). **Never an
   enemy**: the game's map data also lists the ones it has spotted, and WTFTD drops them as soon as it reads them. Drag it on
   the picture of your screen like the text blocks, and resize it, or a text block, by the grip in its corner; it has its own
-  opacity, and the map can be darkened so that the marks, each with a dark edge, stand out. Windows draws it (GDI+), which
+  opacity, and the map can be darkened so that the marks, each with a dark edge, stand out. Your aircraft, your allies, the
+  airfields and the zones and bases each have their own size, from half to four times the usual one. Windows draws it (GDI+), which
   turns the map and reads it as the game sends it, JPEG or PNG
 - **Flight data** (Windows): live curves of what the game reports, in flight and in tanks and ships (speed, altitude, G, turn time, fuel use...),
   and a recorder: CSV logs for Excel, replayed in the app, with a **flight report** (top speed, best climb, best

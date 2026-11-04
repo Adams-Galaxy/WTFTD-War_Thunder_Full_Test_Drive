@@ -17,6 +17,7 @@ UNITS = ("aircraft", "ground_model")
 COLOR = re.compile(r"#[0-9a-fA-F]{6}")
 ME, MAP_LINE, MAP_TEXT, MAP_DARK = "#FAC81E", "#9AA4B2", "#E6E6E6", "#141A22"
 ZOOMS = (1, 2, 4, 8)
+MARKS = ("Me", "Allies", "Airfields", "Zones")  # the kinds of marks with a size of their own: mapMarkMe... in %
 
 # what My overlay's preview shows: an aircraft heading north-east, its airfield behind it, the enemy's, two zones, an ally
 SAMPLE = {"me": {"x": 0.46, "y": 0.55, "heading": 45.0}, "allies": [{"x": 0.42, "y": 0.6, "heading": 30.0, "color": "#174DFF", "air": True}],
@@ -121,6 +122,7 @@ def draw(seen: dict, info: dict, trail: list, cfg: dict) -> dict:
         cx, cy, turn = x0 + span / 2, y0 + span / 2, 0.0
     k, c, s = size / span, math.cos(math.radians(turn)), math.sin(math.radians(turn))
     round_ = cfg["mapShape"] == "round"
+    mine, ally, field, zone = (cfg[f"mapMark{kind}"] / 100 for kind in MARKS)  # each kind of mark at its own size
 
     def at(x, y) -> list:
         dx, dy = (x - cx) * k, (y - cy) * k
@@ -137,24 +139,25 @@ def draw(seen: dict, info: dict, trail: list, cfg: dict) -> dict:
             if inside(a) or inside(b):
                 # a runway is a few pixels on a whole map: drawn at least a tenth of the minimap long, and thick, along its way
                 mx, my, dx, dy = (a[0] + b[0]) / 2, (a[1] + b[1]) / 2, b[0] - a[0], b[1] - a[1]
-                half = max(math.hypot(dx, dy), size / 10) / 2
+                half = max(math.hypot(dx, dy), size / 10 * field) / 2
                 ux, uy = (dx, dy) if dx or dy else (1.0, 0.0)
                 n = math.hypot(ux, uy)
                 marks.append(["l", round(mx - ux / n * half, 1), round(my - uy / n * half, 1), round(mx + ux / n * half, 1), round(my + uy / n * half, 1),
-                              max(6, size / 50), f["color"]])
+                              round(max(6, size / 50) * field, 1), f["color"]])
         elif "x" in f and "y" in f:
             p = at(f["x"], f["y"])
             if not inside(p):
                 continue
             if f["type"] == "capture_zone":
-                marks.append(["c", *p, max(5, size / 40), f["color"]])
+                marks.append(["c", *p, round(max(5, size / 40) * zone, 1), f["color"]])
             else:
-                marks.append(["p", [p[0] - 5, p[1] - 5, p[0] + 5, p[1] - 5, p[0] + 5, p[1] + 5, p[0] - 5, p[1] + 5], 0, f["color"]])
+                h = 5 * zone
+                marks.append(["p", [p[0] - h, p[1] - h, p[0] + h, p[1] - h, p[0] + h, p[1] + h, p[0] - h, p[1] + h], 0, f["color"]])
     for u in seen.get("allies", []):
         p = at(u["x"], u["y"])
         if inside(p):
-            h = max(4, size / 90)  # a vehicle's square, half its side
-            marks.append(["p", _arrow(*p, u["heading"] - turn, max(7, size / 38)), 1, u["color"]] if u["air"] else
+            h = max(4, size / 90) * ally  # a vehicle's square, half its side
+            marks.append(["p", _arrow(*p, u["heading"] - turn, max(7, size / 38) * ally), 1, u["color"]] if u["air"] else
                          ["p", [p[0] - h, p[1] - h, p[0] + h, p[1] - h, p[0] + h, p[1] + h, p[0] - h, p[1] + h], 1, u["color"]])
     if cfg["mapTrail"]:
         pts = [at(x, y) for x, y in [*trail, *([(me["x"], me["y"])] if me else [])]]
@@ -162,7 +165,7 @@ def draw(seen: dict, info: dict, trail: list, cfg: dict) -> dict:
     if me:
         p = at(me["x"], me["y"])
         if inside(p):
-            marks.append(["p", _arrow(*p, me["heading"] - turn, max(9, size / 26)), 1, ME])
+            marks.append(["p", _arrow(*p, me["heading"] - turn, max(9, size / 26) * mine), 1, ME])
 
     frame = [["c", mid_x, mid_y, r, MAP_LINE] if round_ else ["p", [left, top, left + size, top, left + size, top + size, left, top + size], 0, MAP_LINE]]
     if heading_up:  # where north is, on the edge

@@ -174,7 +174,8 @@ def _map(cfg: dict, base: dict) -> dict:
             "mapShape": cfg.get("mapShape") if cfg.get("mapShape") in ("square", "round") else base["mapShape"],
             "mapUp": cfg.get("mapUp") if cfg.get("mapUp") in ("north", "heading") else base["mapUp"],
             "mapAllies": _flag(cfg.get("mapAllies"), base["mapAllies"]), "mapAlliesGround": _flag(cfg.get("mapAlliesGround"), base["mapAlliesGround"]),
-            "mapDim": _num(cfg.get("mapDim"), base["mapDim"], 0, 80)}
+            "mapDim": _num(cfg.get("mapDim"), base["mapDim"], 0, 80),
+            **{f"mapMark{k}": _num(cfg.get(f"mapMark{k}"), base[f"mapMark{k}"], 50, 400) for k in minimap.MARKS}}
 
 
 def _hud(cfg: dict) -> dict:
@@ -200,7 +201,8 @@ def defaults(words: dict) -> dict:
             "glowSize": GLOW_SIZE, "glowColor": "", "glowFlash": False, "flashMs": 500, "volume": 100, "soundFocus": False, "soundEngine": False,
             "pollMs": round(POLL_S * 1000), "logMs": round(SAMPLE_S * 1000), "muteKey": [], "muteKeyName": "", "holdKey": [], "holdKeyName": "",
             "color": "#E6E6E6", "alert": "#FF0000", "opacity": 100, "show": True, "hotkey": [], "hotkeyName": "",
-            **HUD_DEFAULTS, "mapMode": "off", "mapZoom": 1, "mapTrail": True, "mapOpacity": 85, "mapShape": "square", "mapUp": "north", "mapAllies": False, "mapAlliesGround": False, "mapDim": 30,  # the minimap: off until the player turns it on
+            **HUD_DEFAULTS, "mapMode": "off", "mapZoom": 1, "mapTrail": True, "mapOpacity": 85, "mapShape": "square", "mapUp": "north", "mapAllies": False, "mapAlliesGround": False, "mapDim": 30,
+            **{f"mapMark{k}": 100 for k in minimap.MARKS},  # the minimap: off until the player turns it on
             "mapSize": round(560 * scale), "mapX": round(40 * scale), "mapY": round(1100 * scale),
             "logKey": [], "logKeyName": "", "hideCrash": False, "hideUnknown": False, "glow": False, "repeat": REPEAT_MS, "alarms": {n: {"on": True, "at": at, "hz": hz, "ms": BEEP_MS, "sound": ""} for n, (at, hz) in ALARMS.items()},
             "lines": [line("IAS", "{ias} / {vne} km/h {swept}", alarm="airframe"), line("MACH", "{mach} / {mne}", alarm="airframe"),

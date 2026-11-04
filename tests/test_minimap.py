@@ -96,6 +96,17 @@ class Drawn(unittest.TestCase):
         self.assertGreaterEqual(runway[5], 8)
         self.assertAlmostEqual(runway[2], runway[4], delta=0.2)  # still along its way: east-west here
 
+    def test_each_kind_of_mark_its_own_size(self):
+        def sizes(frame):
+            runway = [s for s in frame["marks"] if s[0] == "l" and s[-1] == "#174DFF"][0]
+            zone = [s for s in frame["marks"] if s[0] == "c"][0]
+            ally, me = [math.dist(s[1][:2], s[1][2:4]) for s in frame["marks"] if s[0] == "p" and s[2] == 1]
+            return runway[5], math.dist(runway[1:3], runway[3:5]), zone[3], ally, me
+        usual = sizes(self.frame())
+        bigger = sizes(self.frame(mapMarkAirfields=200, mapMarkZones=300, mapMarkAllies=150, mapMarkMe=50))
+        for a, b, k in zip(usual, bigger, (2, 2, 3, 1.5, 0.5)):
+            self.assertAlmostEqual(b, a * k, delta=0.2)
+
     def test_the_way_home(self):
         frame = self.frame()
         self.assertIn("AF 18.1 km 224°", [s[3] for s in frame["frame"] if s[0] == "t"])
@@ -126,6 +137,8 @@ class Settings(unittest.TestCase):
         self.assertEqual((cfg["mapZoom"], cfg["mapShape"], cfg["mapUp"], cfg["mapAllies"], cfg["mapSize"], cfg["mapOpacity"]),
                          (4, "square", "north", False, 3000, 10))
         self.assertEqual(alarms.clean({"mapZoom": True}, WORDS)["mapZoom"], 1)
+        marks = alarms.clean({"mapMarkMe": 10, "mapMarkAllies": 9999, "mapMarkAirfields": "big", "mapMarkZones": 250}, WORDS)
+        self.assertEqual([marks[f"mapMark{k}"] for k in minimap.MARKS], [50, 400, 100, 250])
 
 
 class Read(unittest.TestCase):
