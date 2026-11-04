@@ -66,8 +66,9 @@ window and finds your game by itself (Steam or standalone). Close the window to 
 In the scenario editor, a switch turns the flat map into **the real level in 3D**, read from your own game: place units
 and the game's assets on its relief and turn them the way you want. Vehicles and weapons have a **3D view** too.
 
-While you fly (Windows), the **In flight** menu puts your own overlay over the game, beeps before your aircraft
-breaks, and records the flight: live curves, a flight report, a cockpit window for a second screen, the battle log.
+While you fly (Windows), the **In flight** menu puts your own overlay over the game (your lines, a **fighter HUD**, a
+**minimap**), beeps before your aircraft breaks, and records the flight: live curves, a flight report, a cockpit window for a
+second screen, the battle log.
 
 ![Vehicle browser](docs/screenshots/01-browse.png)
 
@@ -183,7 +184,8 @@ breaks, and records the flight: live curves, a flight report, a cockpit window f
 - **My overlay** (Windows, off until you turn it on; per aircraft or type if you like, for jets, propeller aircraft, tanks
   and ships): your own lines over the game
   in a click-through window (speed against the limit, altitude, fuel, any value the game sends), limits as speeds,
-  percentages or both, placed on a picture of your screen with the game's HUD or your own screenshot; and beeps near
+  percentages or both, placed on a picture of your screen with the game's HUD or your own screenshot (drag a block where you
+  want it, resize it by the grip in its corner); and beeps near
   your aircraft's breaking speeds with your thresholds and sounds or your own (mp3, wav...), on the sound output you
   choose, with a glow around the screen if you like, of the colour and size you want and flashing or not; they stop when you crash.
   Any line can have its own alert on any value (`fuel < 15 %`, `G > 9`) and show under conditions of its own, in up to
@@ -263,8 +265,8 @@ breaks, and records the flight: live curves, a flight report, a cockpit window f
 - **Share** a vehicle setup, a map or a mission with a friend: a short code to paste, or a `.wtftd` file — they
   import it (or drop the file on the window) and get the same thing: vehicle, loadout, ammo, map, editor
   changes, cheats. User missions are single-player, so each of you plays it on your own PC
-- Dark / light theme, `.blk` preview, launch War Thunder; on Windows the app can start minimized, go to the notification
-  area and close with the game
+- Dark / light theme, `.blk` preview, launch War Thunder; on Windows the app reopens where you closed it (its screen, its size,
+  maximized or not), and can start minimized, go to the notification area and close with the game
 
 ## Custom vehicles (on by default)
 
@@ -465,9 +467,8 @@ corrections are very welcome — see [CONTRIBUTING.md](CONTRIBUTING.md#translati
   brings them closer. Worked-out pitch and bank (J-16...) can lag a fast roll by a moment. There's no G alarm: the game gives no
   G limit per aircraft. Barely flown yet ([checklist](docs/ingame-checklist.md))
 - Minimap: allies are told apart by colour, as the game shows them; with a colour-blind palette in the game, check that they still
-  read as allies, or leave them off. Nose up, the map runs off its edge near the sides of the map.
-  Tk only shrinks or grows a picture by whole numbers, so its size comes out near the one you set, not exactly. Barely
-  flown yet, and not in Simulator battles ([checklist](docs/ingame-checklist.md))
+  read as allies, or leave them off. Nose up, the map runs off its edge near the sides of the map. Barely flown yet, and not
+  in Simulator battles ([checklist](docs/ingame-checklist.md))
 - Test bench: helicopters get top speed, climb and acceleration only. Its stall speed is where level flight at idle gives way, not the
   wing's stall: the game's instructor can hold the nose up. It hasn't been flown in the game yet ([checklist](docs/ingame-checklist.md)).
 - macOS support is new and less tested than Windows. The packaged app is built for Apple silicon; on an Intel
@@ -491,7 +492,7 @@ wtftd/                      Python backend (stdlib only)
   cdk.py + builder.py       sensors, engines, avionics, weapons on pylons of any kind
   alarms.py / flightlog.py  in-flight values, alarms and overlay (Windows) / CSV flight logs, report, Tacview export
   hud.py                    the fighter HUD's three styles, drawn as shapes for the overlay and the cockpit window
-  minimap.py                the minimap: the game's map, your aircraft and the fixed objects only
+  minimap.py / mappaint.py  the minimap: what it shows (never an enemy) / painted by Windows (GDI+), turned and cut round
   battle.py                 the game's chat and battle log
   replays.py                My battles: the player's own results, from the game's replay files
   patches.py                What changed: the comparison of two game versions, kept in user/patches.json
