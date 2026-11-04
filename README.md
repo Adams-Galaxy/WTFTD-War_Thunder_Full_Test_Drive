@@ -529,7 +529,8 @@ versions, vehicle and setup's **share code**: read it and send it with your GitH
 share code, it lets us rebuild your exact setup. Questions: [Discussions](https://github.com/StonewarP/WTFTD-War_Thunder_Full_Test_Drive/discussions).
 
 Want to help (code, translations)? See [CONTRIBUTING.md](CONTRIBUTING.md). What changed in each version:
-[CHANGELOG.md](CHANGELOG.md). Security problem: [SECURITY.md](SECURITY.md).
+[CHANGELOG.md](CHANGELOG.md). Security problem: [SECURITY.md](SECURITY.md). Everyone taking part follows the
+[code of conduct](CODE_OF_CONDUCT.md).
 
 ## Support
 

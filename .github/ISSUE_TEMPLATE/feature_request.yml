@@ -3,6 +3,11 @@ description: An idea to make WTFTD better
 title: "[Idea] "
 labels: [enhancement]
 body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks! One idea per issue, please. **Settings → Feedback** in the app fills in this form for you.
+        Please follow our [code of conduct](https://github.com/StonewarP/WTFTD-War_Thunder_Full_Test_Drive/blob/main/CODE_OF_CONDUCT.md).
   - type: textarea
     id: idea
     attributes:
@@ -26,7 +31,11 @@ body:
         - Scenario editor (map, units)
         - Maps & scenarios
         - Weapons / My weapons
-        - In flight (overlay, alarms, flight data, battle)
+        - In flight (overlay, alarms, HUD, minimap, flight data, battle)
+        - Test bench / Challenges
+        - My hangar / My battles / What changed
+        - Skins and sounds
+        - 3D views
         - Sharing / My vehicles, maps, missions
         - Translations
         - Other

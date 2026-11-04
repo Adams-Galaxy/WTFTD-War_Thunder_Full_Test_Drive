@@ -8,4 +8,4 @@ contact_links:
     about: UI texts are in web/locales/<language>.json — see how to suggest a correction.
   - name: Security problem
     url: https://github.com/StonewarP/WTFTD-War_Thunder_Full_Test_Drive/blob/main/SECURITY.md
-    about: Please don't open a public issue: see how to report it privately.
+    about: "Please don't open a public issue: see how to report it privately."

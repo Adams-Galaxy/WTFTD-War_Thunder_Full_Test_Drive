@@ -6,6 +6,7 @@ Thanks for helping! Bug reports, ideas, translation fixes and code are all welco
   For a bug, paste your setup's **share code** (My vehicles → Share): it lets us rebuild your exact setup.
 - **Questions**: ask in [Discussions](https://github.com/StonewarP/WTFTD-War_Thunder_Full_Test_Drive/discussions).
 - **Security problems**: don't open a public issue, see [SECURITY.md](SECURITY.md).
+- Everyone taking part follows the [code of conduct](CODE_OF_CONDUCT.md).
 
 ## Run from source
 

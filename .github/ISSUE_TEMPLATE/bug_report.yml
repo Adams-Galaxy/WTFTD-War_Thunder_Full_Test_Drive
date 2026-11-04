@@ -8,12 +8,14 @@ body:
       value: |
         Thanks for reporting! The more precise, the faster it gets fixed.
         Tip: in WTFTD click **Share** next to *Create mission* and paste the code below — it lets us rebuild your exact setup.
+        The quickest way: **Settings → Feedback** in the app fills in this form for you.
+        Please follow our [code of conduct](https://github.com/StonewarP/WTFTD-War_Thunder_Full_Test_Drive/blob/main/CODE_OF_CONDUCT.md).
   - type: input
     id: version
     attributes:
       label: WTFTD version
-      description: Settings → bottom of the window (e.g. 0.13.0)
-      placeholder: "0.13.0"
+      description: Settings → bottom of the window (e.g. 0.25.2)
+      placeholder: "0.25.2"
     validations:
       required: true
   - type: dropdown
@@ -23,8 +25,12 @@ body:
       options:
         - In WTFTD (the app)
         - In game, in the mission WTFTD created
-        - In flight (overlay, alarms, flight data, battle)
-        - First launch / game data download
+        - In flight (overlay, alarms, HUD, minimap, flight data, battle)
+        - Test bench or Challenges
+        - My hangar, My battles or What changed
+        - Skins and sounds
+        - 3D views
+        - First launch / game data
         - Other
     validations:
       required: true
