@@ -135,7 +135,13 @@ def draw(seen: dict, info: dict, trail: list, cfg: dict) -> dict:
         if f["type"] == "airfield" and {"sx", "sy", "ex", "ey"} <= f.keys():
             a, b = at(f["sx"], f["sy"]), at(f["ex"], f["ey"])
             if inside(a) or inside(b):
-                marks.append(["l", *a, *b, 4, f["color"]])
+                # a runway is a few pixels on a whole map: drawn at least a tenth of the minimap long, and thick, along its way
+                mx, my, dx, dy = (a[0] + b[0]) / 2, (a[1] + b[1]) / 2, b[0] - a[0], b[1] - a[1]
+                half = max(math.hypot(dx, dy), size / 10) / 2
+                ux, uy = (dx, dy) if dx or dy else (1.0, 0.0)
+                n = math.hypot(ux, uy)
+                marks.append(["l", round(mx - ux / n * half, 1), round(my - uy / n * half, 1), round(mx + ux / n * half, 1), round(my + uy / n * half, 1),
+                              max(6, size / 50), f["color"]])
         elif "x" in f and "y" in f:
             p = at(f["x"], f["y"])
             if not inside(p):

@@ -92,6 +92,12 @@ class Drawn(unittest.TestCase):
             if s[0] == "c":
                 self.assertLessEqual(math.hypot(s[1] - 300, s[2] - 300), 200)
 
+    def test_a_runway_big_enough_to_see(self):
+        runway = [s for s in self.frame()["marks"] if s[0] == "l" and s[-1] == "#174DFF"][0]  # 0.02 of the map: 8 px on 400
+        self.assertGreaterEqual(math.hypot(runway[3] - runway[1], runway[4] - runway[2]), 39.9)  # a tenth of the minimap
+        self.assertGreaterEqual(runway[5], 8)
+        self.assertAlmostEqual(runway[2], runway[4], delta=0.2)  # still along its way: east-west here
+
     def test_the_way_home(self):
         frame = self.frame()
         self.assertIn("AF 18.1 km 224°", [s[3] for s in frame["frame"] if s[0] == "t"])
