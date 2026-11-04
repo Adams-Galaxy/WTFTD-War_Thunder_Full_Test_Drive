@@ -599,6 +599,7 @@
   "ov.mapZoom.4": "×4",
   "ov.mapZoom.8": "×8",
   "ov.mapTrail": "你的轨迹",
+  "ov.mapOpacity": "不透明度, %",
   "ov.mapX": "左, px",
   "ov.mapY": "上, px",
   "ov.mapSize": "大小, px",

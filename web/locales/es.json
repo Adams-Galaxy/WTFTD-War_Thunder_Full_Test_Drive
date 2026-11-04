@@ -599,6 +599,7 @@
   "ov.mapZoom.4": "×4",
   "ov.mapZoom.8": "×8",
   "ov.mapTrail": "Tu estela",
+  "ov.mapOpacity": "Opacidad, %",
   "ov.mapX": "Izquierda, px",
   "ov.mapY": "Arriba, px",
   "ov.mapSize": "Tamaño, px",

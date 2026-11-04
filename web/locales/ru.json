@@ -599,6 +599,7 @@
   "ov.mapZoom.4": "×4",
   "ov.mapZoom.8": "×8",
   "ov.mapTrail": "Ваш след",
+  "ov.mapOpacity": "Непрозрачность, %",
   "ov.mapX": "Слева, px",
   "ov.mapY": "Сверху, px",
   "ov.mapSize": "Размер, px",

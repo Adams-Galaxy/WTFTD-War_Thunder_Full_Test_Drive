@@ -599,6 +599,7 @@
   "ov.mapZoom.4": "×4",
   "ov.mapZoom.8": "×8",
   "ov.mapTrail": "Deine Spur",
+  "ov.mapOpacity": "Deckkraft, %",
   "ov.mapX": "Links, px",
   "ov.mapY": "Oben, px",
   "ov.mapSize": "Größe, px",

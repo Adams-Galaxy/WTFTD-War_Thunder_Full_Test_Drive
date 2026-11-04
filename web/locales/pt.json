@@ -599,6 +599,7 @@
   "ov.mapZoom.4": "×4",
   "ov.mapZoom.8": "×8",
   "ov.mapTrail": "Seu rastro",
+  "ov.mapOpacity": "Opacidade, %",
   "ov.mapX": "Esquerda, px",
   "ov.mapY": "Topo, px",
   "ov.mapSize": "Tamanho, px",

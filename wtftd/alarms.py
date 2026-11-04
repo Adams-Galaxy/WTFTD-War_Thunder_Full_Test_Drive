@@ -168,7 +168,8 @@ def _map(cfg: dict, base: dict) -> dict:
     return {"mapMode": cfg.get("mapMode") if cfg.get("mapMode") in ("off", "on") else base["mapMode"],
             "mapZoom": zoom if type(zoom) is int and zoom in minimap.ZOOMS else base["mapZoom"],
             "mapSize": _num(cfg.get("mapSize"), base["mapSize"], 80, 3000), "mapX": _num(cfg.get("mapX"), base["mapX"], -20000, 20000),
-            "mapY": _num(cfg.get("mapY"), base["mapY"], -20000, 20000), "mapTrail": _flag(cfg.get("mapTrail"), base["mapTrail"])}
+            "mapY": _num(cfg.get("mapY"), base["mapY"], -20000, 20000), "mapTrail": _flag(cfg.get("mapTrail"), base["mapTrail"]),
+            "mapOpacity": _num(cfg.get("mapOpacity"), base["mapOpacity"], 10, 100)}
 
 
 def _hud(cfg: dict) -> dict:
@@ -194,7 +195,7 @@ def defaults(words: dict) -> dict:
             "glowSize": GLOW_SIZE, "glowColor": "", "glowFlash": False, "flashMs": 500, "volume": 100, "soundFocus": False, "soundEngine": False,
             "pollMs": round(POLL_S * 1000), "logMs": round(SAMPLE_S * 1000), "muteKey": [], "muteKeyName": "", "holdKey": [], "holdKeyName": "",
             "color": "#E6E6E6", "alert": "#FF0000", "opacity": 100, "show": True, "hotkey": [], "hotkeyName": "",
-            **HUD_DEFAULTS, "mapMode": "off", "mapZoom": 1, "mapTrail": True,  # the minimap: off until the player turns it on
+            **HUD_DEFAULTS, "mapMode": "off", "mapZoom": 1, "mapTrail": True, "mapOpacity": 85,  # the minimap: off until the player turns it on
             "mapSize": round(560 * scale), "mapX": round(40 * scale), "mapY": round(1100 * scale),
             "logKey": [], "logKeyName": "", "hideCrash": False, "hideUnknown": False, "glow": False, "repeat": REPEAT_MS, "alarms": {n: {"on": True, "at": at, "hz": hz, "ms": BEEP_MS, "sound": ""} for n, (at, hz) in ALARMS.items()},
             "lines": [line("IAS", "{ias} / {vne} km/h {swept}", alarm="airframe"), line("MACH", "{mach} / {mne}", alarm="airframe"),
@@ -1111,19 +1112,30 @@ def run_overlay(watch: Watch):
         glow.overrideredirect(True)
         glow.attributes("-topmost", True)
         glow.geometry("1x1+-10000+-10000")
+        mapwin = tk.Toplevel(root)  # the minimap: a window of its own, for an opacity of its own
+        mapwin.overrideredirect(True)
+        mapwin.attributes("-topmost", True)
+        mapwin.attributes("-transparentcolor", OVERLAY_KEY)
+        mapwin.configure(bg=OVERLAY_KEY)
+        mapwin.geometry("1x1+-10000+-10000")
+        mapcanvas = tk.Canvas(mapwin, bg=OVERLAY_KEY, bd=0, highlightthickness=0)
+        mapcanvas.pack()
         root.update()
         hwnd = user32.GetAncestor(root.winfo_id(), 2)  # GA_ROOT
         glow_hwnd = user32.GetAncestor(glow.winfo_id(), 2)
+        map_hwnd = user32.GetAncestor(mapwin.winfo_id(), 2)
         WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TRANSPARENT, WS_EX_LAYERED, GWL_EXSTYLE = 0x08000000, 0x80, 0x20, 0x80000, -20
         SW_HIDE, SW_SHOWNOACTIVATE = 0, 4
         click_through = WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW | WS_EX_TRANSPARENT  # clicks go through it
-        user32.SetWindowLongW(hwnd, GWL_EXSTYLE, user32.GetWindowLongW(hwnd, GWL_EXSTYLE) | click_through)
+        for h in (hwnd, map_hwnd):
+            user32.SetWindowLongW(h, GWL_EXSTYLE, user32.GetWindowLongW(h, GWL_EXSTYLE) | click_through)
         user32.SetWindowLongW(glow_hwnd, GWL_EXSTYLE, user32.GetWindowLongW(glow_hwnd, GWL_EXSTYLE) | click_through | WS_EX_LAYERED)
         paint_glow(glow_hwnd, (1, 1), bytes(4))  # a see-through pixel: hidden before its first picture, it would refuse them all
         user32.ShowWindow(hwnd, SW_HIDE)
         user32.ShowWindow(glow_hwnd, SW_HIDE)
+        user32.ShowWindow(map_hwnd, SW_HIDE)
         user32.SetForegroundWindow(previous)  # creating the window took the focus
-        drawn, painted, fonts, placed, photos = None, None, {}, {}, {}
+        drawn, map_drawn, painted, fonts, placed, map_placed, photos = None, None, None, {}, {}, {}, {}
         anchors = {"w": "w", "m": "center", "e": "e"}
 
         def pressed(keys: list) -> bool:
@@ -1144,16 +1156,16 @@ def run_overlay(watch: Watch):
                 fonts[key] = tkfont.Font(root=root, family="Microsoft YaHei" if wide else "Consolas", size=-max(6, round(size)), weight="bold")
             return fonts[key]
 
-        def place(geometry: str, alpha: float):
+        def place(geometry: str, alpha: float, win=root, done: dict = placed):
             """Only when it changes: each move or resize shows the window black for a moment, and with the HUD it was every image."""
-            if placed.get("geometry") != geometry:
-                placed["geometry"] = geometry
-                root.geometry(geometry)
-            if placed.get("alpha") != alpha:
-                placed["alpha"] = alpha
-                root.attributes("-alpha", alpha)
+            if done.get("geometry") != geometry:
+                done["geometry"] = geometry
+                win.geometry(geometry)
+            if done.get("alpha") != alpha:
+                done["alpha"] = alpha
+                win.attributes("-alpha", alpha)
 
-        def draw_hud(cfg: dict, shapes: list, lit: bool):
+        def draw_hud(cfg: dict, shapes: list, lit: bool, canvas=canvas):
             """hud.draw's shapes; an alert shows in the alert colour, flashing with the lines."""
             for s in shapes:  # the minimap's carry their colour
                 tint = s[-1] if isinstance(s[-1], str) else cfg["alert"] if s[-1] and lit else cfg["hudColor"]
@@ -1184,15 +1196,28 @@ def run_overlay(watch: Watch):
                 photos.update(key=key, shown=shown)
             return photos["shown"]
 
-        def draw(cfg: dict, lines: list, lit: bool, shapes: list = (), image: dict | None = None):
+        def draw_map(cfg: dict, shapes: list, image: dict | None):
+            """The minimap in its window, which moves only when the minimap does: around its frame, and its line below."""
+            mapcanvas.delete("all")
+            if not shapes:
+                return
+            frame = [s for s in shapes if s[0] == "p"][-1][1]  # drawn last of its kind, see minimap.draw
+            x, y, size = int(frame[0]) - 2, int(frame[1]) - 2, int(frame[2] - frame[0]) + 4
+            photo = map_photo(image) if image else None
+            if photo:
+                mapcanvas.create_image(*image["at"], image=photo, anchor="nw")
+            draw_hud(cfg, shapes, True, mapcanvas)
+            mapcanvas.move("all", -x, -y)
+            width, height = max(size, 240), size + 30  # room for the way to the airfield
+            mapcanvas.configure(width=width, height=height)
+            place(f"{width}x{height}+{x}+{y}", cfg["mapOpacity"] / 100, mapwin, map_placed)
+
+        def draw(cfg: dict, lines: list, lit: bool, shapes: list = ()):
             """Each block's lines in their columns, its frame and background behind them, then the window around all of it.
             lit: the blinking lines' turn to show."""
             canvas.delete("all")
             ring = [(dx * r, dy * r) for r in range(1, cfg["outline"] + 1) for dx in (-1, 0, 1) for dy in (-1, 0, 1) if dx or dy]
             dark = []
-            photo = map_photo(image) if image else None
-            if photo:
-                canvas.create_image(*image["at"], image=photo, anchor="nw", tags="map")
             draw_hud(cfg, shapes, lit)
             for index, spot in enumerate([cfg, *cfg["blocks"]]):
                 rows, left, tag = [x for x in lines if x[4] == index], spot["x"], f"block{index}"
@@ -1231,18 +1256,20 @@ def run_overlay(watch: Watch):
             root.update_idletasks()  # now: shown before that, a first drawing stays at (0, 0)
 
         def refresh():
-            nonlocal drawn, painted
+            nonlocal drawn, map_drawn, painted
             if watch.stopping.is_set():
                 root.destroy()
                 return
-            cfg, lines, hud_shapes = watch.preview or watch.cfg, watch.display, watch.hud_frame()
+            cfg, lines, shapes = watch.preview or watch.cfg, watch.display, watch.hud_frame()
             map_shapes, image = watch.map_frame()
-            shapes = hud_shapes + map_shapes
             lit = int(time.monotonic() * 2000 / cfg["flashMs"]) % 2 == 0
-            state = cfg, lines, shapes, image and image["box"], lit if any(x[3] for x in lines) or any(isinstance(s[-1], int) and s[-1] for s in shapes) else None
+            state = cfg, lines, shapes, lit if any(x[3] for x in lines) or any(s[-1] for s in shapes) else None
             if state != drawn:
                 drawn = state
-                draw(cfg, lines, lit, shapes, image)
+                draw(cfg, lines, lit, shapes)
+            if (map_shapes, image and image["box"], cfg["mapOpacity"]) != map_drawn:
+                map_drawn = map_shapes, image and image["box"], cfg["mapOpacity"]
+                draw_map(cfg, map_shapes, image)
             if pressed(cfg["hotkey"]):
                 watch.hidden = not watch.hidden
             if pressed(cfg["logKey"]):
@@ -1255,16 +1282,18 @@ def run_overlay(watch: Watch):
             on_game = cfg["show"] and not watch.hidden and not held and game_focused()
             # ShowWindow rather than Tk: Tk would take the focus
             user32.ShowWindow(hwnd, SW_SHOWNOACTIVATE if (lines or shapes) and (watch.preview or on_game) else SW_HIDE)
+            user32.ShowWindow(map_hwnd, SW_SHOWNOACTIVATE if map_shapes and (watch.preview or on_game) else SW_HIDE)
             if cfg["glow"] and (glow_color(cfg), cfg["glowSize"]) != painted:  # ahead of the first alarm: it takes a moment on a big screen
                 painted = glow_color(cfg), cfg["glowSize"]
                 paint_glow(glow_hwnd, screen(), glow_pixels(screen(), *painted))
             warn = watch.preview or (watch.warn and not watch.hidden and game_focused())
             user32.ShowWindow(glow_hwnd, SW_SHOWNOACTIVATE if cfg["glow"] and warn and (lit or not cfg["glowFlash"]) else SW_HIDE)
-            root.after(HUD_FRAME_MS if hud_shapes else int(POLL_S * 1000), refresh)
+            root.after(HUD_FRAME_MS if shapes else int(POLL_S * 1000), refresh)
 
         refresh()
         root.mainloop()
-        root = glow = canvas = draw = refresh = font_for = None
+        root = glow = mapwin = canvas = mapcanvas = draw = draw_map = refresh = font_for = None
+        photos.clear()
         fonts.clear()
         gc.collect()  # Tk must be freed here: left to Python's exit, in the main thread, it aborts the process
     except Exception as e:  # no Tk in this Python, no display...: the alarms still beep

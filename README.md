@@ -205,7 +205,8 @@ breaks, and records the flight: live curves, a flight report, a cockpit window f
 - **Minimap** (My overlay → Minimap, Windows, off until you turn it on): the game's own map in the overlay, bigger than the
   game's and zoomable around you, with your aircraft, its trail, and what never moves: airfields, capture zones, bases, and
   the distance and heading to your nearest airfield. **Never another aircraft or vehicle**: the game's map data also lists the
-  enemies it has spotted and your allies, and WTFTD drops them as soon as it reads them
+  enemies it has spotted and your allies, and WTFTD drops them as soon as it reads them. Drag it on the picture of your
+  screen like the text blocks; it has its own opacity
 - **Flight data** (Windows): live curves of what the game reports, in flight and in tanks and ships (speed, altitude, G, turn time, fuel use...),
   and a recorder: CSV logs for Excel, replayed in the app, with a **flight report** (top speed, best climb, best
   sustained turn, time to climb, fuel used) and an **export for Tacview**; saved views, and the curves as a picture

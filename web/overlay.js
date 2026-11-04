@@ -24,16 +24,36 @@ function ovShow(st) {
   OV.screen = st.screen;
   OV.hud = st.hud || {};
   OV.map = st.map || [];
+  OV.mapAt = [st.cfg.mapX, st.cfg.mapY];  // where the server drew it: a drag moves it from there
   ovDraw();
   ovDrawHud();
 }
 
 // the HUD of the place picked under Where, as the server drew it with the sample values
+// the minimap's sample, and the frame the mouse takes it by; moved at once while dragged, drawn again when saved
+function ovDrawMap() {
+  const svg = $('#ovMapLive'), hit = $('#ovMapHit'), c = OV.cfg, shapes = OV.map || [];
+  const k = $('#ovScreen').clientWidth / OV.screen[0], dx = (c.mapX - (OV.mapAt?.[0] ?? c.mapX)) * k, dy = (c.mapY - (OV.mapAt?.[1] ?? c.mapY)) * k;
+  svg.setAttribute('viewBox', `0 0 ${OV.screen[0]} ${OV.screen[1]}`);
+  svg.style.opacity = c.mapOpacity / 100;  // its own: the minimap has a window of its own
+  svg.style.transform = `translate(${dx}px, ${dy}px)`;
+  hudDraw(svg, shapes, c.hudColor, c.alert);
+  const xs = [], ys = [];
+  for (const s of shapes) {
+    const pts = s[0] === 'p' ? s[1] : s[0] === 'l' ? s.slice(1, 5) : s.slice(1, 3);
+    pts.forEach((v, i) => (i % 2 ? ys : xs).push(v));
+  }
+  hit.classList.toggle('hidden', !xs.length);
+  if (xs.length) Object.assign(hit.style, { left: `${Math.min(...xs) * k + dx}px`, top: `${Math.min(...ys) * k + dy}px`,
+                                            width: `${(Math.max(...xs) - Math.min(...xs)) * k}px`, height: `${(Math.max(...ys) - Math.min(...ys)) * k}px` });
+}
+
 function ovDrawHud() {
   const svg = $('#ovHudLive'), c = OV.cfg;
   svg.setAttribute('viewBox', `0 0 ${OV.screen[0]} ${OV.screen[1]}`);
   svg.style.opacity = c.opacity / 100;
-  hudDraw(svg, [...(OV.hud[OV.hudPlace] || []), ...OV.map], c.hudColor, c.alert);
+  hudDraw(svg, OV.hud[OV.hudPlace] || [], c.hudColor, c.alert);
+  ovDrawMap();
   $$('#ovHudPlace button').forEach(b => b.classList.toggle('active', b.dataset.place === OV.hudPlace));
   $$('#view-overlay [data-hudplace]').forEach(row => row.classList.toggle('hidden', row.dataset.hudplace !== OV.hudPlace));
 }
@@ -305,9 +325,28 @@ function ovTab(tab) {
   store.set('overlayTab', tab);
 }
 
+// the minimap taken by its frame: its place in px, like a text block's
+function ovDragMap(e) {
+  const hit = e.target, c = OV.cfg, k = $('#ovScreen').clientWidth / OV.screen[0];
+  const start = { x: c.mapX, y: c.mapY, px: e.clientX, py: e.clientY };
+  e.preventDefault();
+  hit.setPointerCapture(e.pointerId);
+  const move = ev => {
+    c.mapX = Math.round(start.x + (ev.clientX - start.px) / k);
+    c.mapY = Math.round(start.y + (ev.clientY - start.py) / k);
+    $('#ovMapX').value = c.mapX;
+    $('#ovMapY').value = c.mapY;
+    ovDrawMap();
+    ovSave();
+  };
+  hit.addEventListener('pointermove', move);
+  hit.addEventListener('pointerup', () => hit.removeEventListener('pointermove', move), { once: true });
+}
+
 function ovDrag() {
   const box = $('#ovScreen');
   box.addEventListener('pointerdown', e => {
+    if (e.target.id === 'ovMapHit') return ovDragMap(e);
     const text = e.target.closest('.ov-text');
     if (!text) return;
     e.preventDefault();
@@ -364,6 +403,7 @@ function bindOverlay() {
       OV.cfg[el.dataset.ov] = value;
       if (el.dataset.ov === 'size' || el.dataset.ov === 'color') ovRenderLines();  // what lines without their own show
       if (el.dataset.ov === 'alert') $('#ovGlowColor').value = ovFollowed('glowColor');
+      if (['mapX', 'mapY', 'mapOpacity'].includes(el.dataset.ov)) ovDrawMap();
       ovShowClears();
       ovDraw();
     } else if (el.dataset.ol) {

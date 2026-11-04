@@ -617,6 +617,7 @@
   "ov.mapZoom.4": "×4",
   "ov.mapZoom.8": "×8",
   "ov.mapTrail": "Your trail",
+  "ov.mapOpacity": "Opacity, %",
   "ov.mapX": "Left, px",
   "ov.mapY": "Top, px",
   "ov.mapSize": "Size, px",

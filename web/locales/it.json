@@ -599,6 +599,7 @@
   "ov.mapZoom.4": "×4",
   "ov.mapZoom.8": "×8",
   "ov.mapTrail": "La tua scia",
+  "ov.mapOpacity": "Opacità, %",
   "ov.mapX": "Sinistra, px",
   "ov.mapY": "Alto, px",
   "ov.mapSize": "Dimensione, px",

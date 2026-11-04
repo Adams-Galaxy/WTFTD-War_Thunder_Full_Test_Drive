@@ -9,7 +9,8 @@ Versions follow `major.minor.patch`; "beta" until 1.0.
 - **Minimap** (My overlay → Minimap, Windows): the game's own map in the overlay, bigger than the game's and zoomable around
   you (×2, ×4, ×8), with your aircraft, its trail, and what never moves: airfields, capture zones, bases, and the distance and
   heading to your nearest airfield. Never another aircraft or vehicle: the game's map data also lists the enemies it has
-  spotted and your allies, and they're dropped as soon as it's read. Off by default; size and place are yours.
+  spotted and your allies, and they're dropped as soon as it's read. Off by default. Drag it on the picture of your screen
+  like the text blocks; size and opacity are its own.
 
 ## 0.24.0 — 2026-11-04
 

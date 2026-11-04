@@ -80,6 +80,10 @@ class Settings(unittest.TestCase):
         self.assertEqual(alarms.clean({"mapZoom": True}, WORDS)["mapZoom"], 1)
         self.assertEqual(alarms.clean({"mapSize": 99999}, WORDS)["mapSize"], 3000)
 
+    def test_an_opacity_of_its_own(self):
+        self.assertEqual(alarms.clean({}, WORDS)["mapOpacity"], 85)
+        self.assertEqual(alarms.clean({"mapOpacity": 2}, WORDS)["mapOpacity"], 10)
+
 
 class Read(unittest.TestCase):
     def setUp(self):

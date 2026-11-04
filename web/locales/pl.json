@@ -599,6 +599,7 @@
   "ov.mapZoom.4": "×4",
   "ov.mapZoom.8": "×8",
   "ov.mapTrail": "Twój ślad",
+  "ov.mapOpacity": "Krycie, %",
   "ov.mapX": "Od lewej, px",
   "ov.mapY": "Od góry, px",
   "ov.mapSize": "Rozmiar, px",
