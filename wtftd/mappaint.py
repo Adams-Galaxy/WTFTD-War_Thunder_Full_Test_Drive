@@ -1,6 +1,8 @@
-"""The minimap painted by Windows (GDI+) into a layered window: the game's map turned with the aircraft and cut round or
-square, smooth lines and words, its own opacity. Tk can't turn a picture or cut it round, and can't read a JPEG, which
-the game sends for some maps; GDI+ does all of it (Windows only, like the overlay). minimap.draw says what goes where."""
+"""The overlay's minimap and text blocks painted by Windows (GDI+), each into a layered window. The minimap: the game's map
+turned with the aircraft and cut round or square, smooth lines and words, its own opacity (Tk can't turn a picture or cut it
+round, and can't read a JPEG, which the game sends for some maps; minimap.draw says what goes where). The text: smooth
+letters on a see-through window, a clean outline or else a soft dark halo, see-through backgrounds (Tk drew them against a
+colour made transparent, which left ragged edges, and its backgrounds were dotted). Windows only, like the overlay."""
 from __future__ import annotations
 
 import ctypes
@@ -15,6 +17,9 @@ UNIT_PIXEL, SMOOTH, BILINEAR, BICUBIC, TEXT_SMOOTH, BOLD = 2, 4, 3, 7, 4, 1
 MOST = 4096  # the scaled copy's largest side
 ANCHORS = {"w": 0, "m": 1, "e": 2}  # StringAlignmentNear, Center, Far
 EDGE, EDGE_PX = 0xE6000000, 2.5  # the dark edge round each mark: on a green or blue map, blue and green marks melted in
+HALO, HALO_PX = 0xB0000000, 2.5  # round text with no outline, a soft dark halo: light text on a light sky didn't read
+BLOCK_PAD = 10  # between a block's text and its frame or background
+TRAILING_SPACES, NO_CLIP = 0x800, 0x4000  # StringFormatFlags: "IAS    771" keeps its spaces
 
 
 class StartupInput(ctypes.Structure):
@@ -60,6 +65,13 @@ SIGNATURES = {
     "GdipCreateStringFormat": [ctypes.c_int, ctypes.c_int, ctypes.POINTER(P)], "GdipDeleteStringFormat": [P],
     "GdipSetStringFormatAlign": [P, ctypes.c_int], "GdipSetStringFormatLineAlign": [P, ctypes.c_int],
     "GdipDrawString": [P, ctypes.c_wchar_p, ctypes.c_int, P, ctypes.POINTER(RectF), P, P],
+    "GdipStringFormatGetGenericTypographic": [ctypes.POINTER(P)], "GdipCloneStringFormat": [P, ctypes.POINTER(P)],
+    "GdipSetStringFormatFlags": [P, ctypes.c_int],
+    "GdipMeasureString": [P, ctypes.c_wchar_p, ctypes.c_int, P, ctypes.POINTER(RectF), P, ctypes.POINTER(RectF), P, P],
+    "GdipGetLineSpacing": [P, ctypes.c_int, ctypes.POINTER(ctypes.c_uint16)], "GdipGetEmHeight": [P, ctypes.c_int, ctypes.POINTER(ctypes.c_uint16)],
+    "GdipAddPathString": [P, ctypes.c_wchar_p, ctypes.c_int, P, ctypes.c_int, F, ctypes.POINTER(RectF), P],
+    "GdipDrawPath": [P, P, P], "GdipSetPenLineJoin": [P, ctypes.c_int],
+    "GdipFillRectangle": [P, P, F, F, F, F], "GdipDrawRectangle": [P, P, F, F, F, F],
 }
 
 
@@ -82,6 +94,15 @@ class Painter:
         self.scaled, self.scaled_key = None, None  # the picture at the minimap's scale: each image only turns it
         self.family = P()
         self.gp.GdipCreateFontFamilyFromName("Consolas", None, ctypes.byref(self.family))
+        self.families, self.text_fonts = {}, {}
+        typographic, self.typographic = P(), P()  # no padding round the words, their spaces kept: measured as Tk did
+        self.gp.GdipStringFormatGetGenericTypographic(ctypes.byref(typographic))
+        self.gp.GdipCloneStringFormat(typographic, ctypes.byref(self.typographic))
+        self.gp.GdipSetStringFormatFlags(self.typographic, TRAILING_SPACES | NO_CLIP)
+        self.measurer, self.measuring = P(), P()  # a graphics of its own to measure words with
+        self.gp.GdipCreateBitmapFromScan0(1, 1, 0, PARGB, None, ctypes.byref(self.measurer))
+        self.gp.GdipGetImageGraphicsContext(self.measurer, ctypes.byref(self.measuring))
+        self.gp.GdipSetTextRenderingHint(self.measuring, TEXT_SMOOTH)
 
     def load(self, path: str | None, key) -> bool:
         """The map's picture, from the file the game's answer was kept in; False when there's none it can read."""
@@ -211,16 +232,19 @@ class Painter:
 
     def pixels(self, frame: dict, width: int, height: int, ox: float, oy: float) -> bytes:
         """The minimap as premultiplied BGRA, top row first: for the tests, and what paint sends to the window."""
+        return self._pixels(lambda g: self.draw(g, frame, ox, oy), width, height)
+
+    def _pixels(self, draw, width: int, height: int) -> bytes:
         buffer = (ctypes.c_ubyte * (width * height * 4))()
-        self._paint_into(ctypes.addressof(buffer), frame, width, height, ox, oy)
+        self._paint_into(ctypes.addressof(buffer), draw, width, height)
         return bytes(buffer)
 
-    def _paint_into(self, bits: int, frame: dict, width: int, height: int, ox: float, oy: float):
+    def _paint_into(self, bits: int, draw, width: int, height: int):
         bitmap, g = P(), P()
         self.gp.GdipCreateBitmapFromScan0(width, height, width * 4, PARGB, P(bits), ctypes.byref(bitmap))
         self.gp.GdipGetImageGraphicsContext(bitmap, ctypes.byref(g))
         try:
-            self.draw(g, frame, ox, oy)
+            draw(g)
         finally:
             self.gp.GdipDeleteGraphics(g)
             self.gp.GdipDisposeImage(bitmap)
@@ -229,6 +253,10 @@ class Painter:
         """The minimap into its layered window, which takes the place and size of the minimap and its words below."""
         left, top, size = frame["box"]
         ox, oy, width, height = int(left) - 2, int(top) - 2, max(int(size), 240) + 4, int(size) + 34
+        return self._layered(hwnd, lambda g: self.draw(g, frame, ox, oy), ox, oy, width, height, opacity)
+
+    def _layered(self, hwnd: int, draw, ox: int, oy: int, width: int, height: int, opacity: float) -> bool:
+        """A layered window's whole picture, place and size at once: no move or resize to show black for a moment."""
         gdi, user = ctypes.WinDLL("gdi32"), ctypes.WinDLL("user32")
         gdi.CreateCompatibleDC.argtypes, gdi.CreateCompatibleDC.restype = [w.HDC], w.HDC
         gdi.CreateDIBSection.argtypes = [w.HDC, P, w.UINT, ctypes.POINTER(P), w.HANDLE, w.DWORD]
@@ -241,7 +269,7 @@ class Painter:
         picture = gdi.CreateDIBSection(dc, ctypes.byref(Header(40, width, -height, 1, 32)), 0, ctypes.byref(bits), None, 0)  # top row first
         done = False
         if picture:
-            self._paint_into(bits.value, frame, width, height, ox, oy)
+            self._paint_into(bits.value, draw, width, height)
             before = gdi.SelectObject(dc, picture)
             done = bool(user.UpdateLayeredWindow(hwnd, None, ctypes.byref(w.POINT(ox, oy)), ctypes.byref(w.SIZE(width, height)), dc,
                                                  ctypes.byref(w.POINT(0, 0)), 0, ctypes.byref(Blend(0, 0, round(255 * opacity), 1)), 2))
@@ -249,3 +277,122 @@ class Painter:
             gdi.DeleteObject(picture)
         gdi.DeleteDC(dc)
         return done
+
+    # ---------------------------------------------------------------- the overlay's text blocks
+
+    def _family(self, name: str):
+        if name not in self.families:
+            family = P()
+            if self.gp.GdipCreateFontFamilyFromName(name, None, ctypes.byref(family)):
+                family = self.family  # a font that isn't on this PC: Consolas
+            self.families[name] = family
+        return self.families[name]
+
+    def _text_font(self, cfg: dict, size: float):
+        style = (BOLD if cfg["bold"] else 0) | (2 if cfg["italic"] else 0)
+        key = cfg["font"], round(size), style
+        if key not in self.text_fonts:
+            family, font = self._family(cfg["font"]), P()
+            self.gp.GdipCreateFont(family, F(max(1, round(size))), style, UNIT_PIXEL, ctypes.byref(font))
+            spacing, em = ctypes.c_uint16(), ctypes.c_uint16()
+            self.gp.GdipGetLineSpacing(family, style, ctypes.byref(spacing))
+            self.gp.GdipGetEmHeight(family, style, ctypes.byref(em))
+            self.text_fonts[key] = (font, family, style, round(size) * spacing.value / (em.value or 1))
+        return self.text_fonts[key]
+
+    def _width(self, text: str, font) -> float:
+        box = RectF()
+        self.gp.GdipMeasureString(self.measuring, text, len(text), font, ctypes.byref(RectF(0, 0, 100000, 100000)), self.typographic,
+                                  ctypes.byref(box), None, None)
+        return box.w
+
+    def text_layout(self, cfg: dict, lines: list) -> tuple:
+        """Where each part of each line goes, as the Tk overlay laid them out: each block's lines in its columns, a column
+        as wide as its widest line. Returns ([(x, y, text, colour, size, blinks)...], [(block, box)...]) in screen pixels."""
+        from .alarms import columns_of  # here: alarms imports this module
+        parts, boxes = [], []
+        for index, spot in enumerate([cfg, *cfg["blocks"]]):
+            rows = [x for x in lines if x[4] == index]
+            left, low, high, top = spot["x"], None, None, spot["y"]
+            for column in columns_of(rows, spot["columns"]):
+                y, wide = spot["y"], 0.0
+                for _, color, size, blinks, _, row in column:
+                    font, _, _, height = self._text_font(cfg, size)
+                    x = left
+                    for text, tint in row or [(" ", color)]:
+                        parts.append((x, y, text, tint, size, blinks))
+                        x += self._width(text, font)
+                    y += height + cfg["spacing"]
+                    wide = max(wide, x - left)
+                    low = left if low is None else low
+                high = max(high or 0, left + wide)
+                left += wide + cfg["size"]
+                top = max(top, y)
+            if rows:
+                boxes.append((spot, (spot["x"], spot["y"], high, top - cfg["spacing"])))
+        return parts, boxes
+
+    def draw_text(self, g, cfg: dict, lines: list, lit: bool, ox: float, oy: float):
+        gp = self.gp
+        gp.GdipSetSmoothingMode(g, SMOOTH)
+        gp.GdipSetTextRenderingHint(g, TEXT_SMOOTH)
+        parts, boxes = self.text_layout(cfg, lines)
+        for spot, (x0, y0, x1, y1) in boxes:  # backgrounds and frames first, see-through as asked
+            pad = BLOCK_PAD + spot["frame"]
+            if spot["background"]:
+                brush = P()
+                gp.GdipCreateSolidFill(argb(spot["background"], round(255 * spot["bgOpacity"] / 100)), ctypes.byref(brush))
+                gp.GdipFillRectangle(g, brush, x0 - pad - ox, y0 - pad - oy, x1 - x0 + 2 * pad, y1 - y0 + 2 * pad)
+                gp.GdipDeleteBrush(brush)
+            if spot["frame"]:
+                pen = P()
+                gp.GdipCreatePen1(argb(spot["frameColor"]), F(spot["frame"]), UNIT_PIXEL, ctypes.byref(pen))
+                gp.GdipDrawRectangle(g, pen, x0 - pad + spot["frame"] / 2 - ox, y0 - pad + spot["frame"] / 2 - oy,
+                                     x1 - x0 + 2 * pad - spot["frame"], y1 - y0 + 2 * pad - spot["frame"])
+                gp.GdipDeletePen(pen)
+        outline = cfg["outline"]
+        for x, y, text, tint, size, blinks in parts:
+            if blinks and not lit or not text.strip():
+                continue
+            _, family, style, _ = self._text_font(cfg, size)
+            path, brush = P(), P()
+            gp.GdipCreatePath(0, ctypes.byref(path))
+            gp.GdipAddPathString(path, text, len(text), family, style, F(max(1, round(size))), ctypes.byref(RectF(x - ox, y - oy, 0, 0)), self.typographic)
+            if outline:  # the outline asked, round at the corners
+                pen = P()
+                gp.GdipCreatePen1(argb(cfg["outlineColor"]), F(2 * outline), UNIT_PIXEL, ctypes.byref(pen))
+                gp.GdipSetPenLineJoin(pen, 2)
+                gp.GdipDrawPath(g, pen, path)
+                gp.GdipDeletePen(pen)
+            else:  # none asked: a soft dark halo, so that light text reads on a light sky and still on a dark one
+                pen = P()
+                gp.GdipCreatePen1(HALO, F(2 * HALO_PX), UNIT_PIXEL, ctypes.byref(pen))
+                gp.GdipSetPenLineJoin(pen, 2)
+                gp.GdipDrawPath(g, pen, path)
+                gp.GdipDeletePen(pen)
+            gp.GdipCreateSolidFill(argb(tint), ctypes.byref(brush))
+            gp.GdipFillPath(g, brush, path)
+            gp.GdipDeleteBrush(brush)
+            gp.GdipDeletePath(path)
+
+    def text_box(self, cfg: dict, lines: list) -> tuple | None:
+        """The window round all the blocks, with room for their frames, outlines and shadows: (x, y, width, height)."""
+        _, boxes = self.text_layout(cfg, lines)
+        if not boxes:
+            return None
+        margin = BLOCK_PAD + max(spot["frame"] for spot, _ in boxes) + 2 * cfg["outline"] + 4
+        x0, y0 = min(b[0] for _, b in boxes) - margin, min(b[1] for _, b in boxes) - margin
+        x1, y1 = max(b[2] for _, b in boxes) + margin, max(b[3] for _, b in boxes) + margin
+        return int(x0), int(y0), int(x1 - x0) + 1, int(y1 - y0) + 1
+
+    def text_pixels(self, cfg: dict, lines: list, lit: bool = True) -> tuple:
+        """The text as premultiplied BGRA and its box: for the tests."""
+        box = self.text_box(cfg, lines)
+        return self._pixels(lambda g: self.draw_text(g, cfg, lines, lit, box[0], box[1]), box[2], box[3]), box
+
+    def paint_text(self, hwnd: int, cfg: dict, lines: list, lit: bool) -> bool:
+        """The overlay's text blocks into their layered window; False when there's nothing to show."""
+        box = self.text_box(cfg, lines)
+        if not box:
+            return False
+        return self._layered(hwnd, lambda g: self.draw_text(g, cfg, lines, lit, box[0], box[1]), *box, cfg["opacity"] / 100)

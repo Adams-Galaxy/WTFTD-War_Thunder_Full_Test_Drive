@@ -189,7 +189,8 @@ second screen, the battle log.
   your aircraft's breaking speeds with your thresholds and sounds or your own (mp3, wav...), on the sound output you
   choose, with a glow around the screen if you like, of the colour and size you want and flashing or not; they stop when you crash.
   Any line can have its own alert on any value (`fuel < 15 %`, `G > 9`) and show under conditions of its own, in up to
-  four text blocks with columns, a frame and a background, with an outline and its own colours for names, values and
+  four text blocks with columns, a frame and a see-through background, with an outline (or else a soft dark halo, so that light
+  text reads on a light sky) and its own colours for names, values and
   units. A key mutes the alarms, another hides the overlay. A line can also show **the name of what you're in**, and **your
   stats**: kills per death, win rate and battles from *My battles*, and your kills and deaths in the battle under way. It reads the game's local data about your own
   vehicle and your own line of the battle log only, nothing is added to the game
@@ -494,7 +495,8 @@ wtftd/                      Python backend (stdlib only)
   cdk.py + builder.py       sensors, engines, avionics, weapons on pylons of any kind
   alarms.py / flightlog.py  in-flight values, alarms and overlay (Windows) / CSV flight logs, report, Tacview export
   hud.py                    the fighter HUD's three styles, drawn as shapes for the overlay and the cockpit window
-  minimap.py / mappaint.py  the minimap: what it shows (never an enemy) / painted by Windows (GDI+), turned and cut round
+  minimap.py / mappaint.py  the minimap: what it shows (never an enemy) / the minimap and the overlay's text painted by
+                            Windows (GDI+): the map turned and cut round, smooth letters with a halo
   battle.py                 the game's chat and battle log
   replays.py                My battles: the player's own results, from the game's replay files
   patches.py                What changed: the comparison of two game versions, kept in user/patches.json

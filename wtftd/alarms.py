@@ -90,8 +90,7 @@ MAX_LINES = 30
 MAX_TEXT = 120
 MAX_BLOCKS = 3  # text blocks besides the main one
 MAX_TESTS = 4  # conditions on a line's showing or its alert
-STIPPLE = {100: "", 75: "gray75", 50: "gray50", 25: "gray25"}  # a block's background: a window has only one opacity
-BLOCK_PAD = 10  # between a block's text and its frame or background
+STIPPLE = {100: "", 75: "gray75", 50: "gray50", 25: "gray25"}  # a block's background opacities, % (the names: Tk's, before GDI+)
 OPS = {">": operator.gt, "<": operator.lt}
 SOUND = re.compile(r"[\w.\- ]{1,80}\.wav", re.I)  # the player's sounds, in user/sounds
 SOUND_RATE = 22050
@@ -1148,35 +1147,35 @@ def run_overlay(watch: Watch):
         mapwin.overrideredirect(True)
         mapwin.attributes("-topmost", True)
         mapwin.geometry("1x1+-10000+-10000")
+        textwin = tk.Toplevel(root)  # the text blocks: a layered window GDI+ paints too, smooth letters with a halo
+        textwin.overrideredirect(True)
+        textwin.attributes("-topmost", True)
+        textwin.geometry("1x1+-10000+-10000")
         root.update()
         hwnd = user32.GetAncestor(root.winfo_id(), 2)  # GA_ROOT
         glow_hwnd = user32.GetAncestor(glow.winfo_id(), 2)
         map_hwnd = user32.GetAncestor(mapwin.winfo_id(), 2)
+        text_hwnd = user32.GetAncestor(textwin.winfo_id(), 2)
         WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TRANSPARENT, WS_EX_LAYERED, GWL_EXSTYLE = 0x08000000, 0x80, 0x20, 0x80000, -20
         SW_HIDE, SW_SHOWNOACTIVATE = 0, 4
         click_through = WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW | WS_EX_TRANSPARENT  # clicks go through it
         user32.SetWindowLongW(hwnd, GWL_EXSTYLE, user32.GetWindowLongW(hwnd, GWL_EXSTYLE) | click_through)
-        user32.SetWindowLongW(map_hwnd, GWL_EXSTYLE, user32.GetWindowLongW(map_hwnd, GWL_EXSTYLE) | click_through | WS_EX_LAYERED)
-        paint_glow(map_hwnd, (1, 1), bytes(4))  # as the glow's: a picture before it's shown
+        for h in (map_hwnd, text_hwnd):
+            user32.SetWindowLongW(h, GWL_EXSTYLE, user32.GetWindowLongW(h, GWL_EXSTYLE) | click_through | WS_EX_LAYERED)
+            paint_glow(h, (1, 1), bytes(4))  # as the glow's: a picture before it's shown
         user32.SetWindowLongW(glow_hwnd, GWL_EXSTYLE, user32.GetWindowLongW(glow_hwnd, GWL_EXSTYLE) | click_through | WS_EX_LAYERED)
         paint_glow(glow_hwnd, (1, 1), bytes(4))  # a see-through pixel: hidden before its first picture, it would refuse them all
         user32.ShowWindow(hwnd, SW_HIDE)
         user32.ShowWindow(glow_hwnd, SW_HIDE)
         user32.ShowWindow(map_hwnd, SW_HIDE)
+        user32.ShowWindow(text_hwnd, SW_HIDE)
         user32.SetForegroundWindow(previous)  # creating the window took the focus
-        drawn, map_drawn, painted, fonts, placed, painter = None, None, None, {}, {}, []
+        drawn, map_drawn, text_drawn, painted, fonts, placed, painter, shown_text = None, None, None, None, {}, {}, [], [False]
         anchors = {"w": "w", "m": "center", "e": "e"}
 
         def pressed(keys: list) -> bool:
             return bool(keys and user32.GetAsyncKeyState(keys[-1]) & 1 and game_focused()
                         and all(user32.GetAsyncKeyState(k) & 0x8000 for k in keys[:-1]))
-
-        def font_for(cfg: dict, size: int):
-            key = cfg["font"], size, cfg["bold"], cfg["italic"]
-            if key not in fonts:
-                fonts[key] = tkfont.Font(root=root, family=cfg["font"], size=-size, weight="bold" if cfg["bold"] else "normal",
-                                         slant="italic" if cfg["italic"] else "roman")
-            return fonts[key]
 
         def hud_font(size: float, text: str):
             wide = any(ord(c) > 0x2E80 for c in text)  # Chinese: Consolas has none of it
@@ -1207,73 +1206,47 @@ def run_overlay(watch: Watch):
                 else:
                     canvas.create_oval(s[1] - s[3], s[2] - s[3], s[1] + s[3], s[2] + s[3], outline=tint, width=1.8, tags="hud")
 
-        def draw_map(frame: dict, opacity: float):
-            """The minimap into its window by GDI+; made at its first map, and none at all where GDI+ won't start."""
+        def gdi():
+            """The GDI+ painter of the minimap and the text, made the first time; None where GDI+ won't start."""
             if not painter:
                 try:
                     painter.append(mappaint.Painter())
                 except (OSError, AttributeError) as e:
-                    print(f"Minimap off: {e}", flush=True)
+                    print(f"Minimap and text off: {e}", flush=True)
                     painter.append(None)
-            if painter[0]:
+            return painter[0]
+
+        def draw_map(frame: dict, opacity: float):
+            if gdi():
                 painter[0].load(*frame["image"])
                 painter[0].paint(map_hwnd, frame, opacity)
 
-        def draw(cfg: dict, lines: list, lit: bool, shapes: list = ()):
-            """Each block's lines in their columns, its frame and background behind them, then the window around all of it.
-            lit: the blinking lines' turn to show."""
+        def draw(cfg: dict, lit: bool, shapes: list):
+            """The HUD, on a window as big as the screen: it moves at every image, the window mustn't."""
             canvas.delete("all")
-            ring = [(dx * r, dy * r) for r in range(1, cfg["outline"] + 1) for dx in (-1, 0, 1) for dy in (-1, 0, 1) if dx or dy]
-            dark = []
             draw_hud(cfg, shapes, lit)
-            for index, spot in enumerate([cfg, *cfg["blocks"]]):
-                rows, left, tag = [x for x in lines if x[4] == index], spot["x"], f"block{index}"
-                for column in columns_of(rows, spot["columns"]):
-                    y, wide = spot["y"], 0
-                    for _, color, size, blinks, _, parts in column:
-                        font, x, items = font_for(cfg, size), left, []
-                        for part, tint in parts or [(" ", color)]:
-                            edge = [canvas.create_text(x + dx, y + dy, text=part, fill=cfg["outlineColor"], font=font, anchor="nw", tags=tag) for dx, dy in ring]
-                            item = canvas.create_text(x, y, text=part, fill=tint, font=font, anchor="nw", tags=tag)
-                            items += [item, *edge]
-                            x += font.measure(part)
-                        for item in items[::len(ring) + 1]:  # over the outlines of the parts next to it
-                            canvas.tag_raise(item)
-                        dark += items if blinks and not lit else []
-                        y += font.metrics("linespace") + cfg["spacing"]
-                        wide = max(wide, x - left)
-                    left += wide + cfg["size"]
-                box = canvas.bbox(tag)
-                if box and (spot["frame"] or spot["background"]):
-                    pad = BLOCK_PAD + spot["frame"]
-                    canvas.tag_lower(canvas.create_rectangle(box[0] - pad, box[1] - pad, box[2] + pad, box[3] + pad, fill=spot["background"], width=spot["frame"],
-                                                             outline=spot["frameColor"] if spot["frame"] else "", tags=tag,
-                                                             stipple=STIPPLE[spot["bgOpacity"]] if spot["background"] else ""))
-            box = canvas.bbox("all")  # before hiding the dark lines: a blink mustn't move the window
-            if shapes:  # the whole screen: the HUD moves at every image, the window mustn't
+            if shapes:
                 width, height = screen()
                 canvas.configure(width=width, height=height)
                 place(f"{width}x{height}+0+0", cfg["opacity"] / 100)
-            elif box:
-                canvas.move("all", -box[0], -box[1])
-                canvas.configure(width=box[2] - box[0], height=box[3] - box[1])
-                place(f"{box[2] - box[0]}x{box[3] - box[1]}+{box[0]}+{box[1]}", cfg["opacity"] / 100)
-            for item in dark:
-                canvas.itemconfigure(item, state="hidden")
             root.update_idletasks()  # now: shown before that, a first drawing stays at (0, 0)
 
         def refresh():
-            nonlocal drawn, map_drawn, painted
+            nonlocal drawn, map_drawn, text_drawn, painted
             if watch.stopping.is_set():
                 root.destroy()
                 return
             cfg, lines, shapes = watch.preview or watch.cfg, watch.display, watch.hud_frame()
             frame = watch.map_frame()
             lit = int(time.monotonic() * 2000 / cfg["flashMs"]) % 2 == 0
-            state = cfg, lines, shapes, lit if any(x[3] for x in lines) or any(s[-1] for s in shapes) else None
+            state = cfg, shapes, lit if any(s[-1] for s in shapes) else None
             if state != drawn:
                 drawn = state
-                draw(cfg, lines, lit, shapes)
+                draw(cfg, lit, shapes)
+            words = cfg, lines, lit if any(x[3] for x in lines) else None
+            if words != text_drawn:
+                text_drawn = words
+                shown_text[0] = bool(lines and gdi() and painter[0].paint_text(text_hwnd, cfg, lines, lit))
             if frame and (frame, cfg["mapOpacity"]) != map_drawn:
                 map_drawn = frame, cfg["mapOpacity"]
                 draw_map(frame, cfg["mapOpacity"] / 100)
@@ -1288,7 +1261,8 @@ def run_overlay(watch: Watch):
             held = cfg["holdKey"] and all(user32.GetAsyncKeyState(k) & 0x8000 for k in cfg["holdKey"])
             on_game = cfg["show"] and not watch.hidden and not held and game_focused()
             # ShowWindow rather than Tk: Tk would take the focus
-            user32.ShowWindow(hwnd, SW_SHOWNOACTIVATE if (lines or shapes) and (watch.preview or on_game) else SW_HIDE)
+            user32.ShowWindow(hwnd, SW_SHOWNOACTIVATE if shapes and (watch.preview or on_game) else SW_HIDE)
+            user32.ShowWindow(text_hwnd, SW_SHOWNOACTIVATE if shown_text[0] and (watch.preview or on_game) else SW_HIDE)
             user32.ShowWindow(map_hwnd, SW_SHOWNOACTIVATE if frame and painter and painter[0] and (watch.preview or on_game) else SW_HIDE)
             if cfg["glow"] and (glow_color(cfg), cfg["glowSize"]) != painted:  # ahead of the first alarm: it takes a moment on a big screen
                 painted = glow_color(cfg), cfg["glowSize"]
@@ -1299,7 +1273,7 @@ def run_overlay(watch: Watch):
 
         refresh()
         root.mainloop()
-        root = glow = mapwin = canvas = draw = draw_map = refresh = font_for = None
+        root = glow = mapwin = textwin = canvas = draw = draw_map = refresh = None
         painter.clear()
         fonts.clear()
         gc.collect()  # Tk must be freed here: left to Python's exit, in the main thread, it aborts the process

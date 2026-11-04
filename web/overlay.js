@@ -96,6 +96,7 @@ function ovDraw() {
   [c, ...c.blocks].forEach((spot, i) => {
     const text = ovBlockEl(i), rows = OV.lines.filter(l => (l[4] || 0) === i), boxed = spot.frame || spot.background, pad = boxed ? (10 + spot.frame) * k : 0;
     Object.assign(text.style, look, { left: `${spot.x * k}px`, top: `${spot.y * k}px`, opacity: c.opacity / 100, webkitTextStroke: stroke(k),
+                                      textShadow: c.outline ? '' : `0 0 ${Math.max(1, 3 * k)}px #000, 0 0 ${Math.max(1, 2 * k)}px #000`,  // the overlay's halo
                                       gridTemplateRows: `repeat(${Math.max(1, Math.ceil(rows.length / spot.columns))}, auto)`, columnGap: `${c.size * k}px`,
                                       margin: `${-pad}px 0 0 ${-pad}px`, padding: boxed ? `${10 * k}px` : '',
                                       border: spot.frame ? `${Math.max(1, spot.frame * k)}px solid ${spot.frameColor}` : '',
