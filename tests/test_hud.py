@@ -138,14 +138,14 @@ class Glide(unittest.TestCase):
 
 class Settings(unittest.TestCase):
     def test_defaults(self):
-        self.assertEqual((CFG["hudMode"], CFG["hudStyle"], CFG["hudUnits"], CFG["hudCockpitScale"]), ("auto", "auto", "auto", 60))
+        self.assertEqual((CFG["hudMode"], CFG["hudStyle"], CFG["hudUnits"], CFG["hudCockpitScale"]), ("off", "auto", "auto", 60))
         self.assertTrue(all(CFG[f"hud{p.title()}"] for p in hud.PARTS))
 
     def test_odd_values_get_the_default(self):
         cfg = alarms.clean({"hudStyle": "<b>", "hudMode": 3, "hudColor": "red", "hudOutsideScale": 9999, "hudFpm": "no",
                             "hudKey": [17, 72], "hudKeyName": "Ctrl+H"}, WORDS)
         self.assertEqual((cfg["hudStyle"], cfg["hudMode"], cfg["hudColor"], cfg["hudOutsideScale"], cfg["hudFpm"]),
-                         ("auto", "auto", alarms.HUD_DEFAULTS["hudColor"], 300, True))
+                         ("auto", "off", alarms.HUD_DEFAULTS["hudColor"], 300, True))
         self.assertEqual((cfg["hudKey"], cfg["hudKeyName"]), ([17, 72], "Ctrl+H"))
 
 
@@ -159,6 +159,7 @@ class Watched(unittest.TestCase):
                                   lambda: False, lambda: None, kind=lambda vid: "fighter", nation=lambda vid: "usa")
         self.watch.enabled = True
         self.watch.model = lambda: None
+        self.watch.set_config(alarms.clean({"hudMode": "auto"}, WORDS), {})
         patcher = mock.patch.object(alarms, "beep")
         patcher.start()
         self.addCleanup(patcher.stop)
@@ -181,10 +182,12 @@ class Watched(unittest.TestCase):
 
     def test_the_preview_shows_the_sample(self):
         watch = alarms.Watch(lambda path: None, dict, save=lambda: None, nation=lambda vid: "china")
+        on = {**CFG, "hudMode": "auto"}
         with mock.patch.object(watch, "start_overlay"):
-            watch.set_preview(CFG, "j_10c")
+            watch.set_preview(on, "j_10c")
         self.assertIn("640", texts(watch.hud))  # the sample's 640 km/h, in the Chinese style's km/h
-        self.assertEqual(watch.sample_hud(CFG, "type:jet")[0][0], "l")
+        self.assertEqual(watch.sample_hud(on, "type:jet")[0][0], "l")
+        self.assertEqual(watch.sample_hud(CFG, "j_10c"), [])  # off by default: no HUD in the preview either
 
 
 class CockpitWindow(unittest.TestCase):

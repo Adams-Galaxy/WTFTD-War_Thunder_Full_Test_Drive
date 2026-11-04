@@ -625,7 +625,7 @@ under Single missions → User missions, titled `Challenge: <name> (<difficulty>
 
 **What was built.** My overlay → HUD draws a fighter's HUD in the overlay window from /state and /indicators. Checked without the game:
 shapes for the three styles, the Tk drawing on a hidden window, the cockpit window's HUD button, the settings. The signs come from
-a recorded F-15A flight (pitch > 0 nose up, bank > 0 left wing down). Nothing has been flown with it yet. Turn the overlay on.
+a recorded F-15A flight (pitch > 0 nose up, bank > 0 left wing down). Nothing has been flown with it yet. Turn the overlay on, then HUD → Show it → On jets and helicopters (off by default).
 
 - [ ] **A jet, cockpit view** (F-15A or any): the HUD shows, small, in the middle. Heading, speed in knots, altitude in feet.
 - [ ] Bank left then right: the horizon line turns the same way as the game's horizon, not the other way.

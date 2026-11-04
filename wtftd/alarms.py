@@ -152,8 +152,8 @@ def labels(lang: str) -> dict:
     return out
 
 
-# the fighter HUD (hud.py): on jets and helicopters unless the player says otherwise, in its family's style
-HUD_CHOICES = {"hudMode": ("auto", "on", "off"), "hudStyle": ("auto", *hud.STYLES), "hudUnits": ("auto", "metric", "imperial"),
+# the fighter HUD (hud.py): off until the player turns it on (auto: jets and helicopters), in its family's style
+HUD_CHOICES = {"hudMode": ("off", "auto", "on"), "hudStyle": ("auto", *hud.STYLES), "hudUnits": ("auto", "metric", "imperial"),
                "hudLang": ("auto", *hud.LANGS)}
 HUD_DEFAULTS = {**{k: v[0] for k, v in HUD_CHOICES.items()}, "hudColor": "#43FF7A", "hudKey": [], "hudKeyName": "",
                 "hudCockpitX": 0, "hudCockpitY": 0, "hudCockpitScale": 60, "hudOutsideX": 0, "hudOutsideY": 0, "hudOutsideScale": 100,
@@ -770,6 +770,8 @@ class Watch:
 
     def sample_hud(self, cfg: dict, key: str = "", place: str = "cockpit", screen_size: tuple | None = None) -> list:
         """The HUD with the sample values; key: the overlay's aircraft id, if it has one, for its nation's style."""
+        if cfg["hudMode"] == "off":
+            return []
         values = {**SAMPLE_STATE, **SAMPLE_ATTITUDE, **computed(SAMPLE_LIM, SAMPLE_STATE, self.words, {"burn": 95})}
         nation = self.nation(key) if key and not key.startswith("type:") else None
         on = active(percents(SAMPLE_LIM, SAMPLE_STATE), cfg["alarms"])

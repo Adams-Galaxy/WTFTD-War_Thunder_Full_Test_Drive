@@ -4,19 +4,19 @@ What changed in each version of WTFTD. Downloads: [Releases](https://github.com/
 (only the latest version is kept there; from 0.19.0 on, each version's code stays available through its git tag).
 Versions follow `major.minor.patch`; "beta" until 1.0.
 
-## 0.24.0 — not released yet
+## 0.24.0 — 2026-11-04
 
 - **Fighter HUD** (My overlay → HUD, Windows): a fighter's head-up display over the game, from your own aircraft's numbers:
   heading, a pitch ladder that turns with the bank, the flight path marker, speed and altitude, vertical speed, G, Mach, angle of
   attack, throttle and fuel. Three styles picked by the aircraft's nation, **American / NATO** (knots and feet), **Russian** and
-  **Chinese** (km/h and metres); the other nations get the NATO style, and any aircraft can have another one. On jets and
-  helicopters unless you say otherwise. Units, colour, size and place, and each part, are yours. One place for the cockpit view,
-  one for the outside view, and a key to switch them: the game doesn't say which view you're in. A speed alarm lights the speed.
-  It isn't lined up with the game's horizon: the overlay can't know where the camera looks. Its words follow the style
-  (English, Russian, Chinese) or the language you pick. It reads the game about 40 times a second and draws between readings:
-  the scales scroll smoothly, and the window no longer flashes black (it was resized at every image). Where the game sends no
-  pitch or bank (the J-16 and other aircraft without an artificial horizon), they're worked out from the climb, the angle of
-  attack, the roll rate and the turn: within 1° most of the time on a recorded F-15A flight.
+  **Chinese** (km/h and metres); the other nations get the NATO style, and any aircraft can have another one. Its words follow the
+  style (English, Russian, Chinese) or the language you pick. **Off by default**: turn the overlay on, then HUD → *Show it*, on jets
+  and helicopters or always. Units, colour, size, place and each part are yours. One place for the cockpit view, one for the
+  outside view, and a key to switch them: the game doesn't say which view you're in. A speed alarm lights the speed. It reads the
+  game about 40 times a second and draws between readings, so the scales scroll smoothly. Where the game sends no pitch or bank
+  (the J-16 and other aircraft without an artificial horizon), they're worked out from the climb, the angle of attack, the roll
+  rate and the turn: within a degree most of the time on a recorded F-15A flight. It isn't lined up with the game's horizon: the
+  overlay can't know where the camera looks.
 - **Cockpit window**: a HUD button fills it with the same HUD, for a second screen.
 
 ## 0.23.1 — 2026-11-01

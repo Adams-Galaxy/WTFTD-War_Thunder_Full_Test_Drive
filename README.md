@@ -191,16 +191,17 @@ breaks, and records the flight: live curves, a flight report, a cockpit window f
   units. A key mutes the alarms, another hides the overlay. A line can also show **the name of what you're in**, and **your
   stats**: kills per death, win rate and battles from *My battles*, and your kills and deaths in the battle under way. It reads the game's local data about your own
   vehicle and your own line of the battle log only, nothing is added to the game
-- **Fighter HUD** (My overlay → HUD, Windows): a fighter's head-up display over the game, drawn from your own aircraft's numbers:
-  heading, a pitch ladder that turns with the bank, the flight path marker, speed and altitude, vertical speed, G, Mach, angle
-  of attack, throttle and fuel. Three styles, picked by the aircraft's nation: **American / NATO** (knots and feet, scrolling
-  scales), **Russian** (km/h and metres in the corners, a moving horizon, angle of attack and G scales) and **Chinese**. Every other
-  nation gets the NATO style; any aircraft can have another one. On jets and helicopters unless you say otherwise; units, colour,
-  size, place and each part are yours. It has two places, one for the cockpit view and one for the outside view, and a key switches
-  them: the game doesn't say which view you're in. A speed alarm lights its speed. Its words are in the style's language,
-  or in English, Russian or Chinese if you prefer. It reads the game about 40 times a second and draws between readings, so
-  the scales scroll smoothly. On aircraft whose cockpit has no artificial horizon the game doesn't send (the J-16, for one),
-  pitch and bank are worked out from the climb, the angle of attack, the roll rate and the turn. Inspired by real HUDs, not a copy of one
+- **Fighter HUD** (My overlay → HUD, Windows, off until you turn it on): a fighter's head-up display over the game, drawn
+  from your own aircraft's numbers: heading, a pitch ladder that turns with the bank, the flight path marker, speed and altitude,
+  vertical speed, G, Mach, angle of attack, throttle and fuel. Three styles, picked by the aircraft's nation: **American / NATO**
+  (knots and feet, scrolling scales), **Russian** (km/h and metres in the corners, a moving horizon, angle of attack and G scales)
+  and **Chinese**; every other nation gets the NATO style, and any aircraft can have another one. Its words are in the style's
+  language, or in English, Russian or Chinese if you prefer. Turn the overlay on, then HUD → *Show it*: on jets and helicopters,
+  or always. Units, colour, size, place and each part are yours. It has two places, one for the cockpit view and one for the
+  outside view, and a key switches them: the game doesn't say which view you're in. A speed alarm lights its speed. It reads
+  the game about 40 times a second and draws between readings, so the scales scroll smoothly. Where the game sends no pitch or
+  bank (aircraft without an artificial horizon, such as the J-16), they're worked out from the climb, the angle of attack, the
+  roll rate and the turn. Your own aircraft only, nothing about anybody else. Inspired by real HUDs, not a copy of one
 - **Flight data** (Windows): live curves of what the game reports, in flight and in tanks and ships (speed, altitude, G, turn time, fuel use...),
   and a recorder: CSV logs for Excel, replayed in the app, with a **flight report** (top speed, best climb, best
   sustained turn, time to climb, fuel used) and an **export for Tacview**; saved views, and the curves as a picture
@@ -332,7 +333,8 @@ game warns when one stops working, can turn them off, and some game modes don't 
 
 The **In flight** tools only read what the game publishes on your own PC (`localhost:8111`): your aircraft's values, and
 the chat and battle log you see in game. No enemy position is used. The overlay is a separate window: nothing is
-injected and nothing touches the game. It isn't endorsed by Gaijin either.
+injected and nothing touches the game. It isn't endorsed by Gaijin either. The **fighter HUD** is drawn in that same window
+from your own aircraft's values: no target, no threat, no other aircraft.
 
 The **Test bench** presses no key and sends no input of any kind: you fly, it reads the same local values, your own aircraft's only.
 
@@ -450,7 +452,8 @@ corrections are very welcome — see [CONTRIBUTING.md](CONTRIBUTING.md#translati
   position), and thrust/weight reads a little high when loaded (the game doesn't tell the weapons' mass).
 - Fighter HUD: it isn't lined up with the game's horizon or its sights. The overlay can't know where the game's camera looks or how
   far it zooms, so the pitch ladder and the flight path marker are drawn at a fixed scale around the middle of the HUD. Its size
-  brings them closer. Not tried in a real flight yet: the in-game checklist has the list
+  brings them closer. Worked-out pitch and bank (J-16...) can lag a fast roll by a moment. There's no G alarm: the game gives no
+  G limit per aircraft. Barely flown yet ([checklist](docs/ingame-checklist.md))
 - Test bench: helicopters get top speed, climb and acceleration only. Its stall speed is where level flight at idle gives way, not the
   wing's stall: the game's instructor can hold the nose up. It hasn't been flown in the game yet ([checklist](docs/ingame-checklist.md)).
 - macOS support is new and less tested than Windows. The packaged app is built for Apple silicon; on an Intel
