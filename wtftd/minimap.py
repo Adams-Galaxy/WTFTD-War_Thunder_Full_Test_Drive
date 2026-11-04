@@ -8,7 +8,11 @@ where the map picture goes: {"box": the part of /map.img shown, in its pixels, "
 from __future__ import annotations
 
 import math
+import os
 import re
+import subprocess
+import sys
+from pathlib import Path
 
 FIXED = ("airfield", "capture_zone", "bombing_point", "defending_point")  # the map's own, the same for everybody
 COLOR = re.compile(r"#[0-9a-fA-F]{6}")
@@ -54,6 +58,33 @@ def png_size(img: bytes | None) -> tuple | None:
     if not img or img[:8] != b"\x89PNG\r\n\x1a\n" or len(img) < 24:
         return None
     return int.from_bytes(img[16:20], "big"), int.from_bytes(img[20:24], "big")
+
+
+# Windows' own image library, through PowerShell: the paths go in the environment, never in the command
+TO_PNG = ("Add-Type -AssemblyName System.Drawing; $i = [System.Drawing.Image]::FromFile($env:WTFTD_IN); "
+          "$i.Save($env:WTFTD_OUT, [System.Drawing.Imaging.ImageFormat]::Png); $i.Dispose()")
+
+
+JPEG = bytes((0xFF, 0xD8))  # how a JPEG starts
+
+
+def to_png(img: bytes | None, folder: Path) -> bytes | None:
+    """The game sends some maps as JPEG, which Tk can't show: Windows turns it into a PNG, once per map (under a second).
+    None when it can't, and the minimap keeps its dark square."""
+    if sys.platform != "win32" or not img or img[:2] != JPEG:
+        return None
+    folder.mkdir(parents=True, exist_ok=True)
+    src, dst = folder / "map.jpg", folder / "map.png"
+    try:
+        src.write_bytes(img)
+        dst.unlink(missing_ok=True)
+        subprocess.run(["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", TO_PNG], timeout=30, check=True,
+                       env={**os.environ, "WTFTD_IN": str(src), "WTFTD_OUT": str(dst)}, capture_output=True,
+                       creationflags=subprocess.CREATE_NO_WINDOW)
+        out = dst.read_bytes()
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return out if png_size(out) else None
 
 
 def view(me: dict | None, zoom: int) -> tuple:

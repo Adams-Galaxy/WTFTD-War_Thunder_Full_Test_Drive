@@ -1,6 +1,11 @@
 """The minimap: only your aircraft and the map's fixed objects, the picture's cut and size, the way home, its settings and reading."""
 import json
+import os
+import subprocess
+import sys
+import tempfile
 import unittest
+from pathlib import Path
 from unittest import mock
 
 from tests.test_alarms import WORDS, details, state
@@ -53,6 +58,26 @@ class Picture(unittest.TestCase):
         self.assertEqual(minimap.picture(200, (0, 0, 1), (512, 512)), (171, {"box": [0, 0, 512, 512], "n": 3}))
         self.assertEqual(minimap.picture(300, (0.75, 0, 0.25), (512, 512)), (256, {"box": [384, 0, 512, 128], "n": -2}))
         self.assertEqual(minimap.picture(300, (0, 0, 1), None), (300, None))
+
+
+@unittest.skipUnless(sys.platform == "win32", "Windows")
+class Jpeg(unittest.TestCase):
+    """Some maps come as JPEG (seen on a battle map, 2026-11-04): Windows turns them into a PNG Tk can show."""
+
+    def test_a_jpeg_becomes_a_png(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            jpg = Path(tmp) / "made.jpg"
+            subprocess.run(["powershell.exe", "-NoProfile", "-NonInteractive", "-Command",
+                            "Add-Type -AssemblyName System.Drawing; $b = New-Object System.Drawing.Bitmap 6, 4; "
+                            "$b.Save($env:OUT, [System.Drawing.Imaging.ImageFormat]::Jpeg); $b.Dispose()"],
+                           env={**os.environ, "OUT": str(jpg)}, check=True, capture_output=True, timeout=60)
+            png = minimap.to_png(jpg.read_bytes(), Path(tmp) / "work")
+        self.assertEqual(minimap.png_size(png), (6, 4))
+
+    def test_anything_else_is_left(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertIsNone(minimap.to_png(b"GIF89a...", Path(tmp)))
+            self.assertIsNone(minimap.to_png(b"\xff\xd8 not a picture", Path(tmp)))
 
 
 class Home(unittest.TestCase):

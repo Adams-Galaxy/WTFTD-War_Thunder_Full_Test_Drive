@@ -35,7 +35,7 @@ from pathlib import Path
 from statistics import linear_regression
 
 from . import battle, flightlog, hud, minimap, sights, waveout
-from .paths import WEB
+from .paths import CACHE, WEB
 
 ALARMS = {"airframe": (93, 1400), "gear": (90, 1000), "flaps": (90, 700)}  # default: % of the limit, beep in Hz
 POLL_S = 0.1
@@ -805,6 +805,7 @@ class Watch:
         info = answer(self.get("/map_info.json"))
         if info.get("map_generation") != m["gen"]:  # another map: its picture, and a new trail
             img = self.get(f"/map.img?gen={info.get('map_generation', 0)}") if info else None
+            img = img if minimap.png_size(img) else minimap.to_png(img, CACHE / "minimap")  # shortcut: the watch waits for it, once a map
             m.update(gen=info.get("map_generation"), image=img if minimap.png_size(img) else None, trail=deque(maxlen=TRAIL_MAX))
         try:
             objects = json.loads(self.get("/map_obj.json")) if info else []
@@ -1211,6 +1212,7 @@ def run_overlay(watch: Watch):
             width, height = max(size, 240), size + 30  # room for the way to the airfield
             mapcanvas.configure(width=width, height=height)
             place(f"{width}x{height}+{x}+{y}", cfg["mapOpacity"] / 100, mapwin, map_placed)
+            mapwin.update_idletasks()  # now: shown before Tk has moved it, it stayed where it was made, off the screen
 
         def draw(cfg: dict, lines: list, lit: bool, shapes: list = ()):
             """Each block's lines in their columns, its frame and background behind them, then the window around all of it.

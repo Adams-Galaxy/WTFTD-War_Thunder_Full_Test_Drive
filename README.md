@@ -462,7 +462,8 @@ corrections are very welcome — see [CONTRIBUTING.md](CONTRIBUTING.md#translati
   far it zooms, so the pitch ladder and the flight path marker are drawn at a fixed scale around the middle of the HUD. Its size
   brings them closer. Worked-out pitch and bank (J-16...) can lag a fast roll by a moment. There's no G alarm: the game gives no
   G limit per aircraft. Barely flown yet ([checklist](docs/ingame-checklist.md))
-- Minimap: the map's picture shows when the game sends it as PNG (it can send a JPEG, then the marks show on a dark square).
+- Minimap: when the game sends its map as JPEG, Windows turns it into a PNG first (PowerShell, under a second once per map);
+  if that fails, the marks show on a dark square.
   Tk only shrinks or grows a picture by whole numbers, so its size comes out near the one you set, not exactly. Barely
   flown yet, and not in Simulator battles ([checklist](docs/ingame-checklist.md))
 - Test bench: helicopters get top speed, climb and acceleration only. Its stall speed is where level flight at idle gives way, not the
