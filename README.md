@@ -203,10 +203,12 @@ breaks, and records the flight: live curves, a flight report, a cockpit window f
   bank (aircraft without an artificial horizon, such as the J-16), they're worked out from the climb, the angle of attack, the
   roll rate and the turn. Your own aircraft only, nothing about anybody else. Inspired by real HUDs, not a copy of one
 - **Minimap** (My overlay → Minimap, Windows, off until you turn it on): the game's own map in the overlay, bigger than the
-  game's and zoomable around you, with your aircraft, its trail, and what never moves: airfields, capture zones, bases, and
-  the distance and heading to your nearest airfield. **Never another aircraft or vehicle**: the game's map data also lists the
-  enemies it has spotted and your allies, and WTFTD drops them as soon as it reads them. Drag it on the picture of your
-  screen like the text blocks, and resize it, or a text block, by the grip in its corner; it has its own opacity
+  game's and zoomable around you, square or round, north up or your nose up, with your aircraft gliding smoothly, its trail,
+  what never moves (airfields, capture zones, bases) and the distance and heading to your nearest airfield; and your allies if
+  you want them, told apart by their colour (blue, or a squadmate's green: the game doesn't say a unit's team). **Never an
+  enemy**: the game's map data also lists the ones it has spotted, and WTFTD drops them as soon as it reads them. Drag it on
+  the picture of your screen like the text blocks, and resize it, or a text block, by the grip in its corner; it has its own
+  opacity. Windows draws it (GDI+), which turns the map and reads it as the game sends it, JPEG or PNG
 - **Flight data** (Windows): live curves of what the game reports, in flight and in tanks and ships (speed, altitude, G, turn time, fuel use...),
   and a recorder: CSV logs for Excel, replayed in the app, with a **flight report** (top speed, best climb, best
   sustained turn, time to climb, fuel used) and an **export for Tacview**; saved views, and the curves as a picture
@@ -340,7 +342,7 @@ The **In flight** tools only read what the game publishes on your own PC (`local
 the chat and battle log you see in game. No enemy position is used. The overlay is a separate window: nothing is
 injected and nothing touches the game. It isn't endorsed by Gaijin either. The **fighter HUD** is drawn in that same window
 from your own aircraft's values: no target, no threat, no other aircraft. The **minimap** shows the game's own map, your
-aircraft and the objects that never move; it drops every other unit, enemy or ally, as soon as it reads the map. Gaijin's
+aircraft, the objects that never move and, if you ask, your allies; it drops every enemy as soon as it reads the map. Gaijin's
 staff said overlays built on this local data are fine, and that enemy markers on one can count as an ESP overlay
 ([forum, 2024](https://forum.warthunder.com/t/tools-using-data-provided-on-port-8111/106664/197)): WTFTD never shows them.
 
@@ -462,8 +464,8 @@ corrections are very welcome — see [CONTRIBUTING.md](CONTRIBUTING.md#translati
   far it zooms, so the pitch ladder and the flight path marker are drawn at a fixed scale around the middle of the HUD. Its size
   brings them closer. Worked-out pitch and bank (J-16...) can lag a fast roll by a moment. There's no G alarm: the game gives no
   G limit per aircraft. Barely flown yet ([checklist](docs/ingame-checklist.md))
-- Minimap: when the game sends its map as JPEG, Windows turns it into a PNG first (PowerShell, under a second once per map);
-  if that fails, the marks show on a dark square.
+- Minimap: allies are told apart by colour, as the game shows them; with a colour-blind palette in the game, check that they still
+  read as allies, or leave them off. Nose up, the map runs off its edge near the sides of the map.
   Tk only shrinks or grows a picture by whole numbers, so its size comes out near the one you set, not exactly. Barely
   flown yet, and not in Simulator battles ([checklist](docs/ingame-checklist.md))
 - Test bench: helicopters get top speed, climb and acceleration only. Its stall speed is where level flight at idle gives way, not the

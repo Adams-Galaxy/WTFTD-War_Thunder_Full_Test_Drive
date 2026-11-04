@@ -34,14 +34,15 @@ from functools import lru_cache
 from pathlib import Path
 from statistics import linear_regression
 
-from . import battle, flightlog, hud, minimap, sights, waveout
+from . import battle, flightlog, hud, mappaint, minimap, sights, waveout
 from .paths import CACHE, WEB
 
 ALARMS = {"airframe": (93, 1400), "gear": (90, 1000), "flaps": (90, 700)}  # default: % of the limit, beep in Hz
 POLL_S = 0.1
 HUD_POLL_S = 0.025  # with the HUD: the game sends a new reading about every 22 ms
 HUD_FRAME_MS = 16  # and the window draws it between readings, at about 60 images a second
-MAP_S = 0.25  # the minimap reads the map's objects 4 times a second
+MAP_S = 0.1  # the minimap reads the map's objects 10 times a second, and glides between readings
+MAP_FRAME_MS = 33  # and the window draws it about 30 times a second
 TRAIL_MAX = 600  # its trail's last places
 IDLE_S = 1.0  # not flying: nothing to read fast
 REPEAT_MS = 300
@@ -169,7 +170,10 @@ def _map(cfg: dict, base: dict) -> dict:
             "mapZoom": zoom if type(zoom) is int and zoom in minimap.ZOOMS else base["mapZoom"],
             "mapSize": _num(cfg.get("mapSize"), base["mapSize"], 80, 3000), "mapX": _num(cfg.get("mapX"), base["mapX"], -20000, 20000),
             "mapY": _num(cfg.get("mapY"), base["mapY"], -20000, 20000), "mapTrail": _flag(cfg.get("mapTrail"), base["mapTrail"]),
-            "mapOpacity": _num(cfg.get("mapOpacity"), base["mapOpacity"], 10, 100)}
+            "mapOpacity": _num(cfg.get("mapOpacity"), base["mapOpacity"], 10, 100),
+            "mapShape": cfg.get("mapShape") if cfg.get("mapShape") in ("square", "round") else base["mapShape"],
+            "mapUp": cfg.get("mapUp") if cfg.get("mapUp") in ("north", "heading") else base["mapUp"],
+            "mapAllies": _flag(cfg.get("mapAllies"), base["mapAllies"])}
 
 
 def _hud(cfg: dict) -> dict:
@@ -195,7 +199,7 @@ def defaults(words: dict) -> dict:
             "glowSize": GLOW_SIZE, "glowColor": "", "glowFlash": False, "flashMs": 500, "volume": 100, "soundFocus": False, "soundEngine": False,
             "pollMs": round(POLL_S * 1000), "logMs": round(SAMPLE_S * 1000), "muteKey": [], "muteKeyName": "", "holdKey": [], "holdKeyName": "",
             "color": "#E6E6E6", "alert": "#FF0000", "opacity": 100, "show": True, "hotkey": [], "hotkeyName": "",
-            **HUD_DEFAULTS, "mapMode": "off", "mapZoom": 1, "mapTrail": True, "mapOpacity": 85,  # the minimap: off until the player turns it on
+            **HUD_DEFAULTS, "mapMode": "off", "mapZoom": 1, "mapTrail": True, "mapOpacity": 85, "mapShape": "square", "mapUp": "north", "mapAllies": False,  # the minimap: off until the player turns it on
             "mapSize": round(560 * scale), "mapX": round(40 * scale), "mapY": round(1100 * scale),
             "logKey": [], "logKeyName": "", "hideCrash": False, "hideUnknown": False, "glow": False, "repeat": REPEAT_MS, "alarms": {n: {"on": True, "at": at, "hz": hz, "ms": BEEP_MS, "sound": ""} for n, (at, hz) in ALARMS.items()},
             "lines": [line("IAS", "{ias} / {vne} km/h {swept}", alarm="airframe"), line("MACH", "{mach} / {mne}", alarm="airframe"),
@@ -794,10 +798,12 @@ class Watch:
 
     @staticmethod
     def blank_map() -> dict:
-        return {"t": 0.0, "gen": None, "image": None, "info": {}, "seen": {"me": None, "fixed": []}, "trail": deque(maxlen=TRAIL_MAX)}
+        return {"t": 0.0, "gen": None, "image": None, "info": {}, "seen": {"me": None, "fixed": [], "allies": []}, "trail": deque(maxlen=TRAIL_MAX),
+                "glide": hud.Glide()}
 
     def read_map(self):
-        """The minimap's reading, 4 times a second: minimap.keep drops every unit but yours as soon as it's read."""
+        """The minimap's reading, 10 times a second: minimap.keep drops every enemy (and the allies unless asked) as soon as
+        it's read. The map's picture is kept in a file, any format the game sends: GDI+ reads it from there."""
         m, now = self.map, time.monotonic()
         if now - m["t"] < MAP_S:
             return
@@ -805,29 +811,53 @@ class Watch:
         info = answer(self.get("/map_info.json"))
         if info.get("map_generation") != m["gen"]:  # another map: its picture, and a new trail
             img = self.get(f"/map.img?gen={info.get('map_generation', 0)}") if info else None
-            img = img if minimap.png_size(img) else minimap.to_png(img, CACHE / "minimap")  # shortcut: the watch waits for it, once a map
-            m.update(gen=info.get("map_generation"), image=img if minimap.png_size(img) else None, trail=deque(maxlen=TRAIL_MAX))
+            m.update(gen=info.get("map_generation"), image=self.keep_picture(img, info.get("map_generation")), trail=deque(maxlen=TRAIL_MAX),
+                     glide=hud.Glide())
         try:
             objects = json.loads(self.get("/map_obj.json")) if info else []
         except (TypeError, ValueError):
             objects = []
-        m["info"], m["seen"] = info, minimap.keep(objects)
+        m["info"], m["seen"] = info, minimap.keep(objects, (self.map_live or {}).get("mapAllies", False))
         me = m["seen"]["me"]
+        if me:
+            m["glide"].add(now, me)
         if me and (not m["trail"] or math.dist(m["trail"][-1], (me["x"], me["y"])) > 0.002):
             m["trail"].append((me["x"], me["y"]))
 
-    def sample_map(self, cfg: dict) -> list:
-        return [] if cfg["mapMode"] == "off" else minimap.draw(minimap.SAMPLE, minimap.SAMPLE_INFO, minimap.SAMPLE_TRAIL, cfg, None)[0]
+    @staticmethod
+    def keep_picture(img: bytes | None, gen) -> str | None:
+        """The map's picture in a file of its map: GDI+ keeps the one it reads open, so each map has its own."""
+        folder = CACHE / "minimap"
+        for old in folder.glob("map-*.img"):
+            with contextlib.suppress(OSError):  # the one still shown stays until its map goes
+                old.unlink()
+        if not img or len(img) < 1000:  # outside a battle the game sends a blank of 1.5 kB
+            return None
+        try:
+            folder.mkdir(parents=True, exist_ok=True)
+            path = folder / f"map-{gen}.img"
+            path.write_bytes(img)
+        except OSError:
+            return None
+        return str(path)
 
-    def map_frame(self) -> tuple:
-        """The minimap to draw now: (shapes, picture), picture {data, gen, box, n, at} or None; the sample in the preview."""
+    def sample_frame(self, cfg: dict) -> dict | None:
+        return None if cfg["mapMode"] == "off" else minimap.draw(minimap.SAMPLE, minimap.SAMPLE_INFO, minimap.SAMPLE_TRAIL, cfg)
+
+    def sample_map(self, cfg: dict) -> list:
+        """The sample's shapes, for My overlay's picture of the screen."""
+        frame = self.sample_frame(cfg)
+        return frame["marks"] + frame["frame"] if frame else []
+
+    def map_frame(self) -> dict | None:
+        """The minimap to draw now (minimap.draw's, with "image": (its file, its map)), the aircraft gliding between
+        readings; the sample while My overlay shows it on the screen."""
         cfg, m = self.map_live, self.map
         if not cfg:
-            return (self.sample_map(self.preview), None) if self.preview else ([], None)
-        shapes, image = minimap.draw(m["seen"], m["info"], list(m["trail"]), cfg, minimap.png_size(m["image"]))
-        if image:
-            image.update(data=m["image"], gen=m["gen"])
-        return shapes, image
+            frame = self.sample_frame(self.preview) if self.preview else None
+            return {**frame, "image": (None, None)} if frame else None
+        seen = {**m["seen"], "me": m["glide"].at(time.monotonic()) or m["seen"]["me"]}
+        return {**minimap.draw(seen, m["info"], list(m["trail"]), cfg), "image": (m["image"], m["gen"])}
 
     def hud_frame(self, size: tuple | None = None, place: str | None = None, cfg: dict | None = None) -> list:
         """The HUD to draw now: in flight, the readings glide into each other; else the preview's sample, if any.
@@ -1113,14 +1143,10 @@ def run_overlay(watch: Watch):
         glow.overrideredirect(True)
         glow.attributes("-topmost", True)
         glow.geometry("1x1+-10000+-10000")
-        mapwin = tk.Toplevel(root)  # the minimap: a window of its own, for an opacity of its own
+        mapwin = tk.Toplevel(root)  # the minimap: a layered window GDI+ paints (mappaint), with an opacity of its own
         mapwin.overrideredirect(True)
         mapwin.attributes("-topmost", True)
-        mapwin.attributes("-transparentcolor", OVERLAY_KEY)
-        mapwin.configure(bg=OVERLAY_KEY)
         mapwin.geometry("1x1+-10000+-10000")
-        mapcanvas = tk.Canvas(mapwin, bg=OVERLAY_KEY, bd=0, highlightthickness=0)
-        mapcanvas.pack()
         root.update()
         hwnd = user32.GetAncestor(root.winfo_id(), 2)  # GA_ROOT
         glow_hwnd = user32.GetAncestor(glow.winfo_id(), 2)
@@ -1128,15 +1154,16 @@ def run_overlay(watch: Watch):
         WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TRANSPARENT, WS_EX_LAYERED, GWL_EXSTYLE = 0x08000000, 0x80, 0x20, 0x80000, -20
         SW_HIDE, SW_SHOWNOACTIVATE = 0, 4
         click_through = WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW | WS_EX_TRANSPARENT  # clicks go through it
-        for h in (hwnd, map_hwnd):
-            user32.SetWindowLongW(h, GWL_EXSTYLE, user32.GetWindowLongW(h, GWL_EXSTYLE) | click_through)
+        user32.SetWindowLongW(hwnd, GWL_EXSTYLE, user32.GetWindowLongW(hwnd, GWL_EXSTYLE) | click_through)
+        user32.SetWindowLongW(map_hwnd, GWL_EXSTYLE, user32.GetWindowLongW(map_hwnd, GWL_EXSTYLE) | click_through | WS_EX_LAYERED)
+        paint_glow(map_hwnd, (1, 1), bytes(4))  # as the glow's: a picture before it's shown
         user32.SetWindowLongW(glow_hwnd, GWL_EXSTYLE, user32.GetWindowLongW(glow_hwnd, GWL_EXSTYLE) | click_through | WS_EX_LAYERED)
         paint_glow(glow_hwnd, (1, 1), bytes(4))  # a see-through pixel: hidden before its first picture, it would refuse them all
         user32.ShowWindow(hwnd, SW_HIDE)
         user32.ShowWindow(glow_hwnd, SW_HIDE)
         user32.ShowWindow(map_hwnd, SW_HIDE)
         user32.SetForegroundWindow(previous)  # creating the window took the focus
-        drawn, map_drawn, painted, fonts, placed, map_placed, photos = None, None, None, {}, {}, {}, {}
+        drawn, map_drawn, painted, fonts, placed, painter = None, None, None, {}, {}, []
         anchors = {"w": "w", "m": "center", "e": "e"}
 
         def pressed(keys: list) -> bool:
@@ -1179,40 +1206,17 @@ def run_overlay(watch: Watch):
                 else:
                     canvas.create_oval(s[1] - s[3], s[2] - s[3], s[1] + s[3], s[2] + s[3], outline=tint, width=1.8, tags="hud")
 
-        def map_photo(image: dict):
-            """The part of /map.img the minimap shows, shrunk or grown by Tk: made again only when it changes."""
-            if photos.get("gen") != image["gen"] or photos.get("data") is not image["data"]:
-                photos.clear()
-                photos.update(gen=image["gen"], data=image["data"])
+        def draw_map(frame: dict, opacity: float):
+            """The minimap into its window by GDI+; made at its first map, and none at all where GDI+ won't start."""
+            if not painter:
                 try:
-                    photos["src"] = tk.PhotoImage(master=root, data=base64.b64encode(image["data"]))
-                except tk.TclError:
-                    photos["src"] = None
-            if not photos["src"]:
-                return None
-            key = tuple(image["box"]), image["n"]
-            if photos.get("key") != key:
-                shown, n = tk.PhotoImage(master=root), image["n"]
-                shown.tk.call(shown, "copy", photos["src"], "-from", *image["box"], *(("-subsample", n, n) if n > 0 else ("-zoom", -n, -n)))
-                photos.update(key=key, shown=shown)
-            return photos["shown"]
-
-        def draw_map(cfg: dict, shapes: list, image: dict | None):
-            """The minimap in its window, which moves only when the minimap does: around its frame, and its line below."""
-            mapcanvas.delete("all")
-            if not shapes:
-                return
-            frame = [s for s in shapes if s[0] == "p"][-1][1]  # drawn last of its kind, see minimap.draw
-            x, y, size = int(frame[0]) - 2, int(frame[1]) - 2, int(frame[2] - frame[0]) + 4
-            photo = map_photo(image) if image else None
-            if photo:
-                mapcanvas.create_image(*image["at"], image=photo, anchor="nw")
-            draw_hud(cfg, shapes, True, mapcanvas)
-            mapcanvas.move("all", -x, -y)
-            width, height = max(size, 240), size + 30  # room for the way to the airfield
-            mapcanvas.configure(width=width, height=height)
-            place(f"{width}x{height}+{x}+{y}", cfg["mapOpacity"] / 100, mapwin, map_placed)
-            mapwin.update_idletasks()  # now: shown before Tk has moved it, it stayed where it was made, off the screen
+                    painter.append(mappaint.Painter())
+                except (OSError, AttributeError) as e:
+                    print(f"Minimap off: {e}", flush=True)
+                    painter.append(None)
+            if painter[0]:
+                painter[0].load(*frame["image"])
+                painter[0].paint(map_hwnd, frame, opacity)
 
         def draw(cfg: dict, lines: list, lit: bool, shapes: list = ()):
             """Each block's lines in their columns, its frame and background behind them, then the window around all of it.
@@ -1263,15 +1267,15 @@ def run_overlay(watch: Watch):
                 root.destroy()
                 return
             cfg, lines, shapes = watch.preview or watch.cfg, watch.display, watch.hud_frame()
-            map_shapes, image = watch.map_frame()
+            frame = watch.map_frame()
             lit = int(time.monotonic() * 2000 / cfg["flashMs"]) % 2 == 0
             state = cfg, lines, shapes, lit if any(x[3] for x in lines) or any(s[-1] for s in shapes) else None
             if state != drawn:
                 drawn = state
                 draw(cfg, lines, lit, shapes)
-            if (map_shapes, image and image["box"], cfg["mapOpacity"]) != map_drawn:
-                map_drawn = map_shapes, image and image["box"], cfg["mapOpacity"]
-                draw_map(cfg, map_shapes, image)
+            if frame and (frame, cfg["mapOpacity"]) != map_drawn:
+                map_drawn = frame, cfg["mapOpacity"]
+                draw_map(frame, cfg["mapOpacity"] / 100)
             if pressed(cfg["hotkey"]):
                 watch.hidden = not watch.hidden
             if pressed(cfg["logKey"]):
@@ -1284,18 +1288,18 @@ def run_overlay(watch: Watch):
             on_game = cfg["show"] and not watch.hidden and not held and game_focused()
             # ShowWindow rather than Tk: Tk would take the focus
             user32.ShowWindow(hwnd, SW_SHOWNOACTIVATE if (lines or shapes) and (watch.preview or on_game) else SW_HIDE)
-            user32.ShowWindow(map_hwnd, SW_SHOWNOACTIVATE if map_shapes and (watch.preview or on_game) else SW_HIDE)
+            user32.ShowWindow(map_hwnd, SW_SHOWNOACTIVATE if frame and painter and painter[0] and (watch.preview or on_game) else SW_HIDE)
             if cfg["glow"] and (glow_color(cfg), cfg["glowSize"]) != painted:  # ahead of the first alarm: it takes a moment on a big screen
                 painted = glow_color(cfg), cfg["glowSize"]
                 paint_glow(glow_hwnd, screen(), glow_pixels(screen(), *painted))
             warn = watch.preview or (watch.warn and not watch.hidden and game_focused())
             user32.ShowWindow(glow_hwnd, SW_SHOWNOACTIVATE if cfg["glow"] and warn and (lit or not cfg["glowFlash"]) else SW_HIDE)
-            root.after(HUD_FRAME_MS if shapes else int(POLL_S * 1000), refresh)
+            root.after(HUD_FRAME_MS if shapes else MAP_FRAME_MS if frame else int(POLL_S * 1000), refresh)
 
         refresh()
         root.mainloop()
-        root = glow = mapwin = canvas = mapcanvas = draw = draw_map = refresh = font_for = None
-        photos.clear()
+        root = glow = mapwin = canvas = draw = draw_map = refresh = font_for = None
+        painter.clear()
         fonts.clear()
         gc.collect()  # Tk must be freed here: left to Python's exit, in the main thread, it aborts the process
     except Exception as e:  # no Tk in this Python, no display...: the alarms still beep

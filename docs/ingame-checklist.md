@@ -651,7 +651,9 @@ a battle: if a kind of object is missing, read `http://127.0.0.1:8111/map_obj.js
 - [ ] Airfields as runways, ours blue and the enemy's red; `AF … km …°` leads to ours (fly that heading: does it?).
 - [ ] A ground battle in a plane: capture zones show, with their colour. Bases (bombing points) in an air battle.
 - [ ] Zoom ×4: the map follows you, and stops at the edge of the map.
-- [ ] The map picture shows, PNG or JPEG (a JPEG is turned into a PNG first). A dark square with marks means that failed.
+- [ ] Round, nose up: the map turns as you turn, your arrow stays up, N shows where north is. Smooth, at about 30 images a second?
+- [ ] Allies on: your team's aircraft and vehicles show, in blue (squad in green); never a red one. With a colour-blind palette too?
+- [ ] The map picture shows, PNG or JPEG (GDI+ reads both). A dark map with marks only means it couldn't read it.
 - [ ] A Simulator battle: does the minimap show your position where the game's own map doesn't? If so it must be turned off there.
 
 ## 3. Ammunition icons (UI only)

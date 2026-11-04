@@ -10,7 +10,9 @@ Versions follow `major.minor.patch`; "beta" until 1.0.
   you (×2, ×4, ×8), with your aircraft, its trail, and what never moves: airfields, capture zones, bases, and the distance and
   heading to your nearest airfield. Never another aircraft or vehicle: the game's map data also lists the enemies it has
   spotted and your allies, and they're dropped as soon as it's read. Off by default. Drag it on the picture of your screen
-  like the text blocks; size and opacity are its own.
+  like the text blocks; size and opacity are its own. Square or round, north up or your nose up; your aircraft glides between
+  the game's readings; your allies if you want them, told apart by their colour. Windows draws it (GDI+): the map turns with
+  you and shows as the game sends it, JPEG or PNG.
 - **My overlay**: the text blocks and the minimap are resized on the picture of your screen, by the grip in their corner.
 - **The app window reopens where you closed it** (Windows), at its size, maximized or not, on the same screen. Edge lost
   it: it keeps an app window's place under its address, and the dots of 127.0.0.1 broke that. WTFTD keeps it now, in
