@@ -652,7 +652,8 @@ a battle: if a kind of object is missing, read `http://127.0.0.1:8111/map_obj.js
 - [ ] A ground battle in a plane: capture zones show, with their colour. Bases (bombing points) in an air battle.
 - [ ] Zoom ×4: the map follows you, and stops at the edge of the map.
 - [ ] Round, nose up: the map turns as you turn, your arrow stays up, N shows where north is. Smooth, at about 30 images a second?
-- [ ] Allies on: your team's aircraft and vehicles show, in blue (squad in green); never a red one. With a colour-blind palette too?
+- [ ] Allied aircraft on: your team's aircraft show, in blue (squad in green); never a red one. With a colour-blind palette too?
+- [ ] Allied AI units on, in an air battle: the allied artillery, SPAA and ships show, and only with that switch.
 - [ ] The map picture shows, PNG or JPEG (GDI+ reads both). A dark map with marks only means it couldn't read it.
 - [ ] A Simulator battle: does the minimap show your position where the game's own map doesn't? If so it must be turned off there.
 

@@ -44,6 +44,15 @@ class Kept(unittest.TestCase):
                              ("#FFFFFF", False), ("#808080", False), ("#FF8800", False)):
             self.assertEqual(minimap._ally(colour), ally, colour)
 
+    def test_aircraft_and_ai_units_each_their_own_switch(self):
+        ai = {"type": "ground_model", "icon": "Artillery", "color": "#043FFF", "x": 0.3, "y": 0.3}  # an allied AI in an air battle
+        squad = {"type": "aircraft", "icon": "Fighter", "color": "#39D921", "x": 0.31, "y": 0.3}  # as seen 2026-11-04
+        kept = lambda **on: sorted(a["air"] for a in minimap.keep([*OBJECTS, ai, squad], **on)["allies"])
+        self.assertEqual(kept(allies=True), [True, True])
+        self.assertEqual(kept(ground=True), [False])
+        self.assertEqual(kept(allies=True, ground=True), [False, True, True])
+        self.assertEqual(kept(), [])
+
     def test_odd_answers(self):
         self.assertEqual(minimap.keep(None), {"me": None, "fixed": [], "allies": []})
         self.assertEqual(minimap.keep([{"icon": "Player", "x": "a"}, 3], allies=True), {"me": None, "fixed": [], "allies": []})
@@ -105,8 +114,8 @@ class Home(unittest.TestCase):
 class Settings(unittest.TestCase):
     def test_off_until_turned_on(self):
         cfg = alarms.clean({}, WORDS)
-        self.assertEqual((cfg["mapMode"], cfg["mapZoom"], cfg["mapTrail"], cfg["mapShape"], cfg["mapUp"], cfg["mapAllies"], cfg["mapOpacity"]),
-                         ("off", 1, True, "square", "north", False, 85))
+        self.assertEqual((cfg["mapMode"], cfg["mapZoom"], cfg["mapTrail"], cfg["mapShape"], cfg["mapUp"], cfg["mapAllies"], cfg["mapAlliesGround"], cfg["mapOpacity"]),
+                         ("off", 1, True, "square", "north", False, False, 85))
 
     def test_odd_values(self):
         cfg = alarms.clean({"mapZoom": "4", "mapShape": "star", "mapUp": "<x>", "mapAllies": "yes", "mapSize": 99999, "mapOpacity": 2}, WORDS)

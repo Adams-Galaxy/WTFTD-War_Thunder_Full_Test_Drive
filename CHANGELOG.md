@@ -4,6 +4,11 @@ What changed in each version of WTFTD. Downloads: [Releases](https://github.com/
 (only the latest version is kept there; from 0.19.0 on, each version's code stays available through its git tag).
 Versions follow `major.minor.patch`; "beta" until 1.0.
 
+## 0.25.1 — not released yet
+
+- **Minimap**: allied aircraft and allied AI units (vehicles and ships, the AI in an air battle) each have their own switch,
+  both off by default. The game doesn't say who's an AI: they're told apart by what they are.
+
 ## 0.25.0 — 2026-11-04
 
 - **Minimap** (My overlay → Minimap, Windows): the game's own map in the overlay, bigger than the game's and zoomable around

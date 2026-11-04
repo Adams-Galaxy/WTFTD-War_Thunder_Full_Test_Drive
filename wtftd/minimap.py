@@ -49,9 +49,10 @@ def _heading(dx, dy) -> float:
     return math.degrees(math.atan2(dx or 0.0, -(dy if dy is not None else -1.0))) % 360  # 0 north, clockwise, as the compass
 
 
-def keep(objects, allies: bool = False) -> dict:
-    """Your aircraft, the fixed objects of /map_obj.json and, if asked, units in an ally's colour; nothing else.
-    Positions are shares of the map, 0 to 1."""
+def keep(objects, allies: bool = False, ground: bool = False) -> dict:
+    """Your aircraft, the fixed objects of /map_obj.json and, if asked, units in an ally's colour: allies, their aircraft;
+    ground, their vehicles and ships, the AI in an air battle (the game doesn't say who's an AI). Nothing else. Positions
+    are shares of the map, 0 to 1."""
     me, fixed, friends = None, [], []
     for o in objects if isinstance(objects, list) else []:
         if not isinstance(o, dict):
@@ -63,7 +64,7 @@ def keep(objects, allies: bool = False) -> dict:
         elif o.get("type") in FIXED:
             pts = {k: _num(o.get(k)) for k in ("x", "y", "sx", "sy", "ex", "ey")}
             fixed.append({"type": o["type"], "color": _color(o.get("color"), MAP_LINE), **{k: v for k, v in pts.items() if v is not None}})
-        elif allies and o.get("type") in UNITS and x is not None and y is not None:
+        elif (allies if o.get("type") == "aircraft" else ground) and o.get("type") in UNITS and x is not None and y is not None:
             color = _color(o.get("color"), "")
             if color and _ally(color):
                 friends.append({"x": x, "y": y, "heading": _heading(_num(o.get("dx")), _num(o.get("dy"))), "color": color,

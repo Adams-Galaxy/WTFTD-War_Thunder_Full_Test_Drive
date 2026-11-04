@@ -206,8 +206,9 @@ second screen, the battle log.
   roll rate and the turn. Your own aircraft only, nothing about anybody else. Inspired by real HUDs, not a copy of one
 - **Minimap** (My overlay → Minimap, Windows, off until you turn it on): the game's own map in the overlay, bigger than the
   game's and zoomable around you, square or round, north up or your nose up, with your aircraft gliding smoothly, its trail,
-  what never moves (airfields, capture zones, bases) and the distance and heading to your nearest airfield; and your allies if
-  you want them, told apart by their colour (blue, or a squadmate's green: the game doesn't say a unit's team). **Never an
+  what never moves (airfields, capture zones, bases) and the distance and heading to your nearest airfield; and if you want
+  them, allied aircraft and, apart, allied AI units on the ground and at sea, told apart by their colour (blue, or a squadmate's
+  green: the game doesn't say a unit's team, nor who's an AI; in an air battle the vehicles and ships are the AI). **Never an
   enemy**: the game's map data also lists the ones it has spotted, and WTFTD drops them as soon as it reads them. Drag it on
   the picture of your screen like the text blocks, and resize it, or a text block, by the grip in its corner; it has its own
   opacity. Windows draws it (GDI+), which turns the map and reads it as the game sends it, JPEG or PNG
