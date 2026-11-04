@@ -14,7 +14,7 @@ Versions follow `major.minor.patch`; "beta" until 1.0.
 - **My overlay**: the text blocks and the minimap are resized on the picture of your screen, by the grip in their corner.
 - **The app window reopens where you closed it** (Windows), at its size, maximized or not, on the same screen. Edge lost
   it: it keeps an app window's place under its address, and the dots of 127.0.0.1 broke that. WTFTD keeps it now, in
-  `user/window.json`; a place on a screen that's gone is left for the default one.
+  `user/window.json`, and opens it there straight away; a place on a screen that's gone is left for the default one.
 
 ## 0.24.0 — 2026-11-04
 

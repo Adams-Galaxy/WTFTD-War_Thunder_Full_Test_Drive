@@ -51,9 +51,17 @@ def find_app_browser() -> str | None:
 
 
 def window_args() -> list[str]:
-    """1500x920 app window, or maximized when the screen's work area is smaller (laptops, 1366x768...)."""
+    """Where the window was closed (user/window.json), so that it opens there rather than somewhere it then leaves; else
+    1500x920, or maximized when the screen's work area is smaller (laptops, 1366x768...). keep_place then puts it exactly
+    (shortcut: the browser's pixels are taken as the main screen's, a screen of another scale ends a little off until then)."""
     w, h = 1500, 920
     if sys.platform == "win32":
+        from . import tray
+        place = read_json(PLACE, None)
+        if tray.usable(place):
+            s = tray.primary_scale()
+            return [f"--window-position={round(place['x'] / s)},{round(place['y'] / s)}",
+                    f"--window-size={round(place['w'] / s)},{round(place['h'] / s)}", *(["--start-maximized"] if place["max"] else [])]
         try:
             import ctypes
             from ctypes import wintypes

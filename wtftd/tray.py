@@ -3,6 +3,7 @@ Minimized with the option on, it leaves the taskbar for an icon there: a click o
 the browser's, so it is found by its title and only ever shown, hidden, minimized or asked to close."""
 from __future__ import annotations
 
+import contextlib
 import ctypes
 import threading
 from ctypes import wintypes as w
@@ -49,21 +50,41 @@ def _user32():
     return user
 
 
+@contextlib.contextmanager
 def _real_pixels(user):
-    """This thread in physical pixels, read and written alike, whatever the process did about DPI (the overlay does)."""
+    """This thread in physical pixels for a while, read and written alike, whatever the process did about DPI (the overlay
+    does); then as it was."""
     try:
-        user.SetThreadDpiAwarenessContext(ctypes.c_void_p(-4))  # DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2
+        user.SetThreadDpiAwarenessContext.restype = ctypes.c_void_p
+        before = user.SetThreadDpiAwarenessContext(ctypes.c_void_p(-4))  # DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2
     except AttributeError:  # before Windows 10 1607: the process's own setting
-        pass
+        before = None
+    try:
+        yield
+    finally:
+        if before:
+            user.SetThreadDpiAwarenessContext(ctypes.c_void_p(before))
+
+
+def primary_scale() -> float:
+    """The main screen's scale (1.5 at 150 %): the browser takes a window's place in its own pixels, physical ones divided by it."""
+    user, dpi = _user32(), w.UINT(96)
+    with _real_pixels(user):
+        user.MonitorFromPoint.argtypes, user.MonitorFromPoint.restype = [w.POINT, w.DWORD], w.HANDLE
+        try:
+            ctypes.windll.shcore.GetDpiForMonitor(user.MonitorFromPoint(w.POINT(0, 0), 1), 0, ctypes.byref(dpi), ctypes.byref(w.UINT()))
+        except (AttributeError, OSError):  # MONITOR_DEFAULTTOPRIMARY, MDT_EFFECTIVE_DPI
+            pass
+    return dpi.value / 96 or 1.0
 
 
 def place_of(window) -> dict | None:
     """Where a window is: its restored rectangle (Windows' workspace coordinates) and whether it's maximized."""
     user = _user32()
-    _real_pixels(user)
     p = Placement(length=ctypes.sizeof(Placement))
-    if not user.GetWindowPlacement(window, ctypes.byref(p)):
-        return None
+    with _real_pixels(user):
+        if not user.GetWindowPlacement(window, ctypes.byref(p)):
+            return None
     r = p.normal
     maximized = p.show == SW_SHOWMAXIMIZED or (p.show == SW_SHOWMINIMIZED and p.flags & WPF_RESTORETOMAXIMIZED)
     return {"x": r.left, "y": r.top, "w": r.right - r.left, "h": r.bottom - r.top, "max": bool(maximized)}
@@ -76,17 +97,17 @@ def usable(place) -> bool:
     if not (200 <= place["w"] <= 20000 and 150 <= place["h"] <= 20000):
         return False
     user = _user32()
-    _real_pixels(user)
     rect = w.RECT(place["x"], place["y"], place["x"] + place["w"], place["y"] + place["h"])
-    return bool(user.MonitorFromRect(ctypes.byref(rect), 0))  # MONITOR_DEFAULTTONULL
+    with _real_pixels(user):
+        return bool(user.MonitorFromRect(ctypes.byref(rect), 0))  # MONITOR_DEFAULTTONULL
 
 
 def put(window, place: dict) -> bool:
     user = _user32()
-    _real_pixels(user)
     rect = w.RECT(place["x"], place["y"], place["x"] + place["w"], place["y"] + place["h"])
     p = Placement(length=ctypes.sizeof(Placement), show=SW_SHOWMAXIMIZED if place["max"] else SW_SHOWNORMAL, normal=rect)
-    return bool(user.SetWindowPlacement(window, ctypes.byref(p)))
+    with _real_pixels(user):
+        return bool(user.SetWindowPlacement(window, ctypes.byref(p)))
 
 
 def find_window(title: str = TITLE, kind: str = WINDOW_CLASS):
