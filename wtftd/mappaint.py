@@ -44,7 +44,7 @@ class Blend(ctypes.Structure):
 
 SIGNATURES = {
     "GdiplusStartup": [ctypes.POINTER(ctypes.c_size_t), ctypes.POINTER(StartupInput), P],
-    "GdipLoadImageFromFile": [ctypes.c_wchar_p, ctypes.POINTER(P)],
+    "GdipLoadImageFromStream": [P, ctypes.POINTER(P)],
     "GdipGetImageWidth": [P, ctypes.POINTER(ctypes.c_uint)], "GdipGetImageHeight": [P, ctypes.POINTER(ctypes.c_uint)],
     "GdipDisposeImage": [P],
     "GdipCreateBitmapFromScan0": [ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, P, ctypes.POINTER(P)],
@@ -75,6 +75,19 @@ SIGNATURES = {
 }
 
 
+def _stream(data: bytes):
+    """An IStream over a copy of the bytes (SHCreateMemStream), for GdipLoadImageFromStream."""
+    shlwapi = ctypes.WinDLL("shlwapi")
+    shlwapi.SHCreateMemStream.argtypes, shlwapi.SHCreateMemStream.restype = [ctypes.c_char_p, ctypes.c_uint], P
+    return shlwapi.SHCreateMemStream(data, len(data)) or None
+
+
+def _release(com) -> None:
+    """IUnknown::Release, the third entry of a COM object's table."""
+    table = ctypes.cast(com, ctypes.POINTER(ctypes.POINTER(P))).contents
+    ctypes.WINFUNCTYPE(ctypes.c_ulong, P)(table[2])(com)
+
+
 def argb(color: str, alpha: int = 255) -> int:
     return (alpha << 24) | int(color[1:7], 16)
 
@@ -92,6 +105,7 @@ class Painter:
             raise OSError("GDI+ didn't start")
         self.image, self.image_key, self.image_size, self.fonts, self.formats = None, None, (0, 0), {}, {}
         self.scaled, self.scaled_key = None, None  # the picture at the minimap's scale: each image only turns it
+        self.stream = None  # the memory the picture is read from: GDI+ needs it as long as the picture lives
         self.family = P()
         self.gp.GdipCreateFontFamilyFromName("Consolas", None, ctypes.byref(self.family))
         self.families, self.text_fonts = {}, {}
@@ -104,15 +118,19 @@ class Painter:
         self.gp.GdipGetImageGraphicsContext(self.measurer, ctypes.byref(self.measuring))
         self.gp.GdipSetTextRenderingHint(self.measuring, TEXT_SMOOTH)
 
-    def load(self, path: str | None, key) -> bool:
-        """The map's picture, from the file the game's answer was kept in; False when there's none it can read."""
-        if key != self.image_key:
+    def load(self, data: bytes | None, key) -> bool:
+        """The map's picture, from the game's answer in memory (a file could be held by another WTFTD still closing, and
+        then the map never came); False when there's none it can read."""
+        if (key, data is not None) != self.image_key:
             for old in (self.image, self.scaled):
                 if old:
                     self.gp.GdipDisposeImage(old)
-            self.image, self.image_key, self.scaled, self.scaled_key = None, key, None, None
+            if self.stream:
+                _release(self.stream)
+            self.image, self.image_key, self.scaled, self.scaled_key, self.stream = None, (key, data is not None), None, None, None
             image = P()
-            if path and not self.gp.GdipLoadImageFromFile(path, ctypes.byref(image)):
+            self.stream = _stream(data) if data else None
+            if self.stream and not self.gp.GdipLoadImageFromStream(self.stream, ctypes.byref(image)):
                 width, height = ctypes.c_uint(), ctypes.c_uint()
                 self.gp.GdipGetImageWidth(image, ctypes.byref(width))
                 self.gp.GdipGetImageHeight(image, ctypes.byref(height))

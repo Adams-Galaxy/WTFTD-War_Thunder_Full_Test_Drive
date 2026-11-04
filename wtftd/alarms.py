@@ -35,7 +35,7 @@ from pathlib import Path
 from statistics import linear_regression
 
 from . import battle, flightlog, hud, mappaint, minimap, sights, waveout
-from .paths import CACHE, WEB
+from .paths import WEB
 
 ALARMS = {"airframe": (93, 1400), "gear": (90, 1000), "flaps": (90, 700)}  # default: % of the limit, beep in Hz
 POLL_S = 0.1
@@ -43,6 +43,7 @@ HUD_POLL_S = 0.025  # with the HUD: the game sends a new reading about every 22 
 HUD_FRAME_MS = 16  # and the window draws it between readings, at about 60 images a second
 MAP_S = 0.1  # the minimap reads the map's objects 10 times a second, and glides between readings
 MAP_FRAME_MS = 33  # and the window draws it about 30 times a second
+PICTURE_S = 2.0  # a map's picture not had yet (the game not ready, a battle joined with the app opening): asked again
 TRAIL_MAX = 600  # its trail's last places
 IDLE_S = 1.0  # not flying: nothing to read fast
 REPEAT_MS = 300
@@ -799,20 +800,22 @@ class Watch:
     @staticmethod
     def blank_map() -> dict:
         return {"t": 0.0, "gen": None, "image": None, "info": {}, "seen": {"me": None, "fixed": [], "allies": []}, "trail": deque(maxlen=TRAIL_MAX),
-                "glide": hud.Glide()}
+                "glide": hud.Glide(), "asked": -PICTURE_S}
 
     def read_map(self):
         """The minimap's reading, 10 times a second: minimap.keep drops every enemy (and the allies unless asked) as soon as
-        it's read. The map's picture is kept in a file, any format the game sends: GDI+ reads it from there."""
+        it's read. The map's picture stays in memory as the game sends it, JPEG or PNG: GDI+ reads it from there."""
         m, now = self.map, time.monotonic()
         if now - m["t"] < MAP_S:
             return
         m["t"] = now
         info = answer(self.get("/map_info.json"))
         if info.get("map_generation") != m["gen"]:  # another map: its picture, and a new trail
-            img = self.get(f"/map.img?gen={info.get('map_generation', 0)}") if info else None
-            m.update(gen=info.get("map_generation"), image=self.keep_picture(img, info.get("map_generation")), trail=deque(maxlen=TRAIL_MAX),
-                     glide=hud.Glide())
+            m.update(gen=info.get("map_generation"), image=None, asked=-PICTURE_S, trail=deque(maxlen=TRAIL_MAX), glide=hud.Glide())
+        if info and m["image"] is None and now - m["asked"] >= PICTURE_S:  # until the game gives it: it can't come the first time
+            m["asked"] = now
+            img = self.get(f"/map.img?gen={m['gen'] or 0}")
+            m["image"] = img if img and len(img) >= 1000 else None  # outside a battle the game sends a blank of 1.5 kB
         try:
             objects = json.loads(self.get("/map_obj.json")) if info else []
         except (TypeError, ValueError):
@@ -824,23 +827,6 @@ class Watch:
         if me and (not m["trail"] or math.dist(m["trail"][-1], (me["x"], me["y"])) > 0.002):
             m["trail"].append((me["x"], me["y"]))
 
-    @staticmethod
-    def keep_picture(img: bytes | None, gen) -> str | None:
-        """The map's picture in a file of its map: GDI+ keeps the one it reads open, so each map has its own."""
-        folder = CACHE / "minimap"
-        for old in folder.glob("map-*.img"):
-            with contextlib.suppress(OSError):  # the one still shown stays until its map goes
-                old.unlink()
-        if not img or len(img) < 1000:  # outside a battle the game sends a blank of 1.5 kB
-            return None
-        try:
-            folder.mkdir(parents=True, exist_ok=True)
-            path = folder / f"map-{gen}.img"
-            path.write_bytes(img)
-        except OSError:
-            return None
-        return str(path)
-
     def sample_frame(self, cfg: dict) -> dict | None:
         return None if cfg["mapMode"] == "off" else minimap.draw(minimap.SAMPLE, minimap.SAMPLE_INFO, minimap.SAMPLE_TRAIL, cfg)
 
@@ -850,7 +836,7 @@ class Watch:
         return frame["marks"] + frame["frame"] if frame else []
 
     def map_frame(self) -> dict | None:
-        """The minimap to draw now (minimap.draw's, with "image": (its file, its map)), the aircraft gliding between
+        """The minimap to draw now (minimap.draw's, with "image": (the picture's bytes, its map)), the aircraft gliding between
         readings; the sample while My overlay shows it on the screen."""
         cfg, m = self.map_live, self.map
         if not cfg:

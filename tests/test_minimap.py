@@ -3,9 +3,7 @@ up; gliding between readings; painted by GDI+ (Windows), and its settings."""
 import json
 import math
 import sys
-import tempfile
 import unittest
-from pathlib import Path
 from unittest import mock
 
 from tests.test_alarms import WORDS, details, state
@@ -132,16 +130,12 @@ class Settings(unittest.TestCase):
 
 class Read(unittest.TestCase):
     def setUp(self):
-        tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(tmp.cleanup)
-        p = mock.patch.object(alarms, "CACHE", Path(tmp.name))
-        p.start()
-        self.addCleanup(p.stop)
         self.objects = list(OBJECTS)
+        self.picture = b"\xff\xd8 a map" * 200
         planes = {"f_15a": {"v": 1480, "m": 2.5, "gear": 460, "fuel": [5945], "eng": 2, "jet": True}}
         answers = {"/state": lambda: json.dumps(state()).encode(), "/indicators": lambda: json.dumps({"valid": True, "type": "f_15a"}).encode(),
                    "/map_info.json": lambda: json.dumps(INFO).encode(), "/map_obj.json": lambda: json.dumps(self.objects).encode(),
-                   "/map.img?gen=3": lambda: b"\xff\xd8 a map" * 200}
+                   "/map.img?gen=3": lambda: self.picture}
         self.watch = alarms.Watch(lambda path: answers.get(path, lambda: None)(), lambda: details(planes), lambda: False, lambda: None)
         self.watch.enabled = True
         self.watch.model = lambda: None
@@ -153,8 +147,7 @@ class Read(unittest.TestCase):
     def test_in_flight(self):
         self.watch.tick()
         frame = self.watch.map_frame()
-        path, gen = frame["image"]
-        self.assertEqual((Path(path).read_bytes()[:2], gen), (b"\xff\xd8", 3))  # kept as the game sent it: GDI+ reads JPEG
+        self.assertEqual(frame["image"], (self.picture, 3))  # kept as the game sent it, in memory: GDI+ reads JPEG
         self.assertEqual(self.watch.map["seen"], minimap.keep(OBJECTS))
         self.assertTrue(frame["marks"])
 
@@ -169,6 +162,20 @@ class Read(unittest.TestCase):
         (t0, a), (t1, b) = glide.before, glide.latest
         self.assertAlmostEqual(glide.at(t1 + (t1 - t0) / 2)["x"], 0.51, places=5)
         self.assertEqual(list(self.watch.map["trail"]), [(0.5, 0.5), (0.52, 0.5)])
+
+    def test_the_picture_asked_again_until_it_comes(self):
+        self.picture = b"blank"  # the app opened as the battle starts: the game has no map yet
+        clock = [1000.0]
+        with mock.patch.object(alarms.time, "monotonic", lambda: clock[0]):
+            self.watch.tick()
+            self.assertIsNone(self.watch.map["image"])
+            self.picture = b"\x89PNG a map" * 200
+            clock[0] += alarms.MAP_S
+            self.watch.tick()
+            self.assertIsNone(self.watch.map["image"])  # not at every reading
+            clock[0] += alarms.PICTURE_S
+            self.watch.tick()
+        self.assertEqual(self.watch.map["image"], self.picture)
 
     def test_allies_only_when_asked(self):
         self.watch.tick()
@@ -224,15 +231,11 @@ class Contrast(unittest.TestCase):
         import struct
         import zlib
         from wtftd import mappaint
-        tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(tmp.cleanup)
         rows = b"".join(b"\x00" + b"\xff\xff\xff" * 64 for _ in range(64))
         chunk = lambda t, d: struct.pack(">I", len(d)) + t + d + struct.pack(">I", zlib.crc32(t + d) & 0xffffffff)
-        path = Path(tmp.name) / "white.png"
-        path.write_bytes(b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", 64, 64, 8, 2, 0, 0, 0)) + chunk(b"IDAT", zlib.compress(rows)) + chunk(b"IEND", b""))
+        png = b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", 64, 64, 8, 2, 0, 0, 0)) + chunk(b"IDAT", zlib.compress(rows)) + chunk(b"IEND", b"")
         self.painter = mappaint.Painter()
-        self.assertTrue(self.painter.load(str(path), "white"))
-        self.addCleanup(self.painter.load, None, None)  # GDI+ keeps the file it reads open: let it go first
+        self.assertTrue(self.painter.load(png, "white"))
 
     def pixel(self, dim, x, y):
         cfg = {**CFG, "mapX": 0, "mapY": 0, "mapSize": 200, "mapDim": dim}
