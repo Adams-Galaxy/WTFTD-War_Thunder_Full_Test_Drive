@@ -354,7 +354,7 @@ function ovResize(e, grip) {
   const i = map ? -1 : +owner.dataset.b, spot = map ? c : i ? c.blocks[i - 1] : c, key = map ? 'mapSize' : 'scale';
   const width = map ? c.mapSize * k : owner.getBoundingClientRect().width, start = spot[key], x0 = e.clientX;
   e.preventDefault();
-  grip.setPointerCapture(e.pointerId);
+  owner.setPointerCapture(e.pointerId);  // the block, not its grip: drawing the block again replaces the grip
   const move = ev => {
     const grown = start * Math.max(0.05, (width + ev.clientX - x0) / width);
     spot[key] = Math.round(map ? Math.min(3000, Math.max(80, grown)) : Math.min(400, Math.max(10, grown)));
@@ -364,8 +364,8 @@ function ovResize(e, grip) {
     else ovDraw();
     ovSave();
   };
-  grip.addEventListener('pointermove', move);
-  grip.addEventListener('pointerup', () => grip.removeEventListener('pointermove', move), { once: true });
+  owner.addEventListener('pointermove', move);
+  owner.addEventListener('pointerup', () => owner.removeEventListener('pointermove', move), { once: true });
 }
 
 function ovDrag() {
