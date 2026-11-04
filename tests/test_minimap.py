@@ -210,5 +210,39 @@ class Painted(unittest.TestCase):
         self.assertEqual(at(110, 110)[3], 255)  # the middle
 
 
+@unittest.skipUnless(sys.platform == "win32", "Windows")
+class Contrast(unittest.TestCase):
+    """On a bright map (a white picture here): a dark edge round each mark, and the map darkened as set."""
+
+    def setUp(self):
+        import struct
+        import zlib
+        from wtftd import mappaint
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        rows = b"".join(b"\x00" + b"\xff\xff\xff" * 64 for _ in range(64))
+        chunk = lambda t, d: struct.pack(">I", len(d)) + t + d + struct.pack(">I", zlib.crc32(t + d) & 0xffffffff)
+        path = Path(tmp.name) / "white.png"
+        path.write_bytes(b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", 64, 64, 8, 2, 0, 0, 0)) + chunk(b"IDAT", zlib.compress(rows)) + chunk(b"IEND", b""))
+        self.painter = mappaint.Painter()
+        self.assertTrue(self.painter.load(str(path), "white"))
+        self.addCleanup(self.painter.load, None, None)  # GDI+ keeps the file it reads open: let it go first
+
+    def pixel(self, dim, x, y):
+        cfg = {**CFG, "mapX": 0, "mapY": 0, "mapSize": 200, "mapDim": dim}
+        frame = minimap.draw({"me": None, "fixed": [{"type": "bombing_point", "color": "#174DFF", "x": 0.5, "y": 0.5}], "allies": []},
+                             minimap.SAMPLE_INFO, [], cfg)
+        px = self.painter.pixels(frame, 244, 234, 0, 0)
+        return px[(y * 244 + x) * 4]  # its blue
+
+    def test_the_map_darkened(self):
+        self.assertGreater(self.pixel(0, 20, 20), 240)
+        self.assertLess(self.pixel(50, 20, 20), 140)
+
+    def test_a_dark_edge_round_a_mark(self):
+        self.assertLess(self.pixel(0, 108, 100), 60)  # just outside the base's square, whose side is at 105
+        self.assertGreater(self.pixel(0, 120, 100), 240)  # further out, the map
+
+
 if __name__ == "__main__":
     unittest.main()

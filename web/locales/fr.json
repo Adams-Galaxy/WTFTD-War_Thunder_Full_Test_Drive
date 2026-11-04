@@ -627,6 +627,7 @@
   "ov.mapAlliesGround": "Unités IA alliées (sol et mer)",
   "ov.mapAlliesHint": "Reconnus à leur seule couleur, le jeu ne dit ni l'équipe d'une unité ni qui est une IA : bleu, ou vert pour l'escouade. En bataille aérienne, les véhicules et les navires sont l'IA. Les ennemis ne s'affichent jamais.",
   "ov.mapOpacity": "Opacité, %",
+  "ov.mapDim": "Carte assombrie, %",
   "ov.mapX": "Gauche, px",
   "ov.mapY": "Haut, px",
   "ov.mapSize": "Taille, px",

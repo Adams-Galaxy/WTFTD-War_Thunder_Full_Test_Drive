@@ -14,6 +14,7 @@ PARGB = 0xE200B  # PixelFormat32bppPARGB: what a layered window takes
 UNIT_PIXEL, SMOOTH, BILINEAR, BICUBIC, TEXT_SMOOTH, BOLD = 2, 4, 3, 7, 4, 1
 MOST = 4096  # the scaled copy's largest side
 ANCHORS = {"w": 0, "m": 1, "e": 2}  # StringAlignmentNear, Center, Far
+EDGE, EDGE_PX = 0xE6000000, 2.5  # the dark edge round each mark: on a green or blue map, blue and green marks melted in
 
 
 class StartupInput(ctypes.Structure):
@@ -130,6 +131,19 @@ class Painter:
             self.formats[anchor] = fmt
         return self.formats[anchor]
 
+    def _edge(self, g, s: list, ox: float, oy: float):
+        """A dark edge under a mark, a little wider than it."""
+        pen = P()
+        self.gp.GdipCreatePen1(EDGE, F((s[5] if s[0] == "l" else 1.8) + 2 * EDGE_PX), UNIT_PIXEL, ctypes.byref(pen))
+        if s[0] == "l":
+            self.gp.GdipDrawLine(g, pen, s[1] - ox, s[2] - oy, s[3] - ox, s[4] - oy)
+        elif s[0] == "c":
+            self.gp.GdipDrawEllipse(g, pen, s[1] - s[3] - ox, s[2] - s[3] - oy, 2 * s[3], 2 * s[3])
+        elif s[0] == "p":
+            pts = (PointF * (len(s[1]) // 2))(*(PointF(s[1][i] - ox, s[1][i + 1] - oy) for i in range(0, len(s[1]), 2)))
+            self.gp.GdipDrawPolygon(g, pen, pts, len(pts))
+        self.gp.GdipDeletePen(pen)
+
     def _shape(self, g, s: list, ox: float, oy: float):
         color = argb(s[-1])
         if s[0] == "t":
@@ -182,7 +196,13 @@ class Painter:
             gp.GdipDrawImageRectI(g, picture, 0, 0, n, n)
             gp.GdipResetWorldTransform(g)
             gp.GdipDeleteMatrix(matrix)
+        if self.image and pic and frame.get("dim"):  # the map darkened, so that the marks read on it
+            shade = P()
+            gp.GdipCreateSolidFill(round(255 * frame["dim"] / 100) << 24, ctypes.byref(shade))
+            gp.GdipFillPath(g, shade, path)
+            gp.GdipDeleteBrush(shade)
         for shape in frame["marks"]:
+            self._edge(g, shape, ox, oy)
             self._shape(g, shape, ox, oy)
         gp.GdipResetClip(g)
         gp.GdipDeletePath(path)

@@ -609,6 +609,7 @@
   "ov.mapAlliesGround": "Sojusznicze jednostki SI (ląd i morze)",
   "ov.mapAlliesHint": "Rozpoznawani tylko po kolorze, gra nie podaje drużyny ani tego, kto jest SI: niebieski lub zielony dla drużyny. W bitwie powietrznej pojazdy i okręty to SI. Wrogowie nigdy się nie pokazują.",
   "ov.mapOpacity": "Krycie, %",
+  "ov.mapDim": "Przyciemnienie mapy, %",
   "ov.mapX": "Od lewej, px",
   "ov.mapY": "Od góry, px",
   "ov.mapSize": "Rozmiar, px",

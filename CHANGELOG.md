@@ -8,6 +8,8 @@ Versions follow `major.minor.patch`; "beta" until 1.0.
 
 - **Minimap**: allied aircraft and allied AI units (vehicles and ships, the AI in an air battle) each have their own switch,
   both off by default. The game doesn't say who's an AI: they're told apart by what they are.
+- **Minimap**: easier to read on the map. Each mark has a dark edge, aircraft and vehicles are bigger, and the map is
+  darkened, 30 % by default (*Map darker*, from 0 to 80 %).
 
 ## 0.25.0 — 2026-11-04
 

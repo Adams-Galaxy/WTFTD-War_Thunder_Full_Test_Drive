@@ -627,6 +627,7 @@
   "ov.mapAlliesGround": "Allied AI units (ground and sea)",
   "ov.mapAlliesHint": "Told apart by their colour only, the game doesn't say a unit's team or who's an AI: blue, or a squadmate's green. In an air battle the vehicles and ships are the AI. Enemies never show.",
   "ov.mapOpacity": "Opacity, %",
+  "ov.mapDim": "Map darker, %",
   "ov.mapX": "Left, px",
   "ov.mapY": "Top, px",
   "ov.mapSize": "Size, px",

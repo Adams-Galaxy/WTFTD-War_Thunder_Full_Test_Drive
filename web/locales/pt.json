@@ -609,6 +609,7 @@
   "ov.mapAlliesGround": "Unidades IA aliadas (terra e mar)",
   "ov.mapAlliesHint": "Reconhecidos só pela cor, o jogo não diz a equipe de uma unidade nem quem é IA: azul, ou verde do esquadrão. Numa batalha aérea, os veículos e navios são a IA. Inimigos nunca aparecem.",
   "ov.mapOpacity": "Opacidade, %",
+  "ov.mapDim": "Mapa escurecido, %",
   "ov.mapX": "Esquerda, px",
   "ov.mapY": "Topo, px",
   "ov.mapSize": "Tamanho, px",

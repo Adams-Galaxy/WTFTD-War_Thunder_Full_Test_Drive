@@ -609,6 +609,7 @@
   "ov.mapAlliesGround": "Verbündete KI-Einheiten (Boden und See)",
   "ov.mapAlliesHint": "Nur an der Farbe erkannt, das Spiel nennt weder das Team einer Einheit noch, wer KI ist: Blau, oder Grün für die Staffel. In einer Luftschlacht sind Fahrzeuge und Schiffe die KI. Gegner werden nie gezeigt.",
   "ov.mapOpacity": "Deckkraft, %",
+  "ov.mapDim": "Karte dunkler, %",
   "ov.mapX": "Links, px",
   "ov.mapY": "Oben, px",
   "ov.mapSize": "Größe, px",

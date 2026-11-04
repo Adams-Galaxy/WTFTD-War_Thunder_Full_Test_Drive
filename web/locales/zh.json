@@ -609,6 +609,7 @@
   "ov.mapAlliesGround": "友军 AI 单位（地面和海上）",
   "ov.mapAlliesHint": "仅凭颜色区分，游戏不会告诉单位的队伍或谁是 AI：蓝色，或小队的绿色。在空战中，车辆和舰船是 AI。敌人永远不会显示。",
   "ov.mapOpacity": "不透明度, %",
+  "ov.mapDim": "地图变暗, %",
   "ov.mapX": "左, px",
   "ov.mapY": "上, px",
   "ov.mapSize": "大小, px",

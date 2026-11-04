@@ -609,6 +609,7 @@
   "ov.mapAlliesGround": "Spojenecké jednotky AI (zem a moře)",
   "ov.mapAlliesHint": "Rozpoznaní jen podle barvy, hra neříká tým jednotky ani kdo je AI: modrá, nebo zelená pro letku. V letecké bitvě jsou vozidla a lodě AI. Nepřátelé se nikdy nezobrazí.",
   "ov.mapOpacity": "Neprůhlednost, %",
+  "ov.mapDim": "Ztmavení mapy, %",
   "ov.mapX": "Zleva, px",
   "ov.mapY": "Shora, px",
   "ov.mapSize": "Velikost, px",

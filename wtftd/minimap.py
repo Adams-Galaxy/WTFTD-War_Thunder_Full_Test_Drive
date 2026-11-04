@@ -147,15 +147,16 @@ def draw(seen: dict, info: dict, trail: list, cfg: dict) -> dict:
     for u in seen.get("allies", []):
         p = at(u["x"], u["y"])
         if inside(p):
-            marks.append(["p", _arrow(*p, u["heading"] - turn, max(5, size / 50)), 1, u["color"]] if u["air"] else
-                         ["p", [p[0] - 4, p[1] - 4, p[0] + 4, p[1] - 4, p[0] + 4, p[1] + 4, p[0] - 4, p[1] + 4], 1, u["color"]])
+            h = max(4, size / 90)  # a vehicle's square, half its side
+            marks.append(["p", _arrow(*p, u["heading"] - turn, max(7, size / 38)), 1, u["color"]] if u["air"] else
+                         ["p", [p[0] - h, p[1] - h, p[0] + h, p[1] - h, p[0] + h, p[1] + h, p[0] - h, p[1] + h], 1, u["color"]])
     if cfg["mapTrail"]:
         pts = [at(x, y) for x, y in [*trail, *([(me["x"], me["y"])] if me else [])]]
         marks += [["l", *a, *b, 1.5, ME] for a, b in zip(pts, pts[1:]) if inside(a) or inside(b)]
     if me:
         p = at(me["x"], me["y"])
         if inside(p):
-            marks.append(["p", _arrow(*p, me["heading"] - turn, max(7, size / 30)), 1, ME])
+            marks.append(["p", _arrow(*p, me["heading"] - turn, max(9, size / 26)), 1, ME])
 
     frame = [["c", mid_x, mid_y, r, MAP_LINE] if round_ else ["p", [left, top, left + size, top, left + size, top + size, left, top + size], 0, MAP_LINE]]
     if heading_up:  # where north is, on the edge
@@ -167,5 +168,5 @@ def draw(seen: dict, info: dict, trail: list, cfg: dict) -> dict:
     way = home(me, seen.get("fixed", []), extent) if me and extent else None
     if way:
         frame.append(["t", left, top + size + 14, f"AF {way[0]:.1f} km {way[1]:03.0f}°", 13, "w", MAP_TEXT])
-    return {"box": [left, top, size], "round": round_, "marks": marks, "frame": frame,
+    return {"box": [left, top, size], "round": round_, "marks": marks, "frame": frame, "dim": cfg["mapDim"],
             "picture": {"cx": cx, "cy": cy, "k": k, "turn": turn}}
