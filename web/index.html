@@ -265,7 +265,7 @@
           </div>
       </div>
       <div class="seg ov-tabs" id="ovTabs" role="tablist">
-        <button data-tab="lines" data-i18n="ov.lines"></button><button data-tab="blocks" data-i18n="ov.blocks"></button><button data-tab="look" data-i18n="ov.look"></button><button data-tab="hud" data-i18n="ov.hud"></button><button data-tab="alarms" data-i18n="ov.alarms"></button><button data-tab="behaviour" data-i18n="ov.behaviour"></button>
+        <button data-tab="lines" data-i18n="ov.lines"></button><button data-tab="blocks" data-i18n="ov.blocks"></button><button data-tab="look" data-i18n="ov.look"></button><button data-tab="hud" data-i18n="ov.hud"></button><button data-tab="map" data-i18n="ov.map"></button><button data-tab="alarms" data-i18n="ov.alarms"></button><button data-tab="behaviour" data-i18n="ov.behaviour"></button>
       </div>
       <section class="ov-panel" data-panel="lines">
           <div class="ov-style">
@@ -347,6 +347,20 @@
           <label class="switch"><input type="checkbox" data-ov="hudSpeed"><span class="sw"></span><span data-i18n="ov.hudSpeed"></span></label>
           <label class="switch"><input type="checkbox" data-ov="hudAlt"><span class="sw"></span><span data-i18n="ov.hudAlt"></span></label>
           <label class="switch"><input type="checkbox" data-ov="hudData"><span class="sw"></span><span data-i18n="ov.hudData"></span></label>
+        </div>
+      </div></section>
+      <section class="ov-panel hidden" data-panel="map"><div class="ov-cards">
+        <div class="ov-card">
+          <h3 class="ov-h" data-i18n="ov.mapCard"></h3>
+          <small class="muted" data-i18n="ov.mapHint"></small>
+          <div class="field"><label for="ovMapMode" data-i18n="ov.mapMode"></label><select id="ovMapMode" data-ov="mapMode"><option value="off" data-i18n="ov.mapMode.off"></option><option value="on" data-i18n="ov.mapMode.on"></option></select></div>
+          <div class="field"><label for="ovMapZoom" data-i18n="ov.mapZoom"></label><select id="ovMapZoom" data-ov="mapZoom"><option value="1" data-i18n="ov.mapZoom.1"></option><option value="2" data-i18n="ov.mapZoom.2"></option><option value="4" data-i18n="ov.mapZoom.4"></option><option value="8" data-i18n="ov.mapZoom.8"></option></select></div>
+          <label class="switch"><input type="checkbox" data-ov="mapTrail"><span class="sw"></span><span data-i18n="ov.mapTrail"></span></label>
+        </div>
+        <div class="ov-card">
+          <h3 class="ov-h" data-i18n="ov.hudPlaces"></h3>
+          <div class="field-row"><div class="field"><label for="ovMapX" data-i18n="ov.mapX"></label><input id="ovMapX" type="number" data-ov="mapX" min="-20000" max="20000" step="10"></div><div class="field"><label for="ovMapY" data-i18n="ov.mapY"></label><input id="ovMapY" type="number" data-ov="mapY" min="-20000" max="20000" step="10"></div></div>
+          <div class="field"><label for="ovMapSize" data-i18n="ov.mapSize"></label><input id="ovMapSize" type="number" data-ov="mapSize" min="80" max="3000" step="10"></div>
         </div>
       </div></section>
       <section class="ov-panel hidden" data-panel="alarms">

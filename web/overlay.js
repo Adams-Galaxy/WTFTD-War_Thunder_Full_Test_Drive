@@ -23,6 +23,7 @@ function ovShow(st) {
   OV.lines = st.lines;
   OV.screen = st.screen;
   OV.hud = st.hud || {};
+  OV.map = st.map || [];
   ovDraw();
   ovDrawHud();
 }
@@ -32,7 +33,7 @@ function ovDrawHud() {
   const svg = $('#ovHudLive'), c = OV.cfg;
   svg.setAttribute('viewBox', `0 0 ${OV.screen[0]} ${OV.screen[1]}`);
   svg.style.opacity = c.opacity / 100;
-  hudDraw(svg, OV.hud[OV.hudPlace] || [], c.hudColor, c.alert);
+  hudDraw(svg, [...(OV.hud[OV.hudPlace] || []), ...OV.map], c.hudColor, c.alert);
   $$('#ovHudPlace button').forEach(b => b.classList.toggle('active', b.dataset.place === OV.hudPlace));
   $$('#view-overlay [data-hudplace]').forEach(row => row.classList.toggle('hidden', row.dataset.hudplace !== OV.hudPlace));
 }

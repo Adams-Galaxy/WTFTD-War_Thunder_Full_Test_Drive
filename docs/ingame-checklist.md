@@ -641,6 +641,19 @@ a recorded F-15A flight (pitch > 0 nose up, bank > 0 left wing down). Nothing ha
 - [ ] HUD language: Russian and Chinese words show, Chinese characters included, in the overlay and the cockpit window.
 - [ ] Cockpit window on a second screen, HUD button: the HUD fills it and moves with the aircraft.
 
+## 2ac. Minimap (new)
+
+**What was built.** My overlay → Minimap reads /map_info.json, /map_obj.json and /map.img 4 times a second and keeps your aircraft and
+the objects of type airfield, capture_zone, bombing_point and defending_point only. Those type names come from memory of the API, not from
+a battle: if a kind of object is missing, read `http://127.0.0.1:8111/map_obj.json` during the battle and note its `type`.
+
+- [ ] An air battle: the map shows, your arrow points where you fly, the trail follows. No other aircraft, enemy or ally.
+- [ ] Airfields as runways, ours blue and the enemy's red; `AF … km …°` leads to ours (fly that heading: does it?).
+- [ ] A ground battle in a plane: capture zones show, with their colour. Bases (bombing points) in an air battle.
+- [ ] Zoom ×4: the map follows you, and stops at the edge of the map.
+- [ ] Does the game send the map as PNG? If the square stays dark with marks, it was a JPEG.
+- [ ] A Simulator battle: does the minimap show your position where the game's own map doesn't? If so it must be turned off there.
+
 ## 3. Ammunition icons (UI only)
 
 Shell icons (tanks), belt icons (aircraft, helicopters, ships) and flare / chaff icons come from the game's own

@@ -11,7 +11,7 @@ function hudDraw(svg, shapes, color, alert, lit = true) {
     return e;
   };
   svg.replaceChildren(...shapes.map(s => {
-    const tint = s[s.length - 1] && lit ? alert : color;
+    const last = s[s.length - 1], tint = typeof last === 'string' ? last : last && lit ? alert : color;  // the minimap's carry their colour
     if (s[0] === 'l') return el('line', { x1: s[1], y1: s[2], x2: s[3], y2: s[4], stroke: tint, 'stroke-width': s[5] });
     if (s[0] === 'p') return el('polygon', { points: s[1].join(' '), stroke: tint, 'stroke-width': 1.6, fill: s[2] ? tint : 'none' });
     if (s[0] === 'c') return el('circle', { cx: s[1], cy: s[2], r: s[3], stroke: tint, 'stroke-width': 1.8, fill: 'none' });

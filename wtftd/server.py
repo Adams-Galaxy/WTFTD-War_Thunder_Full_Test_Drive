@@ -1369,7 +1369,7 @@ def overlay_status(profile: str = "") -> dict:
     sample values."""
     cfg = WATCH.profiles.get(profile, WATCH.base)
     return {"cfg": cfg, "screen": alarms.screen(), "lines": WATCH.sample(cfg), "onScreen": WATCH.preview is not None,
-            "hud": {place: WATCH.sample_hud(cfg, profile, place) for place in hud.PLACES},
+            "hud": {place: WATCH.sample_hud(cfg, profile, place) for place in hud.PLACES}, "map": WATCH.sample_map(cfg),
             "enabled": STATE.settings().get("alarms") is True, "profile": profile if profile in WATCH.profiles else "",
             "profiles": sorted(WATCH.profiles), "active": WATCH.profile, "aircraft": WATCH.current,
             "sounds": alarms.sound_list(SOUNDS), "devices": waveout.devices(), "device": alarms.OUTPUT["device"]}

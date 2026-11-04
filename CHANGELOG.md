@@ -4,6 +4,13 @@ What changed in each version of WTFTD. Downloads: [Releases](https://github.com/
 (only the latest version is kept there; from 0.19.0 on, each version's code stays available through its git tag).
 Versions follow `major.minor.patch`; "beta" until 1.0.
 
+## 0.25.0 — not released yet
+
+- **Minimap** (My overlay → Minimap, Windows): the game's own map in the overlay, bigger than the game's and zoomable around
+  you (×2, ×4, ×8), with your aircraft, its trail, and what never moves: airfields, capture zones, bases, and the distance and
+  heading to your nearest airfield. Never another aircraft or vehicle: the game's map data also lists the enemies it has
+  spotted and your allies, and they're dropped as soon as it's read. Off by default; size and place are yours.
+
 ## 0.24.0 — 2026-11-04
 
 - **Fighter HUD** (My overlay → HUD, Windows): a fighter's head-up display over the game, from your own aircraft's numbers:

@@ -202,6 +202,10 @@ breaks, and records the flight: live curves, a flight report, a cockpit window f
   the game about 40 times a second and draws between readings, so the scales scroll smoothly. Where the game sends no pitch or
   bank (aircraft without an artificial horizon, such as the J-16), they're worked out from the climb, the angle of attack, the
   roll rate and the turn. Your own aircraft only, nothing about anybody else. Inspired by real HUDs, not a copy of one
+- **Minimap** (My overlay → Minimap, Windows, off until you turn it on): the game's own map in the overlay, bigger than the
+  game's and zoomable around you, with your aircraft, its trail, and what never moves: airfields, capture zones, bases, and
+  the distance and heading to your nearest airfield. **Never another aircraft or vehicle**: the game's map data also lists the
+  enemies it has spotted and your allies, and WTFTD drops them as soon as it reads them
 - **Flight data** (Windows): live curves of what the game reports, in flight and in tanks and ships (speed, altitude, G, turn time, fuel use...),
   and a recorder: CSV logs for Excel, replayed in the app, with a **flight report** (top speed, best climb, best
   sustained turn, time to climb, fuel used) and an **export for Tacview**; saved views, and the curves as a picture
@@ -334,7 +338,10 @@ game warns when one stops working, can turn them off, and some game modes don't 
 The **In flight** tools only read what the game publishes on your own PC (`localhost:8111`): your aircraft's values, and
 the chat and battle log you see in game. No enemy position is used. The overlay is a separate window: nothing is
 injected and nothing touches the game. It isn't endorsed by Gaijin either. The **fighter HUD** is drawn in that same window
-from your own aircraft's values: no target, no threat, no other aircraft.
+from your own aircraft's values: no target, no threat, no other aircraft. The **minimap** shows the game's own map, your
+aircraft and the objects that never move; it drops every other unit, enemy or ally, as soon as it reads the map. Gaijin's
+staff said overlays built on this local data are fine, and that enemy markers on one can count as an ESP overlay
+([forum, 2024](https://forum.warthunder.com/t/tools-using-data-provided-on-port-8111/106664/197)): WTFTD never shows them.
 
 The **Test bench** presses no key and sends no input of any kind: you fly, it reads the same local values, your own aircraft's only.
 
@@ -454,6 +461,9 @@ corrections are very welcome — see [CONTRIBUTING.md](CONTRIBUTING.md#translati
   far it zooms, so the pitch ladder and the flight path marker are drawn at a fixed scale around the middle of the HUD. Its size
   brings them closer. Worked-out pitch and bank (J-16...) can lag a fast roll by a moment. There's no G alarm: the game gives no
   G limit per aircraft. Barely flown yet ([checklist](docs/ingame-checklist.md))
+- Minimap: the map's picture shows when the game sends it as PNG (it can send a JPEG, then the marks show on a dark square).
+  Tk only shrinks or grows a picture by whole numbers, so its size comes out near the one you set, not exactly. Barely
+  flown yet, and not in Simulator battles ([checklist](docs/ingame-checklist.md))
 - Test bench: helicopters get top speed, climb and acceleration only. Its stall speed is where level flight at idle gives way, not the
   wing's stall: the game's instructor can hold the nose up. It hasn't been flown in the game yet ([checklist](docs/ingame-checklist.md)).
 - macOS support is new and less tested than Windows. The packaged app is built for Apple silicon; on an Intel
@@ -477,6 +487,7 @@ wtftd/                      Python backend (stdlib only)
   cdk.py + builder.py       sensors, engines, avionics, weapons on pylons of any kind
   alarms.py / flightlog.py  in-flight values, alarms and overlay (Windows) / CSV flight logs, report, Tacview export
   hud.py                    the fighter HUD's three styles, drawn as shapes for the overlay and the cockpit window
+  minimap.py                the minimap: the game's map, your aircraft and the fixed objects only
   battle.py                 the game's chat and battle log
   replays.py                My battles: the player's own results, from the game's replay files
   patches.py                What changed: the comparison of two game versions, kept in user/patches.json

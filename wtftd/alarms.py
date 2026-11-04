@@ -34,13 +34,15 @@ from functools import lru_cache
 from pathlib import Path
 from statistics import linear_regression
 
-from . import battle, flightlog, hud, sights, waveout
+from . import battle, flightlog, hud, minimap, sights, waveout
 from .paths import WEB
 
 ALARMS = {"airframe": (93, 1400), "gear": (90, 1000), "flaps": (90, 700)}  # default: % of the limit, beep in Hz
 POLL_S = 0.1
 HUD_POLL_S = 0.025  # with the HUD: the game sends a new reading about every 22 ms
 HUD_FRAME_MS = 16  # and the window draws it between readings, at about 60 images a second
+MAP_S = 0.25  # the minimap reads the map's objects 4 times a second
+TRAIL_MAX = 600  # its trail's last places
 IDLE_S = 1.0  # not flying: nothing to read fast
 REPEAT_MS = 300
 BEEP_MS = 150
@@ -160,6 +162,15 @@ HUD_DEFAULTS = {**{k: v[0] for k, v in HUD_CHOICES.items()}, "hudColor": "#43FF7
                 **{f"hud{p.title()}": True for p in hud.PARTS}}
 
 
+def _map(cfg: dict, base: dict) -> dict:
+    zoom = cfg.get("mapZoom")
+    zoom = int(zoom) if isinstance(zoom, str) and zoom.isdecimal() else zoom  # a select sends text
+    return {"mapMode": cfg.get("mapMode") if cfg.get("mapMode") in ("off", "on") else base["mapMode"],
+            "mapZoom": zoom if type(zoom) is int and zoom in minimap.ZOOMS else base["mapZoom"],
+            "mapSize": _num(cfg.get("mapSize"), base["mapSize"], 80, 3000), "mapX": _num(cfg.get("mapX"), base["mapX"], -20000, 20000),
+            "mapY": _num(cfg.get("mapY"), base["mapY"], -20000, 20000), "mapTrail": _flag(cfg.get("mapTrail"), base["mapTrail"])}
+
+
 def _hud(cfg: dict) -> dict:
     out = {k: cfg.get(k) if cfg.get(k) in choices else choices[0] for k, choices in HUD_CHOICES.items()}
     out["hudColor"] = _color(cfg.get("hudColor"), HUD_DEFAULTS["hudColor"])
@@ -183,7 +194,8 @@ def defaults(words: dict) -> dict:
             "glowSize": GLOW_SIZE, "glowColor": "", "glowFlash": False, "flashMs": 500, "volume": 100, "soundFocus": False, "soundEngine": False,
             "pollMs": round(POLL_S * 1000), "logMs": round(SAMPLE_S * 1000), "muteKey": [], "muteKeyName": "", "holdKey": [], "holdKeyName": "",
             "color": "#E6E6E6", "alert": "#FF0000", "opacity": 100, "show": True, "hotkey": [], "hotkeyName": "",
-            **HUD_DEFAULTS,
+            **HUD_DEFAULTS, "mapMode": "off", "mapZoom": 1, "mapTrail": True,  # the minimap: off until the player turns it on
+            "mapSize": round(560 * scale), "mapX": round(40 * scale), "mapY": round(1100 * scale),
             "logKey": [], "logKeyName": "", "hideCrash": False, "hideUnknown": False, "glow": False, "repeat": REPEAT_MS, "alarms": {n: {"on": True, "at": at, "hz": hz, "ms": BEEP_MS, "sound": ""} for n, (at, hz) in ALARMS.items()},
             "lines": [line("IAS", "{ias} / {vne} km/h {swept}", alarm="airframe"), line("MACH", "{mach} / {mne}", alarm="airframe"),
                       line(words["gear"], "{ias} / {gear_max} km/h", "gear", "gear"),
@@ -281,7 +293,7 @@ def clean(cfg, words: dict) -> dict:
            "pollMs": _num(cfg.get("pollMs"), base["pollMs"], 50, 1000), "logMs": _num(cfg.get("logMs"), base["logMs"], 100, 10000),
            "repeat": _num(cfg.get("repeat"), base["repeat"], 100, 10000), "alarms": {},
            **_keys(cfg, "hotkey", "hotkeyName"), **_keys(cfg, "logKey", "logKeyName"), **_keys(cfg, "muteKey", "muteKeyName"),
-           **_keys(cfg, "holdKey", "holdKeyName"), **_hud(cfg)}
+           **_keys(cfg, "holdKey", "holdKeyName"), **_hud(cfg), **_map(cfg, base)}
     for name, std in base["alarms"].items():
         a = alarms.get(name) if isinstance(alarms.get(name), dict) else {}
         out["alarms"][name] = {"on": _flag(a.get("on"), std["on"]), "at": _num(a.get("at"), std["at"], 1, 200),
@@ -694,6 +706,8 @@ class Watch:
         self.hud_live = None  # (overlay, nation) while flying an aircraft that shows its HUD: see hud_frame
         self.attitude, self.glide = hud.Attitude(), hud.Glide()  # pitch and bank if the game has none; between readings
         self.hud_viewed = -VIEW_S  # when the cockpit window last asked for its HUD
+        self.map_live = None  # the overlay while flying with the minimap on
+        self.map = self.blank_map()  # what the minimap read last: see read_map
         self.hud_place = "cockpit"  # or outside: the HUD key switches them
         self.preview_key = ""  # the overlay shown by preview: an aircraft's own gives its HUD style
         self.on = []  # the alarms on, for the cockpit window's HUD
@@ -776,6 +790,42 @@ class Watch:
         nation = self.nation(key) if key and not key.startswith("type:") else None
         on = active(percents(SAMPLE_LIM, SAMPLE_STATE), cfg["alarms"])
         return hud.draw(numbers(values), cfg, nation, screen_size or screen(), place, on)
+
+    @staticmethod
+    def blank_map() -> dict:
+        return {"t": 0.0, "gen": None, "image": None, "info": {}, "seen": {"me": None, "fixed": []}, "trail": deque(maxlen=TRAIL_MAX)}
+
+    def read_map(self):
+        """The minimap's reading, 4 times a second: minimap.keep drops every unit but yours as soon as it's read."""
+        m, now = self.map, time.monotonic()
+        if now - m["t"] < MAP_S:
+            return
+        m["t"] = now
+        info = answer(self.get("/map_info.json"))
+        if info.get("map_generation") != m["gen"]:  # another map: its picture, and a new trail
+            img = self.get(f"/map.img?gen={info.get('map_generation', 0)}") if info else None
+            m.update(gen=info.get("map_generation"), image=img if minimap.png_size(img) else None, trail=deque(maxlen=TRAIL_MAX))
+        try:
+            objects = json.loads(self.get("/map_obj.json")) if info else []
+        except (TypeError, ValueError):
+            objects = []
+        m["info"], m["seen"] = info, minimap.keep(objects)
+        me = m["seen"]["me"]
+        if me and (not m["trail"] or math.dist(m["trail"][-1], (me["x"], me["y"])) > 0.002):
+            m["trail"].append((me["x"], me["y"]))
+
+    def sample_map(self, cfg: dict) -> list:
+        return [] if cfg["mapMode"] == "off" else minimap.draw(minimap.SAMPLE, minimap.SAMPLE_INFO, minimap.SAMPLE_TRAIL, cfg, None)[0]
+
+    def map_frame(self) -> tuple:
+        """The minimap to draw now: (shapes, picture), picture {data, gen, box, n, at} or None; the sample in the preview."""
+        cfg, m = self.map_live, self.map
+        if not cfg:
+            return (self.sample_map(self.preview), None) if self.preview else ([], None)
+        shapes, image = minimap.draw(m["seen"], m["info"], list(m["trail"]), cfg, minimap.png_size(m["image"]))
+        if image:
+            image.update(data=m["image"], gen=m["gen"])
+        return shapes, image
 
     def hud_frame(self, size: tuple | None = None, place: str | None = None, cfg: dict | None = None) -> list:
         """The HUD to draw now: in flight, the readings glide into each other; else the preview's sample, if any.
@@ -892,6 +942,7 @@ class Watch:
             self.display = self.sample(self.preview) if self.preview else []
             self.hud = self.sample_hud(self.preview, self.preview_key, self.hud_place) if self.preview else []
             self.hud_live, self.attitude, self.glide = None, hud.Attitude(), hud.Glide()
+            self.map_live, self.map = None, self.blank_map()
             self.warn = False
             self.last = {}
             self._key = None  # the next spawn may be another aircraft, or the same one elsewhere
@@ -918,7 +969,7 @@ class Watch:
         if not self.enabled:
             self.display = self.sample(self.preview) if self.preview else []
             self.hud = self.sample_hud(self.preview, self.preview_key, self.hud_place) if self.preview else []
-            self.hud_live = None
+            self.hud_live = self.map_live = None
             self.warn = False
             return min(cfg["pollMs"] / 1000, HUD_POLL_S) if fast else cfg["pollMs"] / 1000
         on = active(percents(lim, state), cfg["alarms"]) if lim and not self._unbreakable and not wreck else []
@@ -932,6 +983,9 @@ class Watch:
         jet = bool(lim.get("jet")) if lim else None
         shown = not (hidden or wreck) and hud.wanted(cfg["hudMode"], self.kind(self.current), jet)
         self.hud, self.hud_live = [], (cfg, self.nation(self.current)) if shown else None
+        self.map_live = cfg if cfg["mapMode"] == "on" and not hidden else None
+        if self.map_live:
+            self.read_map()
         rpm = _engines(state)[0]
         silent = self.muted or (cfg["soundFocus"] and not game_focused()) or (cfg["soundEngine"] and rpm and not any(rpm))
         if on and not silent and time.monotonic() - self._last_beep >= cfg["repeat"] / 1000:
@@ -945,7 +999,7 @@ class Watch:
         no limits, so only the lines' own alerts."""
         values = {**values, **self.own_numbers(), "vehicle": self.vehicle(reported_type(values))}
         self.current, self.profile = None, f"type:{values['army']}" if f"type:{values['army']}" in self.profiles else ""
-        self.hud, self.hud_live = [], None  # an aircraft's: not on a tank or a ship
+        self.hud, self.hud_live, self.map_live = [], None, None  # an aircraft's: not on a tank or a ship
         self._flight = str(values.get("type") or "vehicle").rsplit("/", 1)[-1]
         self.last = numbers(values)
         self.record(values)
@@ -1069,7 +1123,7 @@ def run_overlay(watch: Watch):
         user32.ShowWindow(hwnd, SW_HIDE)
         user32.ShowWindow(glow_hwnd, SW_HIDE)
         user32.SetForegroundWindow(previous)  # creating the window took the focus
-        drawn, painted, fonts, placed = None, None, {}, {}
+        drawn, painted, fonts, placed, photos = None, None, {}, {}, {}
         anchors = {"w": "w", "m": "center", "e": "e"}
 
         def pressed(keys: list) -> bool:
@@ -1101,8 +1155,8 @@ def run_overlay(watch: Watch):
 
         def draw_hud(cfg: dict, shapes: list, lit: bool):
             """hud.draw's shapes; an alert shows in the alert colour, flashing with the lines."""
-            for s in shapes:
-                tint = cfg["alert"] if s[-1] and lit else cfg["hudColor"]
+            for s in shapes:  # the minimap's carry their colour
+                tint = s[-1] if isinstance(s[-1], str) else cfg["alert"] if s[-1] and lit else cfg["hudColor"]
                 if s[0] == "l":
                     canvas.create_line(*s[1:5], fill=tint, width=s[5], tags="hud")
                 elif s[0] == "t":
@@ -1112,12 +1166,33 @@ def run_overlay(watch: Watch):
                 else:
                     canvas.create_oval(s[1] - s[3], s[2] - s[3], s[1] + s[3], s[2] + s[3], outline=tint, width=1.8, tags="hud")
 
-        def draw(cfg: dict, lines: list, lit: bool, shapes: list = ()):
+        def map_photo(image: dict):
+            """The part of /map.img the minimap shows, shrunk or grown by Tk: made again only when it changes."""
+            if photos.get("gen") != image["gen"] or photos.get("data") is not image["data"]:
+                photos.clear()
+                photos.update(gen=image["gen"], data=image["data"])
+                try:
+                    photos["src"] = tk.PhotoImage(master=root, data=base64.b64encode(image["data"]))
+                except tk.TclError:
+                    photos["src"] = None
+            if not photos["src"]:
+                return None
+            key = tuple(image["box"]), image["n"]
+            if photos.get("key") != key:
+                shown, n = tk.PhotoImage(master=root), image["n"]
+                shown.tk.call(shown, "copy", photos["src"], "-from", *image["box"], *(("-subsample", n, n) if n > 0 else ("-zoom", -n, -n)))
+                photos.update(key=key, shown=shown)
+            return photos["shown"]
+
+        def draw(cfg: dict, lines: list, lit: bool, shapes: list = (), image: dict | None = None):
             """Each block's lines in their columns, its frame and background behind them, then the window around all of it.
             lit: the blinking lines' turn to show."""
             canvas.delete("all")
             ring = [(dx * r, dy * r) for r in range(1, cfg["outline"] + 1) for dx in (-1, 0, 1) for dy in (-1, 0, 1) if dx or dy]
             dark = []
+            photo = map_photo(image) if image else None
+            if photo:
+                canvas.create_image(*image["at"], image=photo, anchor="nw", tags="map")
             draw_hud(cfg, shapes, lit)
             for index, spot in enumerate([cfg, *cfg["blocks"]]):
                 rows, left, tag = [x for x in lines if x[4] == index], spot["x"], f"block{index}"
@@ -1160,12 +1235,14 @@ def run_overlay(watch: Watch):
             if watch.stopping.is_set():
                 root.destroy()
                 return
-            cfg, lines, shapes = watch.preview or watch.cfg, watch.display, watch.hud_frame()
+            cfg, lines, hud_shapes = watch.preview or watch.cfg, watch.display, watch.hud_frame()
+            map_shapes, image = watch.map_frame()
+            shapes = hud_shapes + map_shapes
             lit = int(time.monotonic() * 2000 / cfg["flashMs"]) % 2 == 0
-            state = cfg, lines, shapes, lit if any(x[3] for x in lines) or any(s[-1] for s in shapes) else None
+            state = cfg, lines, shapes, image and image["box"], lit if any(x[3] for x in lines) or any(isinstance(s[-1], int) and s[-1] for s in shapes) else None
             if state != drawn:
                 drawn = state
-                draw(cfg, lines, lit, shapes)
+                draw(cfg, lines, lit, shapes, image)
             if pressed(cfg["hotkey"]):
                 watch.hidden = not watch.hidden
             if pressed(cfg["logKey"]):
@@ -1183,7 +1260,7 @@ def run_overlay(watch: Watch):
                 paint_glow(glow_hwnd, screen(), glow_pixels(screen(), *painted))
             warn = watch.preview or (watch.warn and not watch.hidden and game_focused())
             user32.ShowWindow(glow_hwnd, SW_SHOWNOACTIVATE if cfg["glow"] and warn and (lit or not cfg["glowFlash"]) else SW_HIDE)
-            root.after(HUD_FRAME_MS if shapes else int(POLL_S * 1000), refresh)
+            root.after(HUD_FRAME_MS if hud_shapes else int(POLL_S * 1000), refresh)
 
         refresh()
         root.mainloop()
