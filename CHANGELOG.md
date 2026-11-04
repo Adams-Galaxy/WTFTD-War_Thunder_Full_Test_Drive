@@ -4,19 +4,20 @@ What changed in each version of WTFTD. Downloads: [Releases](https://github.com/
 (only the latest version is kept there; from 0.19.0 on, each version's code stays available through its git tag).
 Versions follow `major.minor.patch`; "beta" until 1.0.
 
-## 0.25.0 — not released yet
+## 0.25.0 — 2026-11-04
 
 - **Minimap** (My overlay → Minimap, Windows): the game's own map in the overlay, bigger than the game's and zoomable around
-  you (×2, ×4, ×8), with your aircraft, its trail, and what never moves: airfields, capture zones, bases, and the distance and
-  heading to your nearest airfield. Never another aircraft or vehicle: the game's map data also lists the enemies it has
-  spotted and your allies, and they're dropped as soon as it's read. Off by default. Drag it on the picture of your screen
-  like the text blocks; size and opacity are its own. Square or round, north up or your nose up; your aircraft glides between
-  the game's readings; your allies if you want them, told apart by their colour. Windows draws it (GDI+): the map turns with
-  you and shows as the game sends it, JPEG or PNG.
-- **My overlay**: the text blocks and the minimap are resized on the picture of your screen, by the grip in their corner.
-- **The app window reopens where you closed it** (Windows), at its size, maximized or not, on the same screen. Edge lost
-  it: it keeps an app window's place under its address, and the dots of 127.0.0.1 broke that. WTFTD keeps it now, in
-  `user/window.json`, and opens it there straight away; a place on a screen that's gone is left for the default one.
+  you (×2, ×4, ×8), square or round, north up or your nose up. Your aircraft glides smoothly between the game's readings, with
+  its trail if you want it; what never moves shows too (airfields, capture zones, bases), with the distance and heading to
+  your nearest airfield. Your allies if you turn them on, told apart by their colour: the game doesn't say a unit's team.
+  **Never an enemy**: the game's map data also lists the ones it has spotted, and they're dropped as soon as it's read. Off by
+  default; its place, size and opacity are its own. Windows draws it (GDI+): the map turns with you and shows as the game
+  sends it, JPEG or PNG.
+- **My overlay**: the text blocks and the minimap are placed and resized on the picture of your screen, by dragging them and
+  by the grip in their corner.
+- **The app window reopens where you closed it** (Windows), at its size, maximized or not, on the same screen, at once rather
+  than somewhere it then leaves. Edge lost it: it keeps an app window's place under its address, and the dots of 127.0.0.1
+  broke that. WTFTD keeps it now, in `user/window.json`; a place on a screen that's gone is left for the default one.
 
 ## 0.24.0 — 2026-11-04
 
