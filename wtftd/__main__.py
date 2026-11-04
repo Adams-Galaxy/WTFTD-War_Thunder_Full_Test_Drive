@@ -16,11 +16,13 @@ import webbrowser
 from pathlib import Path
 
 from .alarms import available, game_running
-from .paths import CACHE, FROZEN, WEB, prepare
-from .server import ROOT, STATE, WATCH, page_closed, serve, wait_page_gone
+from .paths import CACHE, FROZEN, USER, WEB, prepare
+from .server import ROOT, STATE, WATCH, page_closed, read_json, serve, wait_page_gone, write_json
 
 GAME_CHECK_S = 5
 FIND_WINDOW_S = 20
+PLACE_S = 2  # how often the window's place is looked at, kept when it changes
+PLACE = USER / "window.json"  # a file of its own: the settings are written by the page too
 # a window hidden, minimized or on another screen keeps its pings, curves and battle log going
 STAY_AWAKE = ("--disable-background-timer-throttling", "--disable-renderer-backgrounding", "--disable-backgrounding-occluded-windows")
 # macOS: Chromium browsers that support app windows (--app), executable inside the bundle
@@ -84,6 +86,30 @@ def no_translate(profile: Path):
         pass
 
 
+def keep_place(tray, wanted, path: Path = PLACE):
+    """The window where it was closed. Edge keeps an app window's place under its address, and 127.0.0.1's dots lose
+    it (it writes 127 -> 0 -> 0 -> 1_/ and reads 127.0.0.1_/), so WTFTD keeps it, then minimizes if asked."""
+    window = None
+    for _ in range(FIND_WINDOW_S * 2):
+        time.sleep(0.5)
+        window = tray.find_window()
+        if window:
+            break
+    if not window:
+        return
+    last = read_json(path, None)
+    if tray.usable(last):
+        tray.put(window, last)
+    if wanted("startMinimized"):
+        tray.minimize()
+    while tray.find_window() == window:  # until it's closed
+        time.sleep(PLACE_S)
+        now = tray.place_of(window)
+        if now and now != last and tray.usable(now):
+            write_json(path, now)
+            last = now
+
+
 def window_options(tray) -> object | None:
     """What the app window does on Windows, once it's open: start minimized, go to the notification area, close with the game."""
     wanted = lambda key: STATE.settings().get(key) is True
@@ -97,14 +123,7 @@ def window_options(tray) -> object | None:
                 tray.close()
             seen = up
 
-    def start_minimized():
-        for _ in range(FIND_WINDOW_S * 2):
-            time.sleep(0.5)
-            if tray.minimize():
-                return
-
-    if wanted("startMinimized"):
-        threading.Thread(target=start_minimized, daemon=True).start()
+    threading.Thread(target=keep_place, args=(tray, wanted), daemon=True).start()
     threading.Thread(target=close_with_game, daemon=True).start()
     icon = tray.Tray(lambda: wanted("trayMinimize"), WEB / "favicon.ico")
     icon.start()

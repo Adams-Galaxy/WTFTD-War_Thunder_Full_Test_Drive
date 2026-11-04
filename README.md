@@ -496,7 +496,7 @@ wtftd/                      Python backend (stdlib only)
   bench.py                  Test bench: finds the valid stretches of a recorded test, results in user/bench.json
   mods.py                   Skins and sounds: untrusted archives, what WTFTD installed, config.blk's one line
   challenges.py             Challenges: what's where on each map, results in user/challenges.json
-  waveout.py / tray.py      sound on the output you pick / the app window: minimized, notification area (Windows)
+  waveout.py / tray.py      sound on the output you pick / the app window: its place, minimized, notification area (Windows)
   uninstall.py              Settings → Uninstall
   blk.py, game.py, paths.py BLK writer, install detection, file locations
 web/                        UI (HTML/CSS/JS, no build step), web/locales = translations, stats.js = stats & search,

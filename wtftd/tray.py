@@ -12,8 +12,13 @@ TITLE = "WTFTD — War Thunder"
 WINDOW_CLASS = "Chrome_WidgetWin_1"
 WM_DESTROY, WM_CLOSE, WM_TIMER, WM_LBUTTONUP, WM_RBUTTONUP, WM_ICON = 0x2, 0x10, 0x113, 0x202, 0x205, 0x8001
 SW_HIDE, SW_MINIMIZE, SW_RESTORE = 0, 6, 9
+SW_SHOWNORMAL, SW_SHOWMINIMIZED, SW_SHOWMAXIMIZED, WPF_RESTORETOMAXIMIZED = 1, 2, 3, 2
 NIM_ADD, NIM_DELETE, NIF_MESSAGE, NIF_ICON, NIF_TIP = 0, 2, 1, 2, 4
 LOOK_MS = 500
+
+
+class Placement(ctypes.Structure):  # WINDOWPLACEMENT
+    _fields_ = [("length", w.UINT), ("flags", w.UINT), ("show", w.UINT), ("min", w.POINT), ("max", w.POINT), ("normal", w.RECT)]
 
 
 class IconData(ctypes.Structure):  # NOTIFYICONDATAW
@@ -38,7 +43,50 @@ def _user32():
     user.ShowWindow.argtypes = [w.HWND, ctypes.c_int]
     user.GetWindowTextW.argtypes = [w.HWND, w.LPWSTR, ctypes.c_int]
     user.GetClassNameW.argtypes = [w.HWND, w.LPWSTR, ctypes.c_int]
+    user.GetWindowPlacement.argtypes = user.SetWindowPlacement.argtypes = [w.HWND, ctypes.POINTER(Placement)]
+    user.MonitorFromRect.argtypes = [ctypes.POINTER(w.RECT), w.DWORD]
+    user.MonitorFromRect.restype = w.HANDLE
     return user
+
+
+def _real_pixels(user):
+    """This thread in physical pixels, read and written alike, whatever the process did about DPI (the overlay does)."""
+    try:
+        user.SetThreadDpiAwarenessContext(ctypes.c_void_p(-4))  # DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2
+    except AttributeError:  # before Windows 10 1607: the process's own setting
+        pass
+
+
+def place_of(window) -> dict | None:
+    """Where a window is: its restored rectangle (Windows' workspace coordinates) and whether it's maximized."""
+    user = _user32()
+    _real_pixels(user)
+    p = Placement(length=ctypes.sizeof(Placement))
+    if not user.GetWindowPlacement(window, ctypes.byref(p)):
+        return None
+    r = p.normal
+    maximized = p.show == SW_SHOWMAXIMIZED or (p.show == SW_SHOWMINIMIZED and p.flags & WPF_RESTORETOMAXIMIZED)
+    return {"x": r.left, "y": r.top, "w": r.right - r.left, "h": r.bottom - r.top, "max": bool(maximized)}
+
+
+def usable(place) -> bool:
+    """A place saved earlier, still on a screen: one unplugged since, or odd numbers, and the browser's own place stays."""
+    if not isinstance(place, dict) or not all(type(place.get(k)) is int for k in "xywh") or not isinstance(place.get("max"), bool):
+        return False
+    if not (200 <= place["w"] <= 20000 and 150 <= place["h"] <= 20000):
+        return False
+    user = _user32()
+    _real_pixels(user)
+    rect = w.RECT(place["x"], place["y"], place["x"] + place["w"], place["y"] + place["h"])
+    return bool(user.MonitorFromRect(ctypes.byref(rect), 0))  # MONITOR_DEFAULTTONULL
+
+
+def put(window, place: dict) -> bool:
+    user = _user32()
+    _real_pixels(user)
+    rect = w.RECT(place["x"], place["y"], place["x"] + place["w"], place["y"] + place["h"])
+    p = Placement(length=ctypes.sizeof(Placement), show=SW_SHOWMAXIMIZED if place["max"] else SW_SHOWNORMAL, normal=rect)
+    return bool(user.SetWindowPlacement(window, ctypes.byref(p)))
 
 
 def find_window(title: str = TITLE, kind: str = WINDOW_CLASS):
