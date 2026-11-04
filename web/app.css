@@ -1248,6 +1248,9 @@ body.no-sidebar .sidebar, body.no-sidebar #compareTray { display: none; }
 .ov-screen { position: relative; overflow: hidden; }
 .ov-map-hit { position: absolute; cursor: move; touch-action: none; border-radius: 4px; }
 .ov-map-hit:hover { outline: 1px dashed var(--accent); }
+.ov-grip { position: absolute; right: -6px; bottom: -6px; width: 12px; height: 12px; border-radius: 3px; background: var(--accent);
+           border: 1px solid #000; cursor: nwse-resize; opacity: 0; transition: opacity .15s; }
+.ov-text:hover .ov-grip, .ov-map-hit:hover .ov-grip, .ov-grip:active { opacity: 1; }
 .ov-hud-live { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; font-family: Consolas, 'Microsoft YaHei', monospace; font-weight: 700; }
 .ov-zoom { padding: 12px; overflow: hidden; white-space: pre; line-height: 1.17; }
 .ov-text { display: grid; grid-auto-flow: column; justify-content: start; position: absolute; cursor: move; white-space: pre; line-height: 1.17; user-select: none; touch-action: none; outline: 1px dashed rgba(255,255,255,.35); outline-offset: 3px; }
@@ -1282,7 +1285,7 @@ body.no-sidebar .sidebar, body.no-sidebar #compareTray { display: none; }
 .ov-block .icon-btn { width: 26px; height: 26px; }
 .fl-views { margin: 12px 0 8px; }
 .fl-views input[type=text] { width: 200px; }
-.ov-text:empty { min-width: 48px; min-height: 18px; }
+.ov-text:empty, .ov-text:has(> .ov-grip:only-child) { min-width: 48px; min-height: 18px; }  /* a block with no line yet */
 .ov-blink { animation: ov-blink var(--ov-flash, 500ms) step-end infinite; }
 @keyframes ov-blink { 50% { opacity: 0; } }
 .ov-group { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }

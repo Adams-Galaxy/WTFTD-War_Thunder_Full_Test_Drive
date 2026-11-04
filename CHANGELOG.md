@@ -11,6 +11,7 @@ Versions follow `major.minor.patch`; "beta" until 1.0.
   heading to your nearest airfield. Never another aircraft or vehicle: the game's map data also lists the enemies it has
   spotted and your allies, and they're dropped as soon as it's read. Off by default. Drag it on the picture of your screen
   like the text blocks; size and opacity are its own.
+- **My overlay**: the text blocks and the minimap are resized on the picture of your screen, by the grip in their corner.
 
 ## 0.24.0 — 2026-11-04
 

@@ -24,7 +24,8 @@ function ovShow(st) {
   OV.screen = st.screen;
   OV.hud = st.hud || {};
   OV.map = st.map || [];
-  OV.mapAt = [st.cfg.mapX, st.cfg.mapY];  // where the server drew it: a drag moves it from there
+  OV.mapAt = [st.cfg.mapX, st.cfg.mapY, st.cfg.mapSize];  // how the server drew it: a drag or the grip changes it from there
+  OV.drawnScale = [st.cfg, ...st.cfg.blocks].map(b => b.scale);  // the text blocks' size in the lines it sent
   ovDraw();
   ovDrawHud();
 }
@@ -34,9 +35,11 @@ function ovShow(st) {
 function ovDrawMap() {
   const svg = $('#ovMapLive'), hit = $('#ovMapHit'), c = OV.cfg, shapes = OV.map || [];
   const k = $('#ovScreen').clientWidth / OV.screen[0], dx = (c.mapX - (OV.mapAt?.[0] ?? c.mapX)) * k, dy = (c.mapY - (OV.mapAt?.[1] ?? c.mapY)) * k;
+  const [ox, oy] = OV.mapAt || [c.mapX, c.mapY], s = c.mapSize / (OV.mapAt?.[2] || c.mapSize);  // grown around its corner
   svg.setAttribute('viewBox', `0 0 ${OV.screen[0]} ${OV.screen[1]}`);
   svg.style.opacity = c.mapOpacity / 100;  // its own: the minimap has a window of its own
-  svg.style.transform = `translate(${dx}px, ${dy}px)`;
+  svg.style.transformOrigin = `${ox * k}px ${oy * k}px`;
+  svg.style.transform = `translate(${dx}px, ${dy}px) scale(${s})`;
   hudDraw(svg, shapes, c.hudColor, c.alert);
   const xs = [], ys = [];
   for (const s of shapes) {
@@ -44,8 +47,8 @@ function ovDrawMap() {
     pts.forEach((v, i) => (i % 2 ? ys : xs).push(v));
   }
   hit.classList.toggle('hidden', !xs.length);
-  if (xs.length) Object.assign(hit.style, { left: `${Math.min(...xs) * k + dx}px`, top: `${Math.min(...ys) * k + dy}px`,
-                                            width: `${(Math.max(...xs) - Math.min(...xs)) * k}px`, height: `${(Math.max(...ys) - Math.min(...ys)) * k}px` });
+  if (xs.length) Object.assign(hit.style, { left: `${(ox + (Math.min(...xs) - ox) * s) * k + dx}px`, top: `${(oy + (Math.min(...ys) - oy) * s) * k + dy}px`,
+                                            width: `${(Math.max(...xs) - Math.min(...xs)) * s * k}px`, height: `${(Math.max(...ys) - Math.min(...ys)) * s * k}px` });
 }
 
 function ovDrawHud() {
@@ -97,7 +100,9 @@ function ovDraw() {
                                       margin: `${-pad}px 0 0 ${-pad}px`, padding: boxed ? `${10 * k}px` : '',
                                       border: spot.frame ? `${Math.max(1, spot.frame * k)}px solid ${spot.frameColor}` : '',
                                       background: spot.background ? `color-mix(in srgb, ${spot.background} ${spot.bgOpacity}%, transparent)` : '' });
-    text.innerHTML = html(rows, k);
+    text.innerHTML = html(rows, k) + '<i class="ov-grip" aria-hidden="true"></i>';
+    const grown = spot.scale / (OV.drawnScale?.[i] || spot.scale);  // at once while the grip moves, drawn again when saved
+    Object.assign(text.style, { transformOrigin: '0 0', transform: grown === 1 ? '' : `scale(${grown})` });
   });
   box.querySelectorAll('.ov-text').forEach(el => { if (+el.dataset.b > c.blocks.length) el.remove(); });
   // the same text big enough to read: the size of the letters compared with each other, not on the screen
@@ -343,9 +348,31 @@ function ovDragMap(e) {
   hit.addEventListener('pointerup', () => hit.removeEventListener('pointermove', move), { once: true });
 }
 
+// a text block's size (its %) or the minimap's (px) from the grip in its corner, with the width the mouse gives it
+function ovResize(e, grip) {
+  const owner = grip.parentElement, c = OV.cfg, k = $('#ovScreen').clientWidth / OV.screen[0], map = owner.id === 'ovMapHit';
+  const i = map ? -1 : +owner.dataset.b, spot = map ? c : i ? c.blocks[i - 1] : c, key = map ? 'mapSize' : 'scale';
+  const width = map ? c.mapSize * k : owner.getBoundingClientRect().width, start = spot[key], x0 = e.clientX;
+  e.preventDefault();
+  grip.setPointerCapture(e.pointerId);
+  const move = ev => {
+    const grown = start * Math.max(0.05, (width + ev.clientX - x0) / width);
+    spot[key] = Math.round(map ? Math.min(3000, Math.max(80, grown)) : Math.min(400, Math.max(10, grown)));
+    const field = map ? $('#ovMapSize') : $(`.ov-block[data-i="${i}"] [data-ob="scale"]`);
+    if (field) field.value = spot[key];
+    if (map) ovDrawMap();
+    else ovDraw();
+    ovSave();
+  };
+  grip.addEventListener('pointermove', move);
+  grip.addEventListener('pointerup', () => grip.removeEventListener('pointermove', move), { once: true });
+}
+
 function ovDrag() {
   const box = $('#ovScreen');
   box.addEventListener('pointerdown', e => {
+    const grip = e.target.closest('.ov-grip');
+    if (grip) return ovResize(e, grip);
     if (e.target.id === 'ovMapHit') return ovDragMap(e);
     const text = e.target.closest('.ov-text');
     if (!text) return;
@@ -403,7 +430,7 @@ function bindOverlay() {
       OV.cfg[el.dataset.ov] = value;
       if (el.dataset.ov === 'size' || el.dataset.ov === 'color') ovRenderLines();  // what lines without their own show
       if (el.dataset.ov === 'alert') $('#ovGlowColor').value = ovFollowed('glowColor');
-      if (['mapX', 'mapY', 'mapOpacity'].includes(el.dataset.ov)) ovDrawMap();
+      if (['mapX', 'mapY', 'mapSize', 'mapOpacity'].includes(el.dataset.ov)) ovDrawMap();
       ovShowClears();
       ovDraw();
     } else if (el.dataset.ol) {
