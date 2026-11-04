@@ -4,7 +4,7 @@ What changed in each version of WTFTD. Downloads: [Releases](https://github.com/
 (only the latest version is kept there; from 0.19.0 on, each version's code stays available through its git tag).
 Versions follow `major.minor.patch`; "beta" until 1.0.
 
-## 0.25.2 — not released yet
+## 0.25.2 — 2026-11-05
 
 - **Minimap**: each kind of mark has its own size, from 50 to 400 % of the usual one: your aircraft, your allies, the
   airfields, and the zones and bases (My overlay → Minimap → *Size of the marks*).
