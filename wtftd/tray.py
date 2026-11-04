@@ -12,7 +12,7 @@ from pathlib import Path
 TITLE = "WTFTD — War Thunder"
 WINDOW_CLASS = "Chrome_WidgetWin_1"
 WM_DESTROY, WM_CLOSE, WM_TIMER, WM_LBUTTONUP, WM_RBUTTONUP, WM_ICON = 0x2, 0x10, 0x113, 0x202, 0x205, 0x8001
-SW_HIDE, SW_MINIMIZE, SW_RESTORE = 0, 6, 9
+SW_HIDE, SW_MAXIMIZE, SW_MINIMIZE, SW_RESTORE = 0, 3, 6, 9
 SW_SHOWNORMAL, SW_SHOWMINIMIZED, SW_SHOWMAXIMIZED, WPF_RESTORETOMAXIMIZED = 1, 2, 3, 2
 NIM_ADD, NIM_DELETE, NIF_MESSAGE, NIF_ICON, NIF_TIP = 0, 2, 1, 2, 4
 LOOK_MS = 500
@@ -124,7 +124,9 @@ def put(window, place: dict) -> bool:
     rect = w.RECT(place["x"], place["y"], place["x"] + place["w"], place["y"] + place["h"])
     p = Placement(length=ctypes.sizeof(Placement), show=SW_SHOWMAXIMIZED if place["max"] else SW_SHOWNORMAL, normal=rect)
     with _real_pixels(user):
-        return bool(user.SetWindowPlacement(window, ctypes.byref(p)))
+        if place["max"]:  # maximized first: given a normal place to show, Windows showed it there for a moment, then grew it
+            user.ShowWindow(window, SW_MAXIMIZE)
+        return bool(user.SetWindowPlacement(window, ctypes.byref(p)))  # then its normal place, for when it's restored
 
 
 def find_window(title: str = TITLE, kind: str = WINDOW_CLASS):

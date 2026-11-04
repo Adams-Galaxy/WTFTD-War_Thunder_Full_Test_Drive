@@ -100,8 +100,8 @@ def keep_place(tray, wanted, path: Path = PLACE):
     """The window where it was closed. Edge keeps an app window's place under its address, and 127.0.0.1's dots lose
     it (it writes 127 -> 0 -> 0 -> 1_/ and reads 127.0.0.1_/), so WTFTD keeps it, then minimizes if asked."""
     window = None
-    for _ in range(FIND_WINDOW_S * 2):
-        time.sleep(0.5)
+    for _ in range(FIND_WINDOW_S * 10):  # often: it's put in its place as soon as its page names it
+        time.sleep(0.1)
         window = tray.find_window()
         if window:
             break
@@ -110,6 +110,9 @@ def keep_place(tray, wanted, path: Path = PLACE):
     last = read_json(path, None)
     if tray.usable(last):
         tray.put(window, last)
+        time.sleep(1)
+        if (tray.place_of(window) or {}).get("max") != last["max"]:  # the browser undid it while it was still opening
+            tray.put(window, last)
     if wanted("startMinimized"):
         tray.minimize()
     while tray.find_window() == window:  # until it's closed
