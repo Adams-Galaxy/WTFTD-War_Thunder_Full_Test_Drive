@@ -4,7 +4,7 @@ What changed in each version of WTFTD. Downloads: [Releases](https://github.com/
 (only the latest version is kept there; from 0.19.0 on, each version's code stays available through its git tag).
 Versions follow `major.minor.patch`; "beta" until 1.0.
 
-## 0.25.4 - not released yet
+## 0.25.4 - 2026-11-05
 
 - **What changed compares your game with the dev server**: *Compare with the dev server* downloads the community datamine
   (about 1 GB the first time) and builds its newest version apart, in its own process and its own folder, in a few
