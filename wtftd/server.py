@@ -487,8 +487,7 @@ def auto_check():
 
 
 def auto_update_loop():
-    time.sleep(4)
-    while True:
+    while True:  # at once: the page asks as soon as it opens, and only once a minute after that
         auto_check()
         time.sleep(AUTO_CHECK_EVERY)
 
