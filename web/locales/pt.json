@@ -8,6 +8,8 @@
   "search.placeholder": "Buscar veículos — nome ou ID…",
   "status.gameFound": "Jogo encontrado",
   "status.gameMissing": "Jogo não encontrado",
+  "status.gameRunning": "Jogo em execução",
+  "status.gameClosed": "Jogo fechado",
   "status.data": "Dados v{version}",
   "status.src.game": "seu jogo",
   "status.src.datamine": "datamine",

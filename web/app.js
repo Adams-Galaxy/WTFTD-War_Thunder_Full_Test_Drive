@@ -226,7 +226,7 @@ function versionAhead(v, w) {
 // the Data button's menu: the two databases WTFTD can keep (the installed game's, the datamine's), one click to switch
 function dataMenu() {
   const st = S.status, box = $('#dataMenu');
-  if (!box.classList.contains('hidden')) return box.classList.add('hidden');
+  if (!box.classList.contains('hidden')) return closeDataMenu();
   const ahead = m => m.source !== 'game' && st.data?.source === 'game' ? versionAhead(m.version, st.data.version) : m === st.data && !!st.dataAhead;
   const name = m => t(m.source === 'game' ? (m.circuit === 'dev' ? 'data.menu.gameDev' : 'data.menu.game') : ahead(m) ? 'data.menu.datamineDev' : 'data.menu.datamine');
   const day = m => (m.built ? new Date(m.built * 1000).toLocaleDateString(I18N.code) : '');
@@ -237,6 +237,12 @@ function dataMenu() {
       <small class="muted">${esc(t('data.menu.buildHint'))}</small></span></button>`;
   box.innerHTML = `${row(st.data, true)}${other}<button class="dm-row dm-foot" role="menuitem" data-dm="settings">${esc(t('data.menu.settings'))}</button>`;
   box.classList.remove('hidden');
+  $('#pillData')?.setAttribute('aria-expanded', 'true');
+}
+
+function closeDataMenu() {
+  $('#dataMenu').classList.add('hidden');
+  $('#pillData')?.setAttribute('aria-expanded', 'false');
 }
 
 // the page reloaded on the page it shows
@@ -248,7 +254,7 @@ function reloadOnPage() {
 async function dataMenuPick(e) {
   const b = e.target.closest('[data-dm]');
   if (!b) return;
-  $('#dataMenu').classList.add('hidden');
+  closeDataMenu();
   try {
     if (b.dataset.dm === 'settings') return openSettings('source');
     if (b.dataset.dm === 'build') { await api('dev-build', {}); return showView('changes'); }  // its progress shows there
@@ -257,18 +263,32 @@ async function dataMenuPick(e) {
   } catch (err) { toastErr(err); }
 }
 
+// the game found: green while it runs, red when it's closed, and then a click launches it (as the launch button did); found,
+// and launched by a click too, where WTFTD can't tell whether it runs (macOS)
+function paintGame() {
+  const el = $('#pillPlay');
+  if (!el) return;
+  const on = S.gameRunning, word = t(on === true ? 'status.gameRunning' : on === false ? 'status.gameClosed' : 'status.gameFound');
+  el.className = `pill pill-play ${on === false ? 'off' : 'ok'}${on === true ? '' : ' launch'}`;
+  el.lastElementChild.textContent = word;
+  el.title = `${on === true ? word : `${word} · ${t('action.launch')}`}\n${S.status.gameDir || ''}`;  // a narrow screen shows the dot alone
+  el.setAttribute('aria-disabled', String(on === true));
+}
+
 function renderStatus() {
   const st = S.status;
   const game = st.gameFound
-    ? `<span class="pill ok" title="${esc(st.gameDir)}"><span class="dot"></span>${esc(t('status.gameFound'))}</span>`
+    ? `<button class="pill pill-play ok" id="pillPlay"><span class="dot"></span>${icon('play', 'ic-sm play')}<span>${esc(t('status.gameFound'))}</span></button>`
     : `<span class="pill bad" id="pillGame" title="${esc(t('settings.gameDirHint'))}"><span class="dot"></span>${esc(t('status.gameMissing'))}</span>`;
   // where the data comes from, and a click to change it: the installed game, or the datamine (the dev server's when ahead of it)
   const src = st.data?.source === 'game' ? (st.data.circuit === 'dev' ? 'gamedev' : 'game') : st.dataAhead ? 'dev' : 'datamine';
   const data = st.data?.version
-    ? `<button class="pill pill-data${src.endsWith('dev') ? ' warn' : ''}" id="pillData" title="${esc(`${t('settings.version', { version: st.data.version, date: new Date(st.data.built * 1000).toLocaleDateString(I18N.code) })} · ${t('source.from.' + (st.data.source || 'datamine'))}\n${t('status.dataHint')}`)}">${esc(t('status.data', { version: st.data.version }))} · ${esc(t('status.src.' + src))}</button>`
+    ? `<button class="pill pill-data${src.endsWith('dev') ? ' warn' : ''}" id="pillData" aria-haspopup="menu" aria-expanded="false" title="${esc(`${t('settings.version', { version: st.data.version, date: new Date(st.data.built * 1000).toLocaleDateString(I18N.code) })} · ${t('source.from.' + (st.data.source || 'datamine'))}\n${t('status.dataHint')}`)}"><span class="pill-word">${esc(t('status.data', { version: st.data.version }))}</span><span class="pill-short">v${esc(st.data.version)}</span><span class="pill-src"> · ${esc(t('status.src.' + src))}</span>${icon('chev', 'ic dm-caret')}</button>`
     : `<span class="pill bad"><span class="dot"></span>${esc(t('status.noData'))}</span>`;
   $('#status').innerHTML = game + data;
+  paintGame();
   $('#pillGame')?.addEventListener('click', openSettings);
+  $('#pillPlay')?.addEventListener('click', () => { if (S.gameRunning !== true) launchGame(); });
   $('#pillData')?.addEventListener('click', dataMenu);
   if (typeof renderAppVersion === 'function' && APP.info) renderAppVersion();
 }
@@ -623,9 +643,8 @@ function bindUI() {
   $$('.subtab').forEach(b => b.addEventListener('click', () => showView(b.dataset.view)));
   $('#btnSettings').addEventListener('click', openSettings);
   $('#dataMenu').addEventListener('click', dataMenuPick);
-  document.addEventListener('click', e => { if (!e.target.closest('#dataMenu, #pillData')) $('#dataMenu').classList.add('hidden'); });
-  document.addEventListener('keydown', e => { if (e.key === 'Escape') $('#dataMenu').classList.add('hidden'); });
-  $('#btnLaunchTop').addEventListener('click', launchGame);
+  document.addEventListener('click', e => { if (!e.target.closest('#dataMenu, #pillData')) closeDataMenu(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDataMenu(); });
   $('#btnOpenFolder').addEventListener('click', () => api('open-folder', {}).catch(toastErr));
   $('#btnSaveSettings').addEventListener('click', saveSettings);
   $('#btnCdkCleanup').addEventListener('click', cdkCleanup);
@@ -1975,4 +1994,9 @@ function renderOnboardInfo() {
 document.addEventListener('DOMContentLoaded', () => boot().catch(e => { console.error(e); toastErr(e); }));
 // app window: tells the local server the page is gone (macOS keeps the browser running, WTFTD quits with the window)
 addEventListener('pagehide', () => navigator.sendBeacon('/api/bye'));
-setInterval(() => fetch('/api/ping').catch(() => {}), 15000);  // alive: WTFTD keeps serving while this page is open
+// alive: WTFTD keeps serving while this page is open; and whether the game runs, for the game's pill at the top
+const ping = () => fetch('/api/ping').then(r => r.json()).then(p => {
+  if (p.running !== S.gameRunning) { S.gameRunning = p.running; paintGame(); }
+}).catch(() => {});
+ping();
+setInterval(ping, 5000);

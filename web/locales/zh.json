@@ -8,6 +8,8 @@
   "search.placeholder": "搜索载具 — 名称或 ID…",
   "status.gameFound": "已找到游戏",
   "status.gameMissing": "未找到游戏",
+  "status.gameRunning": "游戏运行中",
+  "status.gameClosed": "游戏已关闭",
   "status.data": "数据 v{version}",
   "status.src.game": "你的游戏",
   "status.src.datamine": "datamine",

@@ -8,6 +8,8 @@
   "search.placeholder": "Поиск техники — название или ID…",
   "status.gameFound": "Игра найдена",
   "status.gameMissing": "Игра не найдена",
+  "status.gameRunning": "Игра запущена",
+  "status.gameClosed": "Игра закрыта",
   "status.data": "Данные v{version}",
   "status.src.game": "ваша игра",
   "status.src.datamine": "датамайн",

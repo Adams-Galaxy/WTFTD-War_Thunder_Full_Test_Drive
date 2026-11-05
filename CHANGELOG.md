@@ -19,6 +19,9 @@ Versions follow `major.minor.patch`; "beta" until 1.0.
   switches at once, nothing rebuilt (the two folders swap places). The one missing is built apart on request, whichever
   source the app reads. In Settings, *Game data* is two boxes to tick, one or both: saving builds the one ticked apart and
   removes the one unticked (the one in use once the app has switched to the other); which one is in use is picked at the top.
+- **The game's pill at the top says whether War Thunder runs** (green *Game running*, red *Game closed*, checked every 5 s)
+  and, closed, launches it with a click: it replaces the *Launch War Thunder* button. The Data button shows its menu's
+  arrow, and both stay on narrow screens, smaller, instead of going away.
 - **The datamine isn't always the dev server's**: it follows the newest version there is. *Dev server* is only said when
   it's a whole version ahead of your game (2.60 against 2.59); a patch ahead is a patch you haven't installed, behind is no
   dev server open.

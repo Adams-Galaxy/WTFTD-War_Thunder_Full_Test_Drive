@@ -165,9 +165,17 @@ kbd { font: 600 10.5px var(--font); color: var(--muted); border: 1px solid var(-
 }
 .pill .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
 .pill.ok .dot { background: var(--ok); box-shadow: 0 0 8px var(--ok); }
-.pill.bad .dot { background: var(--danger); box-shadow: 0 0 8px var(--danger); }
+.pill.bad .dot, .pill.off .dot { background: var(--danger); box-shadow: 0 0 8px var(--danger); }
 .pill.bad { cursor: pointer; border-color: rgba(255, 100, 100, .35); }
-.pill-data { font: inherit; font-size: 12px; cursor: pointer; }
+.pill-play { font: inherit; font-size: 12px; }
+.pill-play .play { display: none; width: 12px; height: 12px; margin-left: -2px; }
+.pill-play.launch { cursor: pointer; }  /* closed: a click launches the game */
+.pill-play.launch .play { display: inline; }
+.pill-play.launch:hover { border-color: var(--line-hover); color: var(--text); }
+.pill-data { font: inherit; font-size: 12px; cursor: pointer; padding-right: 8px; }
+.pill-data .dm-caret { width: 12px; height: 12px; margin-left: -2px; transform: rotate(90deg); transition: transform .15s; opacity: .85; }  /* a menu: it opens below */
+.pill-data[aria-expanded="true"] .dm-caret { transform: rotate(-90deg); }
+.pill-data[aria-expanded="true"] { border-color: var(--line-hover); color: var(--text); }
 .pill-data:hover { border-color: var(--line-hover); color: var(--text); }
 .pill-data.warn { border-color: rgba(255, 181, 71, .45); color: var(--warn); }
 .opt-list.flash { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 10px; transition: outline-color .4s; }
@@ -530,7 +538,7 @@ option { background: var(--surface); }
 }
 @media (max-width: 1000px) {
   :root { --side-w: 210px; }
-  .brand-text span, .status, #btnLaunchTop span, #accountName { display: none; }
+  .brand-text span, #accountName { display: none; }  /* the game's pill launches it and the Data button switches: both stay, small */
   .brand { min-width: 0; }
 }
 @media (max-width: 760px) {
@@ -963,10 +971,12 @@ body.resizing .drawer, body.resizing .content { transition: none; }
 .topbar .search { min-width: 0; }
 .top-actions, .brand, .tabs { flex: none; }
 .brand-text span { white-space: nowrap; }
+.pill-data .pill-short { display: none; }
 @media (max-width: 1960px) {
   .brand-text span { display: none; }
   .brand { min-width: 0; }
-  .status .pill + .pill { display: none; }  /* the data version: in Settings */
+  #pillPlay { padding: 0 9px; }
+  #pillPlay span:last-child, .pill-data .pill-src { display: none; }  /* the game's dot alone (its state in a tooltip), the data without its source */
 }
 @media (max-width: 1500px) {
   :root { --drawer-w: 500px; }
@@ -974,10 +984,8 @@ body.resizing .drawer, body.resizing .content { transition: none; }
 @media (max-width: 1700px) {
   .topbar { gap: 12px; }
   .tab { padding: 0 9px; font-size: 12.5px; }
-  .status { display: none; }
-}
-@media (max-width: 1440px) {
-  #btnLaunchTop span { display: none; }  /* its icon, named in a tooltip */
+  .pill-data .pill-word { display: none; }  /* the Data button stays: the data in use is picked there */
+  .pill-data .pill-short { display: inline; }
 }
 @media (max-width: 1220px) {
   .brand-text { display: none; }

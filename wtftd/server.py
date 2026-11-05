@@ -698,8 +698,8 @@ class Handler(BaseHTTPRequestHandler):
         return self.send_file(target)
 
     def get_api(self, route: str):
-        if route == "ping":  # the app page is alive (every 15 s)
-            return self.send_json({"ok": True})
+        if route == "ping":  # the app page is alive (every 5 s); it shows whether the game is running (None: can't tell here)
+            return self.send_json({"ok": True, "running": game_up() if alarms.available() else None})
         if route == "status":
             return self.send_json(api_status())
         if route.startswith("vehicle/"):

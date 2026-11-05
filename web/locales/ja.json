@@ -8,6 +8,8 @@
   "search.placeholder": "兵器を検索 — 名前または ID…",
   "status.gameFound": "ゲーム検出済み",
   "status.gameMissing": "ゲームが見つかりません",
+  "status.gameRunning": "ゲーム起動中",
+  "status.gameClosed": "ゲーム終了",
   "status.data": "データ v{version}",
   "status.src.game": "自分のゲーム",
   "status.src.datamine": "datamine",

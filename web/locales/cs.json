@@ -8,6 +8,8 @@
   "search.placeholder": "Hledat vozidla — název nebo ID…",
   "status.gameFound": "Hra nalezena",
   "status.gameMissing": "Hra nenalezena",
+  "status.gameRunning": "Hra běží",
+  "status.gameClosed": "Hra zavřená",
   "status.data": "Data v{version}",
   "status.src.game": "tvoje hra",
   "status.src.datamine": "datamine",
