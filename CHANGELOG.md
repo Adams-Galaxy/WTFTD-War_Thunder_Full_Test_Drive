@@ -17,7 +17,8 @@ Versions follow `major.minor.patch`; "beta" until 1.0.
 - **Your game's data and the datamine's, both kept, switched at the top**: the Data button says where the data comes from
   (*your game*, *datamine*, or *dev server (datamine)*) and opens a menu with both, their version and date; one click
   switches at once, nothing rebuilt (the two folders swap places). The one missing is built apart on request, whichever
-  source the app reads. Settings switches the same way when the other one is kept.
+  source the app reads. In Settings, *Game data* is two boxes to tick, one or both: saving builds the one ticked apart and
+  removes the one unticked (the one in use once the app has switched to the other); which one is in use is picked at the top.
 - **The datamine isn't always the dev server's**: it follows the newest version there is. *Dev server* is only said when
   it's a whole version ahead of your game (2.60 against 2.59); a patch ahead is a patch you haven't installed, behind is no
   dev server open.

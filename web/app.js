@@ -1799,7 +1799,7 @@ async function openSettings(part) {
   [['#setStartMinimized', 'startMinimized'], ['#setTray', 'trayMinimize'], ['#setCloseWithGame', 'closeWithGame']].forEach(([id, key]) => { $(id).checked = st.settings?.[key] === true; });
   $('#setTheme').value = themePref();
   $('#dataVersion').textContent = st.data?.version ? `${t('settings.version', { version: st.data.version, date: new Date(st.data.built * 1000).toLocaleDateString(I18N.code) })} · ${t('source.from.' + (st.data.source || 'datamine'))}` : '';
-  renderSource($('#setSource'), st.dataSource);
+  renderKeep($('#setSource'), new Set([st.data?.source || st.dataSource, st.other?.version && st.other.source].filter(Boolean)));
   $('#rowDatamine').classList.toggle('hidden', !(st.datamineCopy && st.data?.source === 'game'));
   $('#dlgSettings').showModal();
   if (part === 'source') {  // the header's data button: straight to where the data comes from
@@ -1823,13 +1823,27 @@ async function saveSettings() {
   try {
     const hosts = {};
     $$('#setHosts select').forEach(s => { if (s.value) hosts[s.dataset.host] = s.value; });
-    const source = $('#setSource').dataset.source;
-    S.status = await api('settings', { gameDir: $('#setGameDir').value.trim(), lang, cdk: $('#setCdk').checked, hosts, airMethod: $('#setAirMethod').value, autoUpdate: $('#setAutoUpdate').checked, startMinimized: $('#setStartMinimized').checked, trayMinimize: $('#setTray').checked, closeWithGame: $('#setCloseWithGame').checked, theme: $('#setTheme').value, oodleDll: $('#setOodle').value.trim(), dataSource: source });
-    // another source: switched to at once when its data is kept, else rebuilt now (the banner shows it). On the welcome screen,
-    // nothing starts before its button
-    if (S.status.dataReady && source !== (S.status.data?.source || 'datamine')) {
-      if (S.status.other?.source === source) { await api('data-switch', {}); $('#dlgSettings').close(); return reloadOnPage(); }
-      await api('update', {}); watchUpdates();
+    const keep = new Set(($('#setSource').dataset.keep || '').split(',').filter(Boolean));
+    S.status = await api('settings', { gameDir: $('#setGameDir').value.trim(), lang, cdk: $('#setCdk').checked, hosts, airMethod: $('#setAirMethod').value, autoUpdate: $('#setAutoUpdate').checked, startMinimized: $('#setStartMinimized').checked, trayMinimize: $('#setTray').checked, closeWithGame: $('#setCloseWithGame').checked, theme: $('#setTheme').value, oodleDll: $('#setOodle').value.trim() });
+    // the sources kept: one ticked is built apart (What changed shows it), one unticked goes, the one in use once the app has
+    // switched to the other. Which one is in use is the Data button's, at the top
+    if (S.status.dataReady && keep.size) {
+      const using = S.status.data?.source || S.status.dataSource, second = using === 'game' ? 'datamine' : 'game';
+      const other = S.status.other?.version ? S.status.other.source : null;
+      if (!keep.has(using) && other === second) {
+        await api('data-switch', {});
+        await api('dev-remove', {});
+        $('#dlgSettings').close();
+        return reloadOnPage();
+      }
+      if (keep.has(second) && other !== second) {
+        await api('dev-build', {});
+        toast({ title: t('settings.keepBuilding') });
+      } else if (!keep.has(second) && other) {
+        await api('dev-remove', {});
+        S.status = await api('status');
+      }
+      renderStatus();
     }
     if (!S.status.dataReady) renderOnboardInfo();
     applyTheme($('#setTheme').value);
@@ -1913,6 +1927,29 @@ function renderSource(el, current, onPick) {
     onPick?.();
   };
 }
+// Settings: the sources whose data WTFTD keeps, one or both (ticked, in el.dataset.keep); the one in use is picked with the Data
+// button at the top. The one in use goes only once the other is kept: unticked, the app switches to the other on saving
+function renderKeep(el, keep) {
+  const st = S.status, issue = st.gameSourceIssue, using = st.data?.source || st.dataSource, built = st.other?.version ? st.other.source : null;
+  el.dataset.keep = [...keep].join(',');
+  el.innerHTML = ['game', 'datamine'].map(src => {
+    const off = src === 'game' && issue && !keep.has('game');
+    const stuck = keep.has(src) && (keep.size === 1 || (src === using && built !== [...keep].find(x => x !== src)));
+    const sub = off ? t('source.issue.' + issue) : `${src === using ? `${t('source.inUse')} · ` : ''}${t(`source.${src}Hint`)}`;
+    return `<button type="button" class="opt check${off ? ' disabled' : ''}${keep.has(src) ? ' active' : ''}" role="checkbox" aria-checked="${keep.has(src)}"
+      data-source="${src}"${off || stuck ? ' disabled' : ''}${stuck && keep.size > 1 ? ` title="${esc(t('source.keepFirst'))}"` : ''}>
+      <span class="opt-main"><span class="opt-title">${esc(t('source.' + src))}</span><span class="opt-sub">${esc(sub)}</span></span>
+      <span class="opt-radio"></span></button>`;
+  }).join('');
+  el.onclick = e => {
+    const b = e.target.closest('[data-source]');
+    if (!b || b.disabled) return;
+    const next = new Set(keep);
+    next.has(b.dataset.source) ? next.delete(b.dataset.source) : next.add(b.dataset.source);
+    renderKeep(el, next);
+  };
+}
+
 function renderOnboardInfo() {
   const st = S.status;
   const code = s => `<code>${esc(s)}</code>`;
