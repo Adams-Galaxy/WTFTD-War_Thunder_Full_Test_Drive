@@ -217,6 +217,46 @@ async function boot() {
   store.set('startView', 'vehicles');
 }
 
+// v a whole version ahead of w (2.60.x against 2.59.x): the datamine then has the dev server's; a patch ahead is the live game's
+function versionAhead(v, w) {
+  const major = x => String(x || '').split('.').slice(0, 2).map(Number), a = major(v), b = major(w);
+  return (a[0] - b[0] || a[1] - b[1]) > 0;
+}
+
+// the Data button's menu: the two databases WTFTD can keep (the installed game's, the datamine's), one click to switch
+function dataMenu() {
+  const st = S.status, box = $('#dataMenu');
+  if (!box.classList.contains('hidden')) return box.classList.add('hidden');
+  const ahead = m => m.source !== 'game' && st.data?.source === 'game' ? versionAhead(m.version, st.data.version) : m === st.data && !!st.dataAhead;
+  const name = m => t(m.source === 'game' ? (m.circuit === 'dev' ? 'data.menu.gameDev' : 'data.menu.game') : ahead(m) ? 'data.menu.datamineDev' : 'data.menu.datamine');
+  const day = m => (m.built ? new Date(m.built * 1000).toLocaleDateString(I18N.code) : '');
+  const row = (m, on) => `<button class="dm-row${on ? ' on' : ''}" role="menuitemradio" aria-checked="${on}"${on ? ' disabled' : ' data-dm="switch"'}>
+    ${on ? icon('check', 'ic-sm') : '<i class="dm-sp"></i>'}<span><b>${esc(name(m))}</b><small class="muted">${esc(t('settings.version', { version: m.version, date: day(m) }))}</small></span></button>`;
+  const other = st.other?.version ? row(st.other, false)
+    : `<button class="dm-row" role="menuitem" data-dm="build"><i class="dm-sp"></i><span><b>${esc(t(st.dataSource === 'game' ? 'data.menu.buildDatamine' : 'data.menu.buildGame'))}</b>
+      <small class="muted">${esc(t('data.menu.buildHint'))}</small></span></button>`;
+  box.innerHTML = `${row(st.data, true)}${other}<button class="dm-row dm-foot" role="menuitem" data-dm="settings">${esc(t('data.menu.settings'))}</button>`;
+  box.classList.remove('hidden');
+}
+
+// the page reloaded on the page it shows
+function reloadOnPage() {
+  store.set('startView', $('.view:not(.hidden)')?.id.replace('view-', '') || 'vehicles');
+  location.reload();
+}
+
+async function dataMenuPick(e) {
+  const b = e.target.closest('[data-dm]');
+  if (!b) return;
+  $('#dataMenu').classList.add('hidden');
+  try {
+    if (b.dataset.dm === 'settings') return openSettings('source');
+    if (b.dataset.dm === 'build') { await api('dev-build', {}); return showView('changes'); }  // its progress shows there
+    S.status = await api('data-switch', {});
+    reloadOnPage();  // everything the page read comes from the other database now
+  } catch (err) { toastErr(err); }
+}
+
 function renderStatus() {
   const st = S.status;
   const game = st.gameFound
@@ -229,7 +269,7 @@ function renderStatus() {
     : `<span class="pill bad"><span class="dot"></span>${esc(t('status.noData'))}</span>`;
   $('#status').innerHTML = game + data;
   $('#pillGame')?.addEventListener('click', openSettings);
-  $('#pillData')?.addEventListener('click', () => openSettings('source'));
+  $('#pillData')?.addEventListener('click', dataMenu);
   if (typeof renderAppVersion === 'function' && APP.info) renderAppVersion();
 }
 
@@ -582,6 +622,9 @@ function bindUI() {
   $$('.tab').forEach(b => b.addEventListener('click', () => showView(S.menuPage[b.dataset.menu] || menuPages(b.dataset.menu)[0])));
   $$('.subtab').forEach(b => b.addEventListener('click', () => showView(b.dataset.view)));
   $('#btnSettings').addEventListener('click', openSettings);
+  $('#dataMenu').addEventListener('click', dataMenuPick);
+  document.addEventListener('click', e => { if (!e.target.closest('#dataMenu, #pillData')) $('#dataMenu').classList.add('hidden'); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') $('#dataMenu').classList.add('hidden'); });
   $('#btnLaunchTop').addEventListener('click', launchGame);
   $('#btnOpenFolder').addEventListener('click', () => api('open-folder', {}).catch(toastErr));
   $('#btnSaveSettings').addEventListener('click', saveSettings);
@@ -1705,7 +1748,8 @@ function renderUpdateBanner(st) {
     el.innerHTML = `<b>${esc(t(patched ? 'update.available' : 'update.rebuild', { v: st.remote || S.status?.data?.version || '' }))}</b>
       <button class="btn btn-primary btn-sm" data-act="update">${esc(t('update.now'))}</button>`;
     el.querySelector('[data-act]').onclick = async () => { try { await api('update', {}); watchUpdates(); } catch (e) { toastErr(e); } };
-  } else if (S.status?.dataAhead) {  // the datamine runs ahead of the game: the dev server's vehicles and BRs, not the game's
+  } else if (S.status?.dataAhead && S.status.other?.source !== 'game') {  // the datamine runs ahead of the game: the dev server's
+    // vehicles and BRs, not the game's. With the game's data kept too, it was picked on purpose and the Data button switches back
     el.className = 'update-banner warn';
     el.innerHTML = `<b>${esc(t('update.ahead', S.status.dataAhead))}</b><button class="btn btn-sm" data-act="settings">${esc(t('update.aheadFix'))}</button>`;
     el.querySelector('[data-act]').onclick = openSettings;
@@ -1781,8 +1825,12 @@ async function saveSettings() {
     $$('#setHosts select').forEach(s => { if (s.value) hosts[s.dataset.host] = s.value; });
     const source = $('#setSource').dataset.source;
     S.status = await api('settings', { gameDir: $('#setGameDir').value.trim(), lang, cdk: $('#setCdk').checked, hosts, airMethod: $('#setAirMethod').value, autoUpdate: $('#setAutoUpdate').checked, startMinimized: $('#setStartMinimized').checked, trayMinimize: $('#setTray').checked, closeWithGame: $('#setCloseWithGame').checked, theme: $('#setTheme').value, oodleDll: $('#setOodle').value.trim(), dataSource: source });
-    // another source: rebuilt now, the banner shows it. On the welcome screen, nothing starts before its button
-    if (S.status.dataReady && source !== (S.status.data?.source || 'datamine')) { await api('update', {}); watchUpdates(); }
+    // another source: switched to at once when its data is kept, else rebuilt now (the banner shows it). On the welcome screen,
+    // nothing starts before its button
+    if (S.status.dataReady && source !== (S.status.data?.source || 'datamine')) {
+      if (S.status.other?.source === source) { await api('data-switch', {}); $('#dlgSettings').close(); return reloadOnPage(); }
+      await api('update', {}); watchUpdates();
+    }
     if (!S.status.dataReady) renderOnboardInfo();
     applyTheme($('#setTheme').value);
     if (S.sel) renderDrawer();

@@ -14,8 +14,13 @@ Versions follow `major.minor.patch`; "beta" until 1.0.
   compare: it's offered when WTFTD reads your installed game.
 - **The datamine as the source, ahead of your game, is said**: a banner tells that its vehicles and BRs are the dev
   server's, with a way to read the installed game instead.
-- **The data button at the top says where the data comes from** (*your game*, *datamine*, or *dev server (datamine)*) and
-  opens Settings at the source, to switch.
+- **Your game's data and the datamine's, both kept, switched at the top**: the Data button says where the data comes from
+  (*your game*, *datamine*, or *dev server (datamine)*) and opens a menu with both, their version and date; one click
+  switches at once, nothing rebuilt (the two folders swap places). The one missing is built apart on request, whichever
+  source the app reads. Settings switches the same way when the other one is kept.
+- **The datamine isn't always the dev server's**: it follows the newest version there is. *Dev server* is only said when
+  it's a whole version ahead of your game (2.60 against 2.59); a patch ahead is a patch you haven't installed, behind is no
+  dev server open.
 - **What changed**: a new vehicle shows its flag, type and BR even when only the dev server has it.
 - **A dev server client as your game is recognized** (Gaijin's markers: a `matchingdevmode` file in its folder, or
   `curCircuit "dev"` in its `config.blk`, read only and that key alone): the Data button says *your game · dev server*, a

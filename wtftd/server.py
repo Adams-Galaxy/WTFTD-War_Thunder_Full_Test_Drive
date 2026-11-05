@@ -293,13 +293,19 @@ def dev_running() -> bool:
     return bool(DEV_PROC) and DEV_PROC[0].poll() is None
 
 
+def other_source() -> str:
+    """The source of the other database (builder.DEV): the one the app doesn't read now."""
+    return "datamine" if STATE.data_source() == "game" else "game"
+
+
 def dev_status() -> dict:
-    """What changed's dev server part: its data (the datamine's newest version, built apart) and the build under way."""
+    """The other database (the other source's, built apart: the datamine's, the dev server's while one is open, when the app
+    reads the game) and its build under way. What changed and the Data button show it."""
     st = read_json(DEV_STATUS, {}) if DEV_PROC else {}  # a build of an earlier session is over, whatever its file says
     meta = read_json(builder.DEV / "data" / "meta.json", {})
     return {"running": dev_running(), "log": (st.get("log") or [])[-1:], "progress": st.get("progress", 0.0),
             "error": None if dev_running() else st.get("error"), "dev": meta.get("version"), "built": meta.get("built"),
-            "live": read_json(DATA / "meta.json", {}).get("version")}
+            "source": meta.get("source"), "build": other_source(), "live": read_json(DATA / "meta.json", {}).get("version")}
 
 
 def start_dev_build():
@@ -309,8 +315,42 @@ def start_dev_build():
     DEV_STATUS.unlink(missing_ok=True)
     here = Path(__file__).resolve().parent.parent  # where python -m finds the package; the exe is the app itself
     cmd = [sys.executable, "--build-dev"] if FROZEN else [sys.executable, "-m", "wtftd", "--build-dev"]
+    cmd += ["--source", other_source(), *(["--game-dir", str(STATE.game_dir())] if other_source() == "game" else [])]
     DEV_PROC[:] = [subprocess.Popen(cmd, cwd=str(here), stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                                     creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))]
+
+
+def switch_data():
+    """The other database becomes the app's, and the app's the other: the two folders swap places (a rename on the same disk,
+    nothing rebuilt), the source setting and the game files the app reads follow. Raises ValueError with what stops it."""
+    other = read_json(builder.DEV / "data" / "meta.json", {})
+    if STATE.update["running"] or dev_running():
+        raise ValueError("Game data is being built: switch once it's done.")
+    if not other.get("version") or not (DATA / "meta.json").exists():
+        raise ValueError("There is no other game data to switch to.")
+    source = "game" if other.get("source") == "game" else "datamine"
+    if not (builder.GAMEFILES if source == "game" else builder.DATAMINE).is_dir():
+        raise ValueError("Its game files are gone: update it first.")
+    parked = DATA.with_name("data.switching")
+    for attempt in range(5):  # a file of it held open a moment (an antivirus, a page loading): again
+        try:
+            DATA.rename(parked)
+            break
+        except OSError:
+            if attempt == 4:
+                raise
+            time.sleep(0.2)
+    try:
+        (builder.DEV / "data").rename(DATA)
+    except OSError:
+        parked.rename(DATA)
+        raise
+    parked.rename(builder.DEV / "data")
+    s = STATE.settings()
+    s["dataSource"] = source
+    STATE.save_settings(s)
+    builder.DM = builder.GAMEFILES if source == "game" else builder.DATAMINE
+    STATE.reload()
 
 
 def data_ahead(meta: dict, gd) -> dict | None:
@@ -342,6 +382,7 @@ def api_status():
         "dataReady": (DATA / "vehicles.json").exists(),
         "dataSource": STATE.data_source(),
         "dataAhead": data_ahead(meta, gd),
+        "other": {k: v for k, v in read_json(builder.DEV / "data" / "meta.json", {}).items() if k in ("source", "version", "built", "circuit")},
         "gameSourceIssue": "python" if not vromfs.available() else None if gd else "game",
         "datamineCopy": builder.DATAMINE.is_dir(),
         "home": str(HOME),  # where WTFTD keeps its files (the welcome screen says so before the first download)
@@ -1074,17 +1115,26 @@ class Handler(BaseHTTPRequestHandler):
             elif "data" in parts:
                 STATE.reload()
             return self.send_json(res)
-        if route == "dev-build":  # What changed: the dev server's data, on request (the datamine is ~1 GB the first time)
-            if STATE.data_source() != "game":
-                return self.send_json({"error": "The game data already comes from the datamine."}, 400)
+        if route == "dev-build":  # the other source's data, on request (the datamine is ~1 GB the first time)
+            if other_source() == "game" and not (STATE.game_dir() and vromfs.available()):
+                return self.send_json({"error": "Reading the installed game needs the game found and Python 3.14."}, 400)
             start_dev_build()
             return self.send_json(dev_status())
+        if route == "data-switch":  # the Data button: the other database becomes the app's, at once
+            try:
+                switch_data()
+            except (ValueError, OSError) as e:
+                return self.send_json({"error": str(e)}, 400)
+            return self.send_json(api_status())
         if route == "dev-remove":
             if dev_running():
                 return self.send_json({"error": "The dev server's data is being built."}, 400)
+            was = read_json(builder.DEV / "data" / "meta.json", {}).get("source")
             shutil.rmtree(builder.DEV, ignore_errors=True)
             if builder.DM != builder.DATAMINE and not STATE.update["running"]:  # the datamine copy only served it
                 builder.remove_datamine()
+            if was == "game" and builder.DM != builder.GAMEFILES:  # the game's unpacked files too (650 MB), made again when needed
+                shutil.rmtree(builder.GAMEFILES, ignore_errors=True)
             return self.send_json(dev_status())
         if route == "remove-datamine":  # never on its own: the player asked, and the data no longer comes from it
             if builder.DM == builder.DATAMINE or STATE.update["running"]:

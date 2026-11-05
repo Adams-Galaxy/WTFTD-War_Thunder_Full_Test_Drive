@@ -372,12 +372,14 @@ def fetch_gamefiles(game_dir: Path | None, progress=None):
     report(progress, 0.45)
 
 
-def build_dev(status: Path):
-    """In a process of its own (`wtftd --build-dev`): the datamine's newest version, the dev server's while one is open, built
-    into DEV / "data" for What changed to set beside the game's. The app's data, its game files and its history are left
-    alone: DM and DATA are this process's. Progress and the end go to status (JSON), for the app to read."""
+def build_dev(status: Path, source: str = "datamine", game_dir: Path | None = None):
+    """In a process of its own (`wtftd --build-dev`): the other source's database, built into DEV / "data" to switch to at the
+    top or to set beside the app's in What changed: the datamine's newest version (the dev server's while one is open) when the
+    app reads the installed game, or the installed game's when it reads the datamine. The app's data, its game files and its
+    history are left alone: DM and DATA are this process's. Progress and the end go to status (JSON), for the app to read."""
     global DM, DATA
     from . import armament
+    from .game import circuit
     st = {"running": True, "log": [], "progress": 0.0, "error": None}
 
     def save():
@@ -398,11 +400,15 @@ def build_dev(status: Path):
     save()
     out, tmp = DEV / "data", DEV / "data.tmp"
     try:
-        DM = DATAMINE
-        fetch_datamine(Progress())
+        if source == "game":  # the app reads the datamine then: the game's files are free to unpack
+            DM = GAMEFILES
+            fetch_gamefiles(game_dir, Progress())
+        else:
+            DM = DATAMINE
+            fetch_datamine(Progress())
         shutil.rmtree(tmp, ignore_errors=True)
         DATA = armament.DATA = tmp
-        _build(Progress(), "datamine", history=False)
+        _build(Progress(), source, history=False, circuit=circuit(game_dir) if source == "game" else None)
         shutil.rmtree(out, ignore_errors=True)
         tmp.replace(out)
     except Exception as e:  # the app shows it; the dev data of before, if any, stays
@@ -2560,8 +2566,8 @@ def build(pull: bool = True, progress=None, source: str = "datamine", game_dir: 
     except BaseException:
         DM = before
         raise
-    if source == "datamine":
-        shutil.rmtree(GAMEFILES, ignore_errors=True)  # made again from the game in a minute or two; the datamine isn't
+    if source == "datamine" and (load(DEV / "data" / "meta.json") or {}).get("source") != "game":
+        shutil.rmtree(GAMEFILES, ignore_errors=True)  # made again from the game in a minute or two; kept for the game's other database
     return meta
 
 

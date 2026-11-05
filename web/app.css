@@ -148,6 +148,17 @@ svg.ic-xl { width: 42px; height: 42px; fill: none; stroke: currentColor; stroke-
 kbd { font: 600 10.5px var(--font); color: var(--muted); border: 1px solid var(--line-2); border-bottom-width: 2px; border-radius: 5px; padding: 1px 5px; }
 .top-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; }
 .status { display: flex; gap: 6px; }
+.status-wrap { position: relative; }
+.data-menu { position: absolute; top: calc(100% + 6px); right: 0; z-index: 60; min-width: 300px; padding: 6px; border: 1px solid var(--line-2);
+  border-radius: 12px; background: var(--surface); box-shadow: 0 12px 32px rgba(0, 0, 0, .35); display: flex; flex-direction: column; gap: 2px; }
+.data-menu.hidden { display: none; }
+.dm-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 0; border-radius: 8px; background: none; color: var(--text);
+  font: inherit; font-size: 12.5px; text-align: left; cursor: pointer; }
+.dm-row:hover:not(:disabled) { background: var(--surface-2); }
+.dm-row:disabled { cursor: default; }
+.dm-row span { display: flex; flex-direction: column; gap: 1px; }
+.dm-row .ic-sm, .dm-sp { flex: none; width: 14px; color: var(--accent); }
+.dm-foot { margin-top: 2px; border-top: 1px solid var(--line); border-radius: 0 0 8px 8px; color: var(--text-2); }
 .pill {
   display: inline-flex; align-items: center; gap: 7px; height: 28px; padding: 0 10px; border-radius: 14px;
   border: 1px solid var(--line); background: var(--bg-2); font-size: 12px; color: var(--text-2); white-space: nowrap; cursor: default;

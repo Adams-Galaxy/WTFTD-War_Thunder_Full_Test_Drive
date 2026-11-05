@@ -155,7 +155,7 @@ function chRender() {
   const present = CH.groups.filter(g => CH.subjects[g]);
   const [up, down] = CH.subjects.br ? chUpDown(CH.subjects.br) : [0, 0];
   const ud = up || down ? `<span class="ch-ud"><span class="ch-d up">▲ ${I18N.num(up)}</span><span class="ch-d down">▼ ${I18N.num(down)}</span></span>` : '';
-  const notes = [p.dev ? t(p.back ? 'ch.devBehind' : 'ch.devNote', { dev: p.to, live: p.from }) : p.back && t('ch.back', { from: p.from, to: p.to }),
+  const notes = [p.dev ? t(p.back ? 'ch.devBehind' : p.ahead ? 'ch.devNote' : 'ch.dmNewer', { dev: p.to, live: p.from }) : p.back && t('ch.back', { from: p.from, to: p.to }),
     p.circuit === 'dev' && t('ch.devClient'), p.schema && t('ch.schema')].filter(Boolean);
   const tab = present.includes(CH.tab) ? CH.tab : present[0];  // the one picked, while the filters leave it something
   body.innerHTML = `${notes.map(x => `<p class="hint ch-note">${icon('target', 'ic-sm')}<span>${esc(x)}</span></p>`).join('')}
@@ -236,7 +236,7 @@ async function openChangesView() {
     chUnseen();
     $('#updateBanner.done')?.classList.add('hidden');
     const day = p => new Date(p.at * 1000).toLocaleDateString(I18N.code);
-    $('#chPatch').innerHTML = CH.patches.map(p => `<option value="${esc(p.id)}">${esc(p.dev ? t('ch.devOption', { dev: p.to, live: p.from, date: day(p) })
+    $('#chPatch').innerHTML = CH.patches.map(p => `<option value="${esc(p.id)}">${esc(p.dev ? t(p.ahead ? 'ch.devOption' : 'ch.dmOption', { dev: p.to, live: p.from, date: day(p) })
       : `${p.from} → ${p.to} · ${day(p)}${p.back ? ` · ${t('ch.backShort')}` : ''}${p.circuit === 'dev' ? ` · ${t('ch.devClientShort')}` : ''}`)}</option>`).join('');
     if (!CH.patches.length) return chRender();
     if (!AR.data) await openWeaponsView();  // names, carriers and links of the weapons
@@ -250,21 +250,26 @@ async function openChangesView() {
 async function chDev() {
   clearTimeout(CH.devPoll);
   const box = $('#chDev');
-  if (S.status.dataSource !== 'game') { box.innerHTML = ''; return; }  // the game data is the datamine's already
-  if (S.status.data?.circuit === 'dev') { box.innerHTML = `<span class="muted">${esc(t('ch.devIsGame'))}</span>`; return; }  // a dev client's
   let st;
   try { st = await api('dev'); } catch { return; }
+  // the other database: the datamine's when the app reads the game, the game's when it reads the datamine
+  const game = (st.dev && !st.running ? st.source : st.build) === 'game', k = key => t(`ch.${game ? 'game' : 'dev'}${key}`);
+  if (S.status.data?.circuit === 'dev' && !game && !st.dev && !st.running) {  // a dev client's: the dev server's data already
+    box.innerHTML = `<span class="muted">${esc(t('ch.devIsGame'))}</span>`;
+    return;
+  }
   const was = CH.devRunning;
   CH.devRunning = st.running;
   const date = st.built ? new Date(st.built * 1000).toLocaleDateString(I18N.code) : '';
   box.innerHTML = st.running
-    ? `<span class="spin"></span><b>${esc(t('ch.devBuilding', { n: Math.round((st.progress || 0) * 100) }))}</b><span class="muted">${esc(st.log[0] || '')}</span>`
-    : `${st.dev ? `<span>${esc(t('ch.devHave', { v: st.dev, date }))}</span><button class="btn btn-sm" data-dev="dev-build">${esc(t('ch.devUpdate'))}</button>
+    ? `<span class="spin"></span><b>${esc(t(game ? 'ch.gameBuilding' : 'ch.devBuilding', { n: Math.round((st.progress || 0) * 100) }))}</b><span class="muted">${esc(st.log[0] || '')}</span>`
+    : `${st.dev ? `<span>${esc(t(game ? 'ch.gameHave' : versionAhead(st.dev, S.status.data?.version) ? 'ch.devHave' : 'ch.dmHave', { v: st.dev, date }))}</span><button class="btn btn-sm" data-dev="dev-build">${esc(t('ch.devUpdate'))}</button>
         <button class="btn btn-sm" data-dev="dev-remove">${esc(t('ch.devRemove'))}</button>`
-      : `<span class="muted">${esc(t('ch.devHint'))}</span><button class="btn btn-sm" data-dev="dev-build">${esc(t('ch.devStart'))}</button>`}
+      : `<span class="muted">${esc(k('Hint'))}</span><button class="btn btn-sm" data-dev="dev-build">${esc(k('Start'))}</button>`}
       ${st.error ? `<span class="ch-dev-err">${esc(t('ch.devError', { e: st.error }))}</span>` : ''}`;
   if (st.running) CH.devPoll = setTimeout(chDev, 1500);
-  else if (was) {  // just built: its entry joins the list, and opens
+  else if (was) {  // just built: the Data button can switch to it, and its entry joins the list and opens
+    try { S.status = await api('status'); renderStatus(); } catch { /* the next start has it */ }
     delete CH.cache.dev;
     CH.loading = chLoad();
     await openChangesView();
@@ -284,6 +289,8 @@ function bindChanges() {
     try {
       await api(b.dataset.dev, {});
       if (b.dataset.dev === 'dev-remove') {
+        S.status = await api('status');
+        renderStatus();
         delete CH.cache.dev;
         if (CH.id === 'dev') CH.id = '';
         CH.loading = chLoad();

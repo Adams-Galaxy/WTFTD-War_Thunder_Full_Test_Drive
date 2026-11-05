@@ -1,5 +1,6 @@
 """What changed: the comparison of two databases, on made-up data, and what a build keeps of it."""
 import json
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -305,6 +306,7 @@ class Dev(unittest.TestCase):
         d = patches.dev()
         self.assertEqual((d["id"], d["dev"], d["from"], d["to"], d["rows"]), ("dev", 1, "2.59.0.98", "2.60.0.33", [["tank", "brrb", 4.3, 4.7]]))
         self.assertNotIn("back", d)
+        self.assertEqual(d["ahead"], 1)  # a whole version ahead: the dev server's
         self.assertIs(patches.dev(), d)  # compared once
         self.assertEqual(patches.index()["patches"][0]["id"], "dev")
         self.assertEqual(patches.rows("dev"), d["rows"])
@@ -318,9 +320,31 @@ class Dev(unittest.TestCase):
         self.assertEqual(patches.compare(old, new).get("circuit"), "dev")
         self.assertNotIn("circuit", patches.compare(new, old))  # back to the live game: marked as going back, as before
 
+    def test_still_the_game_on_the_left_when_the_app_reads_the_datamine(self):
+        game, datamine = db("2.59.0.98"), db("2.60.0.33", vehicles=[vehicle(br=[4.0, 4.7, 4.7])])
+        game["meta"]["source"], datamine["meta"]["source"] = "game", "datamine"
+        write(self.live, datamine)  # switched: the app's folder holds the datamine's now
+        write(self.other, game)
+        d = patches.dev()
+        self.assertEqual((d["from"], d["to"], d["rows"]), ("2.59.0.98", "2.60.0.33", [["tank", "brrb", 4.3, 4.7]]))
+
+    def test_two_of_the_same_source_are_no_pair(self):
+        a, b = db("2.59.0.98"), db("2.59.0.92")
+        a["meta"]["source"] = b["meta"]["source"] = "game"
+        write(self.live, a)
+        write(self.other, b)
+        self.assertIsNone(patches.dev())
+
     def test_a_datamine_behind_the_game(self):
         write(self.other, db("2.59.0.94"))
         self.assertTrue(patches.dev()["back"])
+        self.assertNotIn("ahead", patches.dev())
+
+    def test_a_patch_ahead_is_not_the_dev_server(self):
+        write(self.other, db("2.59.0.99"))  # the datamine has the live patch the game hasn't installed yet
+        d = patches.dev()
+        self.assertNotIn("ahead", d)
+        self.assertNotIn("back", d)
 
 
 class BuildDev(unittest.TestCase):
@@ -342,17 +366,24 @@ class BuildDev(unittest.TestCase):
         return fetch, made, json.loads((self.dev / "status.json").read_text(encoding="utf-8"))
 
     def test_built_apart_without_history(self):
-        def build(progress, source, history):
+        def build(progress, source, history, circuit):
             (builder.DATA / "meta.json").parent.mkdir(parents=True, exist_ok=True)
             (builder.DATA / "meta.json").write_text('{"version": "2.60.0.33"}')
             progress("Building")
             progress.set_frac(0.5)
         fetch, made, st = self.run_dev(build)
         self.assertEqual(made.call_args.args[1:], ("datamine",))
-        self.assertEqual(made.call_args.kwargs, {"history": False})
+        self.assertEqual(made.call_args.kwargs, {"history": False, "circuit": None})
         self.assertEqual(json.loads((self.dev / "data" / "meta.json").read_text())["version"], "2.60.0.33")
         self.assertFalse((self.dev / "data.tmp").exists())
         self.assertEqual((st["running"], st["error"], st["log"], st["progress"]), (False, None, ["Building"], 0.5))
+
+    def test_the_game_as_the_other_one(self):
+        with mock.patch.object(builder, "DEV", self.dev), mock.patch.object(builder, "fetch_gamefiles") as unpack, \
+                mock.patch.object(builder, "_build") as made, mock.patch("wtftd.game.circuit", lambda gd: "production"):
+            builder.build_dev(self.dev / "status.json", "game", Path("game"))
+        self.assertEqual(unpack.call_args.args[0], Path("game"))
+        self.assertEqual((made.call_args.args[1], made.call_args.kwargs), ("game", {"history": False, "circuit": "production"}))
 
     def test_a_failure_keeps_the_data_of_before(self):
         (self.dev / "data").mkdir(parents=True)
@@ -360,6 +391,51 @@ class BuildDev(unittest.TestCase):
         fetch, made, st = self.run_dev(RuntimeError("git failed"))
         self.assertEqual((st["running"], st["error"]), (False, "git failed"))
         self.assertEqual(json.loads((self.dev / "data" / "meta.json").read_text())["version"], "2.60.0.31")
+
+
+class Switch(unittest.TestCase):
+    """The Data button: the two databases swap folders, nothing rebuilt; the source setting and the game files read follow."""
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        root = Path(tmp.name)
+        self.data, self.dev = root / "data", root / "dev"
+        game, datamine = db("2.59.0.98"), db("2.60.0.33")
+        game["meta"]["source"], datamine["meta"]["source"] = "game", "datamine"
+        write(self.data, game)
+        write(self.dev / "data", datamine)
+        (root / "gamefiles").mkdir()
+        (root / "datamine").mkdir()
+        self.settings = {"dataSource": "game"}
+        for target, name, value in ((server, "DATA", self.data), (builder, "DEV", self.dev), (builder, "GAMEFILES", root / "gamefiles"),
+                                    (builder, "DATAMINE", root / "datamine"), (builder, "DM", root / "gamefiles"), (server, "DEV_PROC", []),
+                                    (server.STATE, "settings", lambda: self.settings), (server.STATE, "save_settings", self.settings.update),
+                                    (server.STATE, "update", {"running": False}), (server.STATE, "reload", mock.Mock())):
+            p = mock.patch.object(target, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+
+    def version(self, folder):
+        return json.loads((folder / "meta.json").read_text())["version"]
+
+    def test_there_and_back(self):
+        server.switch_data()
+        self.assertEqual((self.version(self.data), self.version(self.dev / "data")), ("2.60.0.33", "2.59.0.98"))
+        self.assertEqual((self.settings["dataSource"], builder.DM), ("datamine", builder.DATAMINE))
+        self.assertFalse(self.data.with_name("data.switching").exists())
+        server.switch_data()
+        self.assertEqual((self.version(self.data), self.settings["dataSource"], builder.DM), ("2.59.0.98", "game", builder.GAMEFILES))
+
+    def test_what_stops_it(self):
+        server.STATE.update["running"] = True
+        self.assertRaises(ValueError, server.switch_data)
+        server.STATE.update["running"] = False
+        shutil.rmtree(builder.DATAMINE)
+        self.assertRaises(ValueError, server.switch_data)  # its game files are gone: an update first
+        shutil.rmtree(self.dev)
+        self.assertRaises(ValueError, server.switch_data)
+        self.assertEqual(self.version(self.data), "2.59.0.98")
 
 
 class Server(unittest.TestCase):
@@ -388,13 +464,16 @@ class Server(unittest.TestCase):
 
     def test_the_dev_server_routes(self):
         handler = mock.Mock()
-        with mock.patch.object(server.STATE, "data_source", lambda: "datamine"), mock.patch.object(server, "start_dev_build") as start:
+        with mock.patch.object(server.STATE, "data_source", lambda: "datamine"), mock.patch.object(server.STATE, "game_dir", lambda: None), \
+                mock.patch.object(server, "start_dev_build") as start:
             server.Handler.post_api(handler, "dev-build", {})
-        start.assert_not_called()  # the game data is the datamine's already
+        start.assert_not_called()  # the other one would be the game's: it needs the game
         self.assertEqual(handler.send_json.call_args.args[1], 400)
-        with mock.patch.object(server.STATE, "data_source", lambda: "game"), mock.patch.object(server, "start_dev_build") as start:
-            server.Handler.post_api(handler, "dev-build", {})
-        start.assert_called_once()
+        for source in ("game", "datamine"):
+            with mock.patch.object(server.STATE, "data_source", lambda: source), mock.patch.object(server.STATE, "game_dir", lambda: Path(".")), \
+                    mock.patch.object(server.vromfs, "available", lambda: True), mock.patch.object(server, "start_dev_build") as start:
+                server.Handler.post_api(handler, "dev-build", {})
+            start.assert_called_once()
         with mock.patch.object(server, "DEV_PROC", [mock.Mock(poll=lambda: None)]):
             server.Handler.post_api(handler, "dev-remove", {})
         self.assertEqual(handler.send_json.call_args.args[1], 400)  # not while it's being built

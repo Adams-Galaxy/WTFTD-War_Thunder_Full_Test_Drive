@@ -326,12 +326,17 @@ def dev(live: Path | None = None, other: Path | None = None) -> dict | None:
     id "dev", from the game's version to the datamine's. None without it, or at the same version. Never kept in FILE."""
     live, other = live or DATA, other or DEV_DATA
     a, b = (_load(f / "meta.json") or {} for f in (live, other))
-    if not a.get("version") or not b.get("version") or a["version"] == b["version"]:
+    if a.get("source") == "datamine" and b.get("source") == "game":  # the app reads the datamine: still the game on the left
+        live, other, a, b = other, live, b, a
+    same_source = a.get("source") is not None and a.get("source") == b.get("source")  # left from before a source change: not a pair
+    if not a.get("version") or not b.get("version") or a["version"] == b["version"] or same_source:
         return None
     key = (str(live), a.get("built"), b.get("built"), a["version"], b["version"])
     if key not in _DEV:
         _DEV.clear()
         _DEV[key] = {**compare(read(live), read(other)), "id": "dev", "dev": 1}
+        if _version(b["version"])[:2] > _version(a["version"])[:2]:  # a whole version ahead: the dev server's; a patch ahead isn't
+            _DEV[key]["ahead"] = 1
     return _DEV[key]
 
 
