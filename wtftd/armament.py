@@ -9,6 +9,9 @@ data/armament.json = {"items": [...], "carriers": {id: [vehicle ids]}}. Item fie
              trk tracking rate deg/s, ccm flare rejection (IRCCM) 0..1, ccmt its type,
   radar: act active seeker (fire & forget), ins inertial guidance, dl datalink, loft, sr seeker range m,
   ff fire-and-forget, wire wire-guided, beam beam rider; nuclear: yld yield kt, bh burst height m, iw instant win.
+
+data/weapon_values.json = {id: {path: value}}: every number, switch and word of each weapon's file ("dragCx",
+"guidance.opticalSeeker.fov", "force1"...), for What changed (wtftd/patches.py) to compare beyond these columns.
 """
 from __future__ import annotations
 
@@ -22,6 +25,9 @@ from .builder import DATA, NUKES, ICON_VOTES, Lang, aslist, first_str, humanize,
 FOLDERS = ("rocketguns", "bombguns", "torpedoes", "groundmodels_weapons", "navalmodels_weapons")
 SURFACE = ("groundmodels_weapons", "navalmodels_weapons")
 SKIP_TYPES = re.compile(r"^(flare|chaff|smoke|.*grenade)")
+
+# keys of a weapon's file left out of weapon_values.json: how it looks and sounds, not how it flies or hits
+LOOKS = ("fx", "effect", "sound", "smoke", "trail", "decal", "mesh", "model", "icon", "visual", "particle", "tracer")
 
 ICONS = {"aam_ir": "missile_air_to_air", "aam_radar": "missile_air_to_air_midrange", "sam": "missile_air_to_air",
          "atgm": "missile_air_to_uni_middle", "agm": "missile_air_to_uni", "gbomb": "guided_bomb_middle_laser",
@@ -263,6 +269,25 @@ def _stats(cat: str, g: str, p: dict, tnt_eq: dict) -> dict:
     return s
 
 
+def values(o, path: str = "", out: dict | None = None) -> dict:
+    """Every value of a weapon's merged file by its path: numbers, switches, lists of them, short words (a file name or a path
+    isn't one). A list of blocks gets each its index: "propulsion0.impulse1.force", "rangeBand[0]"."""
+    out = {} if out is None else out
+    if isinstance(o, dict):
+        for k, v in o.items():
+            if not any(x in k.lower() for x in LOOKS):
+                values(v, f"{path}.{k}" if path else k, out)
+    elif isinstance(o, list):
+        if all(not isinstance(x, (dict, list)) for x in o):
+            out[path] = o
+        else:
+            for i, x in enumerate(o):
+                values(x, f"{path}[{i}]", out)
+    elif isinstance(o, (bool, int, float)) or (isinstance(o, str) and len(o) < 48 and not any(c in o for c in "/\\")):
+        out[path] = o
+    return out
+
+
 def _name(lang: Lang, iid: str, stem: str) -> None:
     """Short game name ("R-73", not "R-73 air-to-air missiles") in the "arm" section."""
     if iid in lang.out["arm"]:
@@ -297,7 +322,7 @@ def build_armament(lang: Lang, vehicles: list, progress=None) -> dict:
                 if old and not old["_src"].endswith("_default") and not (old["c"] == "rocket" and cat != "rocket"):
                     continue
                 g = _guidance(cat, p)
-                it = {"id": iid, "c": cat, "g": g, "_src": stem, **_stats(cat, g, p, tnt_eq)}
+                it = {"id": iid, "c": cat, "g": g, "_src": stem, "_raw": p, **_stats(cat, g, p, tnt_eq)}
                 mesh = first_str(p.get("mesh")) or _mesh(d)
                 if mesh and mesh != "empty_mesh":  # the id is the projectile's: it doesn't say which file holds the weapon
                     it["md"] = mesh
@@ -352,8 +377,13 @@ def build_armament(lang: Lang, vehicles: list, progress=None) -> dict:
     final = list(best.values())
     for it in final:
         it.pop("alias", None)
+    raw = {it["id"]: values(it.pop("_raw")) for it in final}
+    for it in items.values():
+        it.pop("_raw", None)
     data = {"items": final, "carriers": {it["id"]: sorted(carriers[it["id"]]) for it in final}}
     with open(DATA / "armament.json", "w", encoding="utf-8") as fw:
         json.dump(data, fw, separators=(",", ":"))
+    with open(DATA / "weapon_values.json", "w", encoding="utf-8") as fw:
+        json.dump(raw, fw, ensure_ascii=False, separators=(",", ":"))
     log(f"  {len(final)} weapons", progress)
     return data

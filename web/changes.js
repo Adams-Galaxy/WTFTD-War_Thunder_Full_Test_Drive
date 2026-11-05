@@ -8,7 +8,16 @@ const CH = { groups: [], fields: {}, patches: [], rows: null, id: '', cache: {},
 
 // a value that's a name, or a list of them: what the table's unit says
 const CH_NAMES = { weapon: k => I18N.weapon(k), bullet: k => I18N.bullet(k), sensor: k => I18N.sensor(k), avionics: k => t('mods.av.' + k),
-                   flag: k => t('arm.f.' + k), guidance: k => (k ? t('arm.g.' + k) : '—') };
+                   flag: k => t('arm.f.' + k), guidance: k => (k ? t('arm.g.' + k) : '—'), irccm: k => t('arm.ccmt.' + k) };
+
+// a weapon file's value by its path: the ones players know by name get it ("force1": thrust, stage 2), the path says where it is
+const CH_RAW = new Set(['dragCx', 'CxK', 'fov', 'fuseDelay', 'fuseDelayDist', 'force', 'timeFire', 'massEnd']);
+function chRawName(path) {
+  const parts = path.split('.'), last = parts.pop(), [, base, stage] = last.match(/^(.*?)(\d?)$/);
+  const name = CH_RAW.has(last) ? t('ch.x.' + last) : CH_RAW.has(base) && stage ? `${t('ch.x.' + base)}, ${t('ch.x.stage', { n: +stage + 1 })}` : last;
+  return `${esc(name)}${parts.length ? ` <small class="muted">${esc(parts.join(' › '))}</small>` : ''}`;
+}
+const chRawFmt = y => new Intl.NumberFormat(I18N.code, { maximumFractionDigits: 6 }).format(y);  // all its decimals, in the app's language
 
 const chShell = sid => {
   const [gun, belt, ...bullets] = sid.split('|');
@@ -42,6 +51,7 @@ function chShown() {
 
 function chValue(r, f, x) {
   if (x == null) return '—';
+  if (f.of === 'x') return [x].flat().map(y => (typeof y === 'number' ? chRawFmt(y) : String(y))).join(' / ');  // as in the file
   if (CH_NAMES[f.unit]) return [...new Set([x].flat().map(CH_NAMES[f.unit]))].join(', ') || '—';
   if (f.of === 'w') return arFmt(r[1].slice(2), x, AR.byId.get(r[0])?.c);
   const n = new Intl.NumberFormat(I18N.code, { minimumFractionDigits: f.digits < 2 ? f.digits : 0, maximumFractionDigits: f.digits });  // 11.0 like a BR
@@ -94,7 +104,8 @@ function chChange(r) {
     return `<span class="ch-k">${esc(chWhat(r))}</span><span></span><span></span><span>${after}</span>`;
   }
   const dir = chDir(f, r[2], r[3]), now = esc(chValue(r, f, r[3]));
-  return `<span class="ch-k">${esc(t(f.label))}</span><span class="muted">${esc(chValue(r, f, r[2]))}</span><span class="ch-to">→</span>
+  const label = f.of === 'x' ? `<span title="${esc(r[4])}">${chRawName(r[4])}</span>` : esc(t(f.label));
+  return `<span class="ch-k">${label}</span><span class="muted">${esc(chValue(r, f, r[2]))}</span><span class="ch-to">→</span>
     <span>${dir ? `<span class="chip ${dir > 0 ? 'info' : 'warn'}" title="${esc(t(dir > 0 ? 'ch.better' : 'ch.worse'))}">${now}</span>` : now}</span>`;
 }
 

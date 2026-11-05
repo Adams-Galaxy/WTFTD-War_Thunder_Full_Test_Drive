@@ -11,6 +11,22 @@ def stats(cat, payload, g=""):
     return A._stats(cat, g or A._guidance(cat, payload), payload, {"tnt": 1.0, "rdx": 1.6})
 
 
+class Values(unittest.TestCase):
+    """Every value of a weapon's file for What changed: how it flies and hits, not how it looks or sounds."""
+
+    def test_by_path_without_looks(self):
+        p = {"dragCx": 0.018, "hasProximityFuse": True, "bulletType": "aam", "mesh": "aim9l", "fx": {"size": 3}, "rocketSmoke": 1,
+             "guidance": {"opticalSeeker": {"fov": 3.6, "rangeBand": [11000, 3000]}, "sound": "beep"},
+             "propulsion0": {"impulse0": {"force": 9000}}, "stages": [{"force": 1}, {"force": 2}],
+             "model": "x", "shellModel": "path/to/a/file.dds", "explosionEffect": "big"}
+        self.assertEqual(A.values(p), {"dragCx": 0.018, "hasProximityFuse": True, "bulletType": "aam", "guidance.opticalSeeker.fov": 3.6,
+                                       "guidance.opticalSeeker.rangeBand": [11000, 3000], "propulsion0.impulse0.force": 9000,
+                                       "stages[0].force": 1, "stages[1].force": 2})
+
+    def test_a_file_name_is_not_a_value(self):
+        self.assertEqual(A.values({"a": "short", "b": "some/file", "c": "x" * 60}), {"a": "short"})
+
+
 class Categories(unittest.TestCase):
     def test_ir_and_radar_air_to_air(self):
         self.assertEqual(A._category("rocket", {"bulletType": "aam", "guidanceType": "optical", "guidance": {}}, "rocketguns", "x"), "aam_ir")

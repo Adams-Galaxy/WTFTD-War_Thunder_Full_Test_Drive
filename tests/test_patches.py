@@ -83,6 +83,26 @@ class Compare(unittest.TestCase):
         self.assertEqual(rows(db(), new), [["new_one", "w.new", None, "new_one"], ["aim_9", "w.f", [], ["ccm"]], ["aim_9", "w.rng", 8000, 8500],
                                            ["new_map", "m.new", None, "new_map"], ["afghan", "m.n", 1, 2]])
 
+    def test_every_value_of_a_weapon_file(self):
+        old, new = db(), db("2.60.0.1")
+        old["values"] = {"aim_9": {"dragCx": 0.018, "guidance.opticalSeeker.fov": 3.6, "force": 10800.0, "mass": 85.3, "fuseDelayDist": 0.4,
+                                   "guidance.opticalSeeker.gateWidth": 0.2}}
+        new["values"] = {"aim_9": {"dragCx": 0.021, "guidance.opticalSeeker.fov": 3.6000000001, "force": 11200.0, "mass": 86.0, "fuseDelayDist": 0.4,
+                                   "force1": 2000.0}}
+        self.assertEqual(rows(old, new), [["aim_9", "w.x", 0.018, 0.021, "dragCx"], ["aim_9", "w.x", 10800.0, 11200.0, "force"],
+                                          ["aim_9", "w.x", None, 2000.0, "force1"], ["aim_9", "w.x", 0.2, None, "guidance.opticalSeeker.gateWidth"]])
+        # mass is a column already; a float's last bits aren't a change; one that came or went is
+
+    def test_no_weapon_values_kept_before_compares_none(self):
+        new = db("2.60.0.1")
+        new["values"] = {"aim_9": {"dragCx": 0.021}}
+        self.assertEqual(rows(db(), new), [])  # the data replaced was built before WTFTD kept them
+
+    def test_the_irccm_type(self):
+        old = db(items=[{"id": "aim_9", "c": "aam_ir", "g": "ir", "rng": 8000, "gl": 20, "ccm": 0.8, "ccmt": "r"}])
+        new = db("2.60.0.1", items=[{"id": "aim_9", "c": "aam_ir", "g": "ir", "rng": 8000, "gl": 20, "ccm": 1.0, "ccmt": "rg"}])
+        self.assertIn(["aim_9", "w.ccmt", "r", "rg"], rows(old, new))
+
     def test_a_value_that_appears_between_equal_schemas_is_a_change(self):
         new = db("2.60.0.1", items=[{"id": "aim_9", "c": "aam_ir", "g": "ir", "rng": 8000, "gl": 20, "pf": 5.0}])
         self.assertEqual(rows(db(), new), [["aim_9", "w.pf", None, 5.0]])
@@ -178,7 +198,7 @@ class Keep(unittest.TestCase):
     def test_the_table_is_consistent(self):
         keys = [f[0] for f in patches.FIELDS]
         self.assertEqual(len(keys), len(set(keys)))
-        self.assertTrue(all(f[1] in patches.GROUPS and f[2] in ("", "v", "s", "w", "m") for f in patches.FIELDS))
+        self.assertTrue(all(f[1] in patches.GROUPS and f[2] in ("", "v", "s", "w", "m", "x") for f in patches.FIELDS))
         labels = json.loads((Path(__file__).parent.parent / "web" / "locales" / "en.json").read_text(encoding="utf-8"))
         self.assertEqual([f[4] for f in patches.FIELDS if f[4] not in labels], [])
         self.assertEqual([g for g in patches.GROUPS if f"ch.group.{g}" not in labels], [])

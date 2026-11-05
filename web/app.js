@@ -1698,7 +1698,8 @@ function renderUpdateBanner(st) {
     el.innerHTML = `${icon('x', 'ic-sm')}<b>${esc(t('update.error'))}</b><span class="muted">${esc(st.error)}</span>`;
   } else if (st.available) {  // automatic updates off: the game was patched, the player decides when
     el.className = 'update-banner';
-    el.innerHTML = `<b>${esc(t('update.available', { v: st.remote || '' }))}</b>
+    const patched = st.remote && st.remote !== S.status?.data?.version;  // else WTFTD reads more of the same game version now
+    el.innerHTML = `<b>${esc(t(patched ? 'update.available' : 'update.rebuild', { v: st.remote || S.status?.data?.version || '' }))}</b>
       <button class="btn btn-primary btn-sm" data-act="update">${esc(t('update.now'))}</button>`;
     el.querySelector('[data-act]').onclick = async () => { try { await api('update', {}); watchUpdates(); } catch (e) { toastErr(e); } };
   } else {

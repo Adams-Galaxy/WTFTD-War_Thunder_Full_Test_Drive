@@ -24,7 +24,7 @@ GROUPS = ("new", "gone", "br", "perf", "cost", "ammo", "arms", "weapon", "map")
 #   key     of the rows
 #   group   of GROUPS
 #   of      v a vehicle (vehicles.json + details.json), s a shell, w a Weapons tab item (armament.json), m a map; "": no value, added
-#           or removed records
+#           or removed records; x any other value of a weapon's file (weapon_values.json), its path on the row
 #   path    of the value in that record. A new field reads as nothing changed: see compare()
 #   label   locale key
 #   unit    after the number; of a name, or of a list of names, what names it (web/changes.js CH_NAMES)
@@ -85,6 +85,7 @@ FIELDS = (
     ("w.gone", "weapon", "", (), "ch.gone", "", 0, 0),
     ("w.g", "weapon", "w", ("g",), "arm.col.type", "guidance", 0, 0),
     ("w.f", "weapon", "w", ("flags",), "ch.abilities", "flag", 0, None),
+    ("w.ccmt", "weapon", "w", ("ccmt",), "ch.irccm", "irccm", 0, 0),
     ("w.v", "weapon", "w", ("v",), "arm.col.v", "m/s", 1, 0),
     ("w.acc", "weapon", "w", ("acc",), "arm.col.acc", "G", 1, 1),
     ("w.gl", "weapon", "w", ("gl",), "arm.col.gl", "G", 1, 0),
@@ -103,11 +104,17 @@ FIELDS = (
     ("w.burn", "weapon", "w", ("burn",), "arm.col.burn", "s", 1, 1),
     ("w.yld", "weapon", "w", ("yld",), "arm.col.yld", "kt", 1, 1),
     ("w.bh", "weapon", "w", ("bh",), "arm.col.bh", "m", 0, 0),
+    ("w.x", "weapon", "x", (), "ch.raw", "", 0, None),  # drag, seeker field of view, fuses, thrust...: rows [id, key, old, new, path]
     ("m.new", "map", "", (), "ch.new", "", 0, 0),
     ("m.gone", "map", "", (), "ch.gone", "", 0, 0),
     ("m.n", "map", "m", ("n",), "ch.scenarios", "", 0, 0),
 )
 GROUP_OF = {f[0]: f[1] for f in FIELDS}
+# the values of a weapon's file that a column above already shows, under its own name
+SHOWN = {"mass", "explosiveMass", "caliber", "maxSpeedInWater", "distToLive", "yield", "loadFactorMax", "maxDistance", "rangeMax",
+         "proximityFuse.radius", "cumulativeDamage.armorPower", "guidance.opticalSeeker.rangeBand0", "guidance.opticalSeeker.rangeBand1",
+         "guidance.opticalSeeker.lockAngleMax", "guidance.opticalSeeker.rateMax", "guidance.radarSeeker.lockAngleMax",
+         "guidance.radarSeeker.receiver.range", "guidance.guidanceAutopilot.reqAccelMax"}
 
 
 def _load(path: Path):
@@ -122,6 +129,7 @@ def read(folder: Path) -> dict:
     """The part of a database that's compared."""
     return {"meta": _load(folder / "meta.json") or {}, "vehicles": _load(folder / "vehicles.json") or [], "details": _load(folder / "details.json") or {},
             "armament": _load(folder / "armament.json") or {}, "scenarios": _load(folder / "scenarios.json") or [],
+            "values": _load(folder / "weapon_values.json"),
             "names": _load(folder / "lang" / "en.json") or {}}
 
 
@@ -212,6 +220,27 @@ def _weapons(db: dict) -> dict:
     return {it["id"]: {**it, "flags": [f for f in WEAPON_FLAGS if it.get(f)]} for it in db["armament"].get("items", [])}
 
 
+def _close(a, b) -> bool:
+    """Equal, but for the last bits of a float."""
+    if isinstance(a, list) and isinstance(b, list):
+        return len(a) == len(b) and all(_close(x, y) for x, y in zip(a, b))
+    if isinstance(a, (int, float)) and isinstance(b, (int, float)) and not isinstance(a, bool) and not isinstance(b, bool):
+        return abs(a - b) <= 1e-9 * max(abs(a), abs(b), 1)
+    return a == b
+
+
+def _value_rows(old, new) -> list:
+    """Every other value of the weapons' files: rows = [id, "w.x", old, new, path], None for one that came or went. Nothing when the
+    database replaced didn't keep them (built by a WTFTD before 0.25.3)."""
+    if not isinstance(old, dict) or not isinstance(new, dict):
+        return []
+    rows = []
+    for wid in sorted(old.keys() & new.keys()):
+        a, b = old[wid] or {}, new[wid] or {}
+        rows += [[wid, "w.x", a.get(p), b.get(p), p] for p in sorted(a.keys() | b.keys()) if p not in SHOWN and not _close(a.get(p), b.get(p))]
+    return rows
+
+
 def _maps(db: dict) -> dict:
     out: dict = {}
     for s in db["scenarios"]:
@@ -233,7 +262,7 @@ def compare(old: dict, new: dict) -> dict:
     a, b = _weapons(old), _weapons(new)
     rows += [[i, "w.new", None, new["names"].get("arm", {}).get(i, i)] for i in sorted(b.keys() - a.keys())]
     rows += [[i, "w.gone", old["names"].get("arm", {}).get(i, i), None] for i in sorted(a.keys() - b.keys())]
-    rows += _rows(a, b, "w", bump, names)
+    rows += _rows(a, b, "w", bump, names) + _value_rows(old.get("values"), new.get("values"))
     a, b = _maps(old), _maps(new)
     rows += [[i, "m.new", None, new["names"].get("maps", {}).get(i, i)] for i in sorted(b.keys() - a.keys())]
     rows += [[i, "m.gone", old["names"].get("maps", {}).get(i, i), None] for i in sorted(a.keys() - b.keys())]
