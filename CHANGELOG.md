@@ -8,6 +8,9 @@ Versions follow `major.minor.patch`; "beta" until 1.0.
 
 - **BR filters go up to the highest BR in the game data** (15.0 now): they stopped at 14.3, written in the code. A
   filter set to the whole range stays whole when the top goes up.
+- **What changed reads better on a big patch**: one row per vehicle, weapon or shell instead of one per value. Battle ratings
+  show AB, RB and SB side by side, before, after and by how much (a mode that didn't move shows its BR, greyed), with how
+  many vehicles went up and down; other changes are listed together under their vehicle. Groups count vehicles, not values.
 - **With automatic updates off, WTFTD says when the game was patched**: a banner offers *Update now*, so the BRs and
   everything else follow the game. It only looks at the installed game's files; with the datamine as the source, nothing
   is checked on the network without automatic updates.

@@ -2,8 +2,8 @@
    compared: labels, units and colours come from it). One patch at a time, its groups closed: a group's rows are made when it opens. */
 'use strict';
 
-const CH_PAGE = 200;  // rows added at a time: a patch can move every battle rating of the game
-const CH = { groups: [], fields: {}, patches: [], rows: null, id: '', cache: {}, by: {}, open: new Set(), more: {}, touched: new Map(),
+const CH_PAGE = 200;  // vehicles, weapons or maps added at a time: a patch can move every battle rating of the game
+const CH = { groups: [], fields: {}, patches: [], rows: null, id: '', cache: {}, subjects: {}, open: new Set(), more: {}, touched: new Map(),
              q: '', nat: '', cat: '', mode: '', mine: false, seen: store.get('changesSeen', ''), hidden: '', loading: null };
 
 // a value that's a name, or a list of them: what the table's unit says
@@ -76,22 +76,53 @@ function chWhat(r) {
   return it ? t('arm.cat.' + it.c) : '—';
 }
 
-function chRow(r, same) {
+// a group's rows, one list per vehicle, weapon, shell or map: sorted by name, a subject's rows follow each other
+function chSubjects(rows) {
+  const out = [];
+  for (const r of rows) {
+    if (out.at(-1)?.[0][0] !== r[0]) out.push([]);
+    out.at(-1).push(r);
+  }
+  return out;
+}
+
+// one change of a subject: name, before → after, on a grid shared by the subject's lines
+function chChange(r) {
   const k = r[1], f = CH.fields[k], v = S.byId.get(r[0]);
   if (f.of === '') {
     const after = k === 'new' && v ? esc(`BR ${fmtBR(brOf(v))}`) : `<span class="chip ${k.endsWith('new') ? 'info' : 'dim'}">${esc(t(f.label))}</span>`;
-    return `<tr><td>${chSubject(r)}</td><td>${esc(chWhat(r))}</td><td>—</td><td>${after}</td></tr>`;
+    return `<span class="ch-k">${esc(chWhat(r))}</span><span></span><span></span><span>${after}</span>`;
   }
-  const dir = chDir(f, r[2], r[3]), mark = dir ? `chip ${dir > 0 ? 'info' : 'warn'}` : '', title = dir ? ` title="${esc(t(dir > 0 ? 'ch.better' : 'ch.worse'))}"` : '';
-  return `<tr><td>${same ? '' : chSubject(r)}</td><td>${esc(t(f.label))}</td><td class="muted">${esc(chValue(r, f, r[2]))}</td>
-    <td>${mark ? `<span class="${mark}"${title}>${esc(chValue(r, f, r[3]))}</span>` : esc(chValue(r, f, r[3]))}</td></tr>`;
+  const dir = chDir(f, r[2], r[3]), now = esc(chValue(r, f, r[3]));
+  return `<span class="ch-k">${esc(t(f.label))}</span><span class="muted">${esc(chValue(r, f, r[2]))}</span><span class="ch-to">→</span>
+    <span>${dir ? `<span class="chip ${dir > 0 ? 'info' : 'warn'}" title="${esc(t(dir > 0 ? 'ch.better' : 'ch.worse'))}">${now}</span>` : now}</span>`;
+}
+
+// battle ratings: a vehicle on one line, the three modes side by side; one that didn't move shows its BR, greyed
+const CH_BR = ['brab', 'brrb', 'brsb'];
+function chBrRow(rows) {
+  const v = S.byId.get(rows[0][0]), by = Object.fromEntries(rows.map(r => [r[1], r]));
+  const rank = by.rank ? `<small class="muted ch-rank">${esc(t('filters.rank'))} ${ROMAN[by.rank[2]] || by.rank[2] || '?'} → ${ROMAN[by.rank[3]] || by.rank[3] || '?'}</small>` : '';
+  const cell = (k, i) => {
+    const r = by[k];
+    if (!r) return `<td class="muted">${v?.br?.[i] != null ? fmtBR(v.br[i]) : ''}</td>`;
+    const d = r[2] != null && r[3] != null ? r[3] - r[2] : 0;
+    return `<td><span class="muted">${fmtBR(r[2])}</span> <span class="ch-to">→</span> <b>${fmtBR(r[3])}</b>${d ? ` <span class="ch-d ${d > 0 ? 'up' : 'down'}">${d > 0 ? '+' : '-'}${fmtBR(Math.abs(d))}</span>` : ''}</td>`;
+  };
+  return `<tr><td>${chSubject(rows[0])}${rank}</td>${CH_BR.map(cell).join('')}</tr>`;
+}
+
+// vehicles whose battle rating went up, and down, in any mode
+function chUpDown(subjects) {
+  const moved = s => s.filter(r => CH_BR.includes(r[1]) && r[2] != null && r[3] != null).map(r => r[3] - r[2]);
+  return [subjects.filter(s => moved(s).some(d => d > 0)).length, subjects.filter(s => moved(s).some(d => d < 0)).length];
 }
 
 function chTable(g) {
-  const rows = CH.by[g] || [], n = CH.more[g] || CH_PAGE;
-  const left = rows.length - n;
-  return `<div class="ar-scroll"><table class="ar-table ch-table"><thead><tr><th>${esc(t('ch.about'))}</th><th>${esc(t('ch.value'))}</th><th>${esc(t('ch.before'))}</th><th>${esc(t('ch.after'))}</th></tr></thead>
-    <tbody>${rows.slice(0, n).map((r, i) => chRow(r, r[0] === rows[i - 1]?.[0])).join('')}</tbody></table></div>
+  const subjects = CH.subjects[g] || [], n = CH.more[g] || CH_PAGE, left = subjects.length - n, br = g === 'br';
+  const head = br ? [t('ch.about'), t('filters.mode.ab'), t('filters.mode.rb'), t('filters.mode.sb')] : [t('ch.about'), t('ch.title')];
+  return `<div class="ar-scroll"><table class="ar-table ch-table${br ? ' ch-br' : ''}"><thead><tr>${head.map(h => `<th>${esc(h)}</th>`).join('')}</tr></thead>
+    <tbody>${subjects.slice(0, n).map(s => (br ? chBrRow(s) : `<tr><td>${chSubject(s[0])}</td><td><div class="ch-list">${s.map(chChange).join('')}</div></td></tr>`)).join('')}</tbody></table></div>
     ${left > 0 ? `<button class="btn btn-sm ch-more" data-chmore="${g}">${esc(t('ch.more', { n: I18N.num(Math.min(left, CH_PAGE)) }))}</button>` : ''}`;
 }
 
@@ -104,13 +135,16 @@ function chRender() {
   }
   if (!CH.rows) { body.innerHTML = `<div class="empty"><p>${esc(t('arm.loading'))}</p></div>`; return; }
   const p = CH.patches.find(x => x.id === CH.id);
-  CH.by = {};
-  for (const r of chShown()) (CH.by[CH.fields[r[1]].group] ||= []).push(r);
-  const present = CH.groups.filter(g => CH.by[g]);
+  const by = {};
+  for (const r of chShown()) (by[CH.fields[r[1]].group] ||= []).push(r);
+  CH.subjects = Object.fromEntries(Object.entries(by).map(([g, rows]) => [g, chSubjects(rows)]));  // counted by vehicle, weapon or map
+  const present = CH.groups.filter(g => CH.subjects[g]);
+  const [up, down] = CH.subjects.br ? chUpDown(CH.subjects.br) : [0, 0];
+  const ud = up || down ? `<span class="ch-ud"><span class="ch-d up">▲ ${I18N.num(up)}</span><span class="ch-d down">▼ ${I18N.num(down)}</span></span>` : '';
   const notes = [p.back && t('ch.back', { from: p.from, to: p.to }), p.schema && t('ch.schema')].filter(Boolean);
   body.innerHTML = `${notes.map(x => `<p class="hint ch-note">${icon('target', 'ic-sm')}<span>${esc(x)}</span></p>`).join('')}
-    ${present.length ? `<div class="vstats mb-totals ch-totals">${present.map(g => `<button class="vstat" data-chgroup="${g}"><span>${esc(t('ch.group.' + g))}</span><b>${I18N.num(CH.by[g].length)}</b></button>`).join('')}</div>` : `<div class="empty"><p>${esc(t('ch.none'))}</p></div>`}
-    ${present.map(g => `<details class="ch-group" data-g="${g}"${CH.open.has(g) ? ' open' : ''}><summary><span>${esc(t('ch.group.' + g))}</span><span class="tab-count">${I18N.num(CH.by[g].length)}</span></summary>
+    ${present.length ? `<div class="vstats mb-totals ch-totals">${present.map(g => `<button class="vstat" data-chgroup="${g}"><span>${esc(t('ch.group.' + g))}</span><b>${I18N.num(CH.subjects[g].length)}</b></button>`).join('')}</div>` : `<div class="empty"><p>${esc(t('ch.none'))}</p></div>`}
+    ${present.map(g => `<details class="ch-group" data-g="${g}"${CH.open.has(g) ? ' open' : ''}><summary><span>${esc(t('ch.group.' + g))}</span><span class="tab-count">${I18N.num(CH.subjects[g].length)}</span>${g === 'br' ? ud : ''}</summary>
       <div class="ch-rows">${CH.open.has(g) ? chTable(g) : ''}</div></details>`).join('')}`;
 }
 

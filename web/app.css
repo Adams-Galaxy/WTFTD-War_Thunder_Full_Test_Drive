@@ -1429,9 +1429,20 @@ td.hg-actions { height: 48px; }
 .ch-group summary { display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); cursor: pointer; font: 700 13.5px var(--font-display); color: var(--text-2); }
 .ch-group summary:hover { color: var(--text); }
 .ch-group[open] summary { margin-bottom: 6px; }
+.ch-rows .ar-scroll { max-width: 1100px; }  /* the values stay near their names on a wide screen */
 .ch-table { table-layout: fixed; }
-.ch-table td { height: 48px; white-space: normal; overflow-wrap: anywhere; }
-.ch-table th:first-child { width: 40%; }
+.ch-table td { height: 44px; padding-top: 7px; padding-bottom: 7px; vertical-align: top; white-space: normal; overflow-wrap: anywhere; }
+.ch-table th:first-child { width: 38%; }
+.ch-table tbody tr:hover td { background: var(--surface-2); }
+.ch-list { display: grid; grid-template-columns: minmax(110px, max-content) max-content max-content 1fr; gap: 3px 10px; align-items: center; }
+.ch-k { color: var(--text-2); font-weight: 600; }
+.ch-to { color: var(--muted); }
+.ch-br td:not(:first-child) { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ch-rank { display: block; margin-top: 2px; }
+.ch-d { display: inline-block; padding: 1px 5px; border-radius: 5px; font-size: 11px; font-weight: 700; }
+.ch-d.up { color: var(--warn); background: rgba(255, 181, 71, .12); }
+.ch-d.down { color: var(--info); background: rgba(90, 184, 255, .12); }
+.ch-ud { display: inline-flex; gap: 6px; margin-left: 4px; }
 .ch-table .wicon, .ch-table .wicon-ph { width: 28px; height: 28px; flex: none; }
 .ch-table .mb-link { vertical-align: middle; }
 .ch-table .mb-link .flag { width: 22px; height: 14px; }
