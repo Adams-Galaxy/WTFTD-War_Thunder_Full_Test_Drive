@@ -794,6 +794,8 @@
   "update.newVehicles": "Новой техники: {n}",
   "update.reload": "Перезагрузить",
   "update.error": "Не удалось обновить данные игры",
+  "update.available": "Игра обновилась ({v}): данные WTFTD устарели",
+  "update.now": "Обновить",
   "theme.label": "Тема",
   "theme.dark": "Тёмная",
   "theme.light": "Светлая",

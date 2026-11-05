@@ -438,7 +438,7 @@ def run_update():
         st["after"], st["source"] = meta.get("version"), meta.get("source")
         st["newVehicles"] = max(0, int(meta.get("vehicles", 0)) - int(before.get("vehicles", 0) or 0))
         st["patch"], st["changes"] = meta.get("patch"), meta.get("changes", 0)
-        st["done"] = True
+        st["done"], st["available"] = True, False
         threading.Thread(target=warm_weapon_icons, daemon=True).start()  # weapons new in this patch
     except Exception as e:  # report any builder failure to the UI
         st["error"] = str(e)
@@ -479,11 +479,17 @@ def check_for_update(start: bool = True) -> dict:
     return st
 
 
+def auto_check():
+    auto = STATE.settings().get("autoUpdate", True) is not False
+    # automatic updates off: the installed game is still looked at (a local read), so the page can offer the update
+    if (auto or STATE.data_source() == "game") and not STATE.update["running"]:
+        check_for_update(start=auto)
+
+
 def auto_update_loop():
     time.sleep(4)
     while True:
-        if STATE.settings().get("autoUpdate", True) is not False and not STATE.update["running"]:
-            check_for_update(start=True)
+        auto_check()
         time.sleep(AUTO_CHECK_EVERY)
 
 

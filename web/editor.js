@@ -1321,7 +1321,7 @@ function edAutoHTML(selection) {
       <button class="${src === 'me' ? 'active' : ''}" data-edauto="src:me"${my ? '' : ' disabled'}>${esc(t('editor.auto.mine', { br: my ? my.toFixed(1) : '–' }))}</button>
       <button class="${src === 'br' ? 'active' : ''}" data-edauto="src:br">${esc(t('editor.auto.custom'))}</button></div>
       ${src === 'me' ? `<small class="muted">${esc(t('editor.auto.followHint'))}</small>` : ''}
-      ${src === 'br' ? `<div class="slider-row" style="margin-top:8px"><input type="range" min="1" max="14.3" step="0.3" data-edautof="br" value="${+a.br}"><output>BR ${(+a.br).toFixed(1)}</output></div>` : ''}</div>
+      ${src === 'br' ? `<div class="slider-row" style="margin-top:8px"><input type="range" min="1" max="${BR_MAX}" step="0.3" data-edautof="br" value="${+a.br}"><output>BR ${(+a.br).toFixed(1)}</output></div>` : ''}</div>
     <div class="field"><label>${esc(t('editor.auto.nation'))} <span class="muted">· ${esc(a.nations.length ? a.nations.map(nationName).join(', ') : t('editor.auto.allNations'))}</span></label>
       <div class="nations ed-nations${a.nations.length ? ' has-active' : ''}">${NATIONS.map(x => `<button class="nation${a.nations.includes(x) ? ' active' : ''}" data-edauto="nat:${x}" title="${esc(nationName(x))}">
         <img src="${flagImg(x)}" alt=""></button>`).join('')}</div>

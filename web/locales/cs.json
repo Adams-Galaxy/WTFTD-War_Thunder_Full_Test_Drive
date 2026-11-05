@@ -794,6 +794,8 @@
   "update.newVehicles": "Nová vozidla: {n}",
   "update.reload": "Načíst znovu",
   "update.error": "Aktualizace herních dat selhala",
+  "update.available": "Hra byla aktualizována ({v}): data WTFTD jsou starší",
+  "update.now": "Aktualizovat nyní",
   "theme.label": "Motiv",
   "theme.dark": "Tmavý",
   "theme.light": "Světlý",

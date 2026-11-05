@@ -812,6 +812,8 @@
   "update.newVehicles": "{n} new vehicle(s)",
   "update.reload": "Reload",
   "update.error": "Game data update failed",
+  "update.available": "The game was patched ({v}): WTFTD's data is older",
+  "update.now": "Update now",
   "theme.label": "Theme",
   "theme.dark": "Dark",
   "theme.light": "Light",

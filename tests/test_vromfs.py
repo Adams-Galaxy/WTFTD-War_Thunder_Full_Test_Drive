@@ -230,14 +230,14 @@ class Source(unittest.TestCase):
             p.start()
             self.addCleanup(p.stop)
 
-    def check(self, meta, version):
+    def check(self, meta, version, start=True):
         started = []
         with mock.patch.object(server.vromfs, "version", lambda gd: version), \
                 mock.patch.object(server, "read_json", lambda p, d=None: meta), \
                 mock.patch.object(server.urllib.request, "urlopen", side_effect=AssertionError("network")), \
                 mock.patch.object(server.threading, "Thread", lambda **kw: started.append(kw) or mock.Mock()), \
                 mock.patch.dict(server.STATE.update, {"running": False}):
-            st = dict(server.check_for_update(start=True))
+            st = dict(server.check_for_update(start=start))
         return st, started
 
     def test_default_is_the_datamine(self):
@@ -251,6 +251,19 @@ class Source(unittest.TestCase):
         st, started = self.check(meta, "2.59.0.93")
         self.assertTrue(st["available"])
         self.assertEqual(len(started), 1)
+
+    def test_automatic_updates_off_still_offer_a_game_patch(self):
+        self.settings.update(dataSource="game", autoUpdate=False)
+        meta = {"version": "2.59.0.92", "schema": builder.SCHEMA, "source": "game"}
+        with mock.patch.object(server, "check_for_update") as check:
+            server.auto_check()
+        check.assert_called_once_with(start=False)
+        st, started = self.check(meta, "2.59.0.98", start=False)
+        self.assertEqual((st["available"], st["remote"], started), (True, "2.59.0.98", []))  # seen, not built: the page offers it
+        self.settings["dataSource"] = "datamine"
+        with mock.patch.object(server, "check_for_update") as check:
+            server.auto_check()
+        check.assert_not_called()  # the datamine's version is on the network: not without automatic updates
 
     def test_command_line_builds_through_the_real_module(self):
         """Weapons read builder.DM: from `python -m` a copy of the module would stay on the datamine, and with no data yet the Weapons page came out empty."""

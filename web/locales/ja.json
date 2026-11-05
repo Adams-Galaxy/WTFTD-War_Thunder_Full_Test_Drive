@@ -794,6 +794,8 @@
   "update.newVehicles": "新規兵器 {n} 両",
   "update.reload": "再読み込み",
   "update.error": "ゲームデータの更新に失敗しました",
+  "update.available": "ゲームが更新されました ({v})：WTFTD のデータは古いままです",
+  "update.now": "今すぐ更新",
   "theme.label": "テーマ",
   "theme.dark": "ダーク",
   "theme.light": "ライト",

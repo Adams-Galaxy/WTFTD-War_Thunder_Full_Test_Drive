@@ -19,7 +19,8 @@ const AVIONICS = ['laserDesignator', 'havePointOfInterestDesignator', 'hasHelmet
 const ENVS = ['Day', 'Morning', 'Noon', 'Evening', 'Dusk', 'Dawn', 'Night'];
 const WEATHERS = ['clear', 'good', 'hazy', 'thin_clouds', 'cloudy', 'cloudy_windy', 'overcast', 'poor', 'rain', 'thunder', 'blind'];
 const AMMO_COLORS = ['#f3b33d', '#5ab8ff', '#5fcf8a', '#d482ff'];
-const BR_MIN = 1.0, BR_MAX = 14.3;
+const BR_MIN = 1.0;
+let BR_MAX = 14.3;  // the BR sliders' top: the highest BR in the game data once it's loaded (Gaijin raises it)
 
 const store = {
   get(k, d) { try { const v = localStorage.getItem('wtftd.' + k); return v == null ? d : JSON.parse(v); } catch { return d; } },
@@ -182,6 +183,10 @@ async function boot() {
   S.vehicles = vehicles;
   S.scenarios = scenarios;
   S.byId = new Map(vehicles.map(v => [v.id, v]));
+  BR_MAX = Math.max(BR_MAX, ...vehicles.flatMap(v => v.br || []).filter(Number.isFinite));
+  if (S.f.brMax >= (S.f.brTop ?? 14.3) - 0.01) S.f.brMax = BR_MAX;  // the whole range, saved under an older top, stays whole
+  S.f.brTop = BR_MAX;
+  $('#brMin').max = $('#brMax').max = BR_MAX;
   for (const v of vehicles) v._s = norm(I18N.unit(v.id)) + '|' + norm(I18N.unitFull(v.id)) + '|' + norm(v.id);
 
   buildSidebar();
@@ -1691,6 +1696,11 @@ function renderUpdateBanner(st) {
   } else if (st.error) {
     el.className = 'update-banner err';
     el.innerHTML = `${icon('x', 'ic-sm')}<b>${esc(t('update.error'))}</b><span class="muted">${esc(st.error)}</span>`;
+  } else if (st.available) {  // automatic updates off: the game was patched, the player decides when
+    el.className = 'update-banner';
+    el.innerHTML = `<b>${esc(t('update.available', { v: st.remote || '' }))}</b>
+      <button class="btn btn-primary btn-sm" data-act="update">${esc(t('update.now'))}</button>`;
+    el.querySelector('[data-act]').onclick = async () => { try { await api('update', {}); watchUpdates(); } catch (e) { toastErr(e); } };
   } else {
     el.className = 'update-banner hidden';
   }

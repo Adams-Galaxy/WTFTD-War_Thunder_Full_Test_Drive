@@ -794,6 +794,8 @@
   "update.newVehicles": "{n} neue(s) Fahrzeug(e)",
   "update.reload": "Neu laden",
   "update.error": "Aktualisierung der Spieldaten fehlgeschlagen",
+  "update.available": "Das Spiel wurde aktualisiert ({v}): die Daten von WTFTD sind älter",
+  "update.now": "Jetzt aktualisieren",
   "theme.label": "Design",
   "theme.dark": "Dunkel",
   "theme.light": "Hell",

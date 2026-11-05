@@ -794,6 +794,8 @@
   "update.newVehicles": "{n} 辆新载具",
   "update.reload": "重新载入",
   "update.error": "游戏数据更新失败",
+  "update.available": "游戏已更新 ({v})：WTFTD 的数据较旧",
+  "update.now": "立即更新",
   "theme.label": "主题",
   "theme.dark": "深色",
   "theme.light": "浅色",
