@@ -756,6 +756,7 @@
   "settings.startMinimized": "最小化して起動",
   "settings.tray": "通知領域に最小化",
   "settings.closeWithGame": "ゲーム終了時にWTFTDを閉じる",
+  "settings.launchGame": "WTFTD を開いたとき、War Thunder が起動していなければ起動する",
   "ov.hotkey": "表示/非表示キー",
   "ov.hotkeyPh": "ここをクリックしてキーを押す",
   "ov.hotkeyHint": "ゲームが前面のときに動作します。Esc でキーを解除します。",

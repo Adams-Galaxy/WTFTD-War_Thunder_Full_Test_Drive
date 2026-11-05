@@ -756,6 +756,7 @@
   "settings.startMinimized": "Iniciar minimizado",
   "settings.tray": "Minimizar para a área de notificação",
   "settings.closeWithGame": "Fechar o WTFTD quando o jogo fechar",
+  "settings.launchGame": "Iniciar o War Thunder ao abrir o WTFTD, se ainda não estiver em execução",
   "ov.hotkey": "Tecla mostrar / ocultar",
   "ov.hotkeyPh": "Clique aqui e pressione uma tecla",
   "ov.hotkeyHint": "Funciona com o jogo em primeiro plano. Esc remove a tecla.",

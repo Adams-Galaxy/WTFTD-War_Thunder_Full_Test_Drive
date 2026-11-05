@@ -756,6 +756,7 @@
   "settings.startMinimized": "Spouštět minimalizované",
   "settings.tray": "Minimalizovat do oznamovací oblasti",
   "settings.closeWithGame": "Zavřít WTFTD s hrou",
+  "settings.launchGame": "Spustit War Thunder při otevření WTFTD, pokud ještě neběží",
   "ov.hotkey": "Klávesa zobrazit / skrýt",
   "ov.hotkeyPh": "Klikněte sem a stiskněte klávesu",
   "ov.hotkeyHint": "Funguje, když je hra v popředí. Esc klávesu odstraní.",

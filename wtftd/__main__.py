@@ -20,6 +20,7 @@ from pathlib import Path
 from .alarms import available, game_running
 from .paths import CACHE, FROZEN, USER, WEB, prepare
 from . import server
+from .game import launch
 from .server import ROOT, STATE, WATCH, free_port, page_closed, read_json, serve, wait_page_gone, write_json
 
 GAME_CHECK_S = 5
@@ -179,6 +180,13 @@ def already_running(path: Path = RUNNING, wait: float = CLOSING_S) -> bool:
     return False
 
 
+def launch_on_start():
+    """Settings' option: War Thunder starts with WTFTD when it isn't running yet, nor on its way (started by Steam: the WTFTD
+    with_game starts says --game-started). Windows, where the game's window can be seen."""
+    if STATE.settings().get("launchGame") is True and "--game-started" not in sys.argv and available() and not game_running():
+        launch(STATE.game_dir())
+
+
 def wait_game(appear: float = GAME_APPEAR_S, poll: float = GAME_CHECK_S):
     """Until the game has come (its launcher may update it first) and gone again; at once where it can't be seen."""
     if not available():
@@ -200,7 +208,7 @@ def with_game(command: list[str]):
         folder = Path(command[0]).parent
         subprocess.Popen(command, cwd=str(folder) if folder.is_dir() else None)
     if not already_running():
-        subprocess.Popen(server.app_command(), cwd=str(ROOT), creationflags=getattr(subprocess, "DETACHED_PROCESS", 0))
+        subprocess.Popen([*server.app_command(), "--game-started"], cwd=str(ROOT), creationflags=getattr(subprocess, "DETACHED_PROCESS", 0))
     wait_game()
 
 
@@ -225,6 +233,10 @@ def main():
     threading.Thread(target=httpd.serve_forever, daemon=True).start()
     if "--port" not in sys.argv:
         write_json(RUNNING, {"port": httpd.server_address[1]})
+        try:
+            launch_on_start()
+        except OSError as e:  # the app opens all the same
+            print(f"War Thunder not launched: {e}")
     print(f"WTFTD running at {url}  (Ctrl+C to quit)")
 
     exe = None if "--browser" in sys.argv or "--no-window" in sys.argv else find_app_browser()

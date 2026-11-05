@@ -10,6 +10,8 @@ Versions follow `major.minor.patch`; "beta" until 1.0.
   War Thunder (*Copy*). Steam then starts WTFTD with the game's own command line: WTFTD starts the game, opens (or brings
   forward the one running), and waits for the game to close, so that Steam still counts your play time. WTFTD doesn't
   touch Steam's files: emptying the field in Steam stops it.
+- **War Thunder can start with WTFTD** (Settings, App window, off by default; Windows): when WTFTD opens and the game isn't
+  running yet. Started from Steam, the game is already on its way: it isn't launched twice.
 
 - **What changed compares your game with the dev server**: *Compare with the dev server* downloads the community datamine
   (about 1 GB the first time) and builds its newest version apart, in its own process and its own folder, in a few

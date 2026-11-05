@@ -756,6 +756,7 @@
   "settings.startMinimized": "Запускать свёрнутым",
   "settings.tray": "Сворачивать в область уведомлений",
   "settings.closeWithGame": "Закрывать WTFTD вместе с игрой",
+  "settings.launchGame": "Запускать War Thunder при открытии WTFTD, если игра ещё не запущена",
   "ov.hotkey": "Клавиша показа / скрытия",
   "ov.hotkeyPh": "Нажмите здесь, затем клавишу",
   "ov.hotkeyHint": "Работает, когда игра на переднем плане. Esc удаляет клавишу.",

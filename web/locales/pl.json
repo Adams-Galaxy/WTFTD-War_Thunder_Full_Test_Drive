@@ -756,6 +756,7 @@
   "settings.startMinimized": "Uruchamiaj zminimalizowane",
   "settings.tray": "Minimalizuj do obszaru powiadomień",
   "settings.closeWithGame": "Zamykaj WTFTD wraz z grą",
+  "settings.launchGame": "Uruchamiaj War Thunder przy otwarciu WTFTD, jeśli jeszcze nie działa",
   "ov.hotkey": "Klawisz pokaż / ukryj",
   "ov.hotkeyPh": "Kliknij tutaj, potem naciśnij klawisz",
   "ov.hotkeyHint": "Działa, gdy gra jest na wierzchu. Esc usuwa klawisz.",

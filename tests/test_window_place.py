@@ -174,7 +174,7 @@ class FromSteam(unittest.TestCase):
         started, waited = self.run_it(running=False)
         game, wtftd = started.call_args_list
         self.assertEqual(game.args[0], [r"D:\Steam\War Thunder\launcher.exe", "-x"])
-        self.assertEqual(wtftd.args[0], app.server.app_command())
+        self.assertEqual(wtftd.args[0], [*app.server.app_command(), "--game-started"])
         waited.assert_called_once()
 
     def test_the_running_one_is_shown_instead(self):
@@ -198,3 +198,26 @@ class FromSteam(unittest.TestCase):
         self.assertTrue(line.endswith(" --with-game %command%") and line.startswith('"'))
         with mock.patch.object(app.server.game, "is_steam_install", lambda gd: False):
             self.assertIsNone(app.server.steam_launch_option(Path(".")))
+
+
+class LaunchOnStart(unittest.TestCase):
+    """Settings' option: War Thunder starts with WTFTD, unless it runs already or Steam is starting it."""
+
+    def launched(self, on=True, running=False, argv=("WTFTD",)):
+        with mock.patch.object(app.STATE, "settings", lambda: {"launchGame": on}), mock.patch.object(app.STATE, "game_dir", lambda: Path("wt")), \
+                mock.patch.object(app, "available", lambda: True), mock.patch.object(app, "game_running", lambda: running), \
+                mock.patch.object(app.sys, "argv", list(argv)), mock.patch.object(app, "launch") as launch:
+            app.launch_on_start()
+        return launch.call_args_list
+
+    def test_only_when_asked_and_not_running(self):
+        self.assertEqual(self.launched(), [mock.call(Path("wt"))])
+        self.assertEqual(self.launched(on=False), [])
+        self.assertEqual(self.launched(running=True), [])
+        self.assertEqual(self.launched(argv=("WTFTD", "--game-started")), [])  # Steam is starting it: not twice
+
+    def test_steam_says_the_game_is_on_its_way(self):
+        with mock.patch.object(app.sys, "argv", ["WTFTD", "--with-game", "launcher.exe"]), mock.patch.object(app.subprocess, "Popen") as started, \
+                mock.patch.object(app, "already_running", return_value=False), mock.patch.object(app, "wait_game"):
+            app.main()
+        self.assertEqual(started.call_args_list[1].args[0][-1], "--game-started")

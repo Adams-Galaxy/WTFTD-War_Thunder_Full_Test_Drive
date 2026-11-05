@@ -774,6 +774,7 @@
   "settings.startMinimized": "Start minimized",
   "settings.tray": "Minimize to the notification area",
   "settings.closeWithGame": "Close WTFTD when the game closes",
+  "settings.launchGame": "Launch War Thunder when WTFTD opens, if it isn't running yet",
   "ov.hotkey": "Show / hide key",
   "ov.hotkeyPh": "Click here, then press a key",
   "ov.hotkeyHint": "Works with the game in front. Esc removes the key.",

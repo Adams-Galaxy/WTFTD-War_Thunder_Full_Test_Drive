@@ -756,6 +756,7 @@
   "settings.startMinimized": "启动时最小化",
   "settings.tray": "最小化到通知区域",
   "settings.closeWithGame": "游戏关闭时关闭 WTFTD",
+  "settings.launchGame": "打开 WTFTD 时，若 War Thunder 尚未运行则启动它",
   "ov.hotkey": "显示/隐藏按键",
   "ov.hotkeyPh": "点击此处,然后按下按键",
   "ov.hotkeyHint": "仅在游戏处于前台时有效。Esc 移除按键。",

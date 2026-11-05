@@ -1820,7 +1820,7 @@ async function openSettings(part) {
   $('#setAirMethod').value = st.cdk?.airMethod || 'custom';
   $('#setAutoUpdate').checked = st.settings?.autoUpdate !== false;
   $('#setWindow').classList.toggle('hidden', !st.alarms);  // Windows only
-  [['#setStartMinimized', 'startMinimized'], ['#setTray', 'trayMinimize'], ['#setCloseWithGame', 'closeWithGame']].forEach(([id, key]) => { $(id).checked = st.settings?.[key] === true; });
+  [['#setStartMinimized', 'startMinimized'], ['#setTray', 'trayMinimize'], ['#setCloseWithGame', 'closeWithGame'], ['#setLaunchGame', 'launchGame']].forEach(([id, key]) => { $(id).checked = st.settings?.[key] === true; });
   $('#setTheme').value = themePref();
   $('#dataVersion').textContent = st.data?.version ? `${t('settings.version', { version: st.data.version, date: new Date(st.data.built * 1000).toLocaleDateString(I18N.code) })} · ${t('source.from.' + (st.data.source || 'datamine'))}` : '';
   renderKeep($('#setSource'), new Set([st.data?.source || st.dataSource, st.other?.version && st.other.source].filter(Boolean)));
@@ -1848,7 +1848,7 @@ async function saveSettings() {
     const hosts = {};
     $$('#setHosts select').forEach(s => { if (s.value) hosts[s.dataset.host] = s.value; });
     const keep = new Set(($('#setSource').dataset.keep || '').split(',').filter(Boolean));
-    S.status = await api('settings', { gameDir: $('#setGameDir').value.trim(), lang, cdk: $('#setCdk').checked, hosts, airMethod: $('#setAirMethod').value, autoUpdate: $('#setAutoUpdate').checked, startMinimized: $('#setStartMinimized').checked, trayMinimize: $('#setTray').checked, closeWithGame: $('#setCloseWithGame').checked, theme: $('#setTheme').value, oodleDll: $('#setOodle').value.trim() });
+    S.status = await api('settings', { gameDir: $('#setGameDir').value.trim(), lang, cdk: $('#setCdk').checked, hosts, airMethod: $('#setAirMethod').value, autoUpdate: $('#setAutoUpdate').checked, startMinimized: $('#setStartMinimized').checked, trayMinimize: $('#setTray').checked, closeWithGame: $('#setCloseWithGame').checked, launchGame: $('#setLaunchGame').checked, theme: $('#setTheme').value, oodleDll: $('#setOodle').value.trim() });
     // the sources kept: one ticked is built apart (What changed shows it), one unticked goes, the one in use once the app has
     // switched to the other. Which one is in use is the Data button's, at the top
     if (S.status.dataReady && keep.size) {

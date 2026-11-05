@@ -1017,7 +1017,7 @@ class Handler(BaseHTTPRequestHandler):
         if route == "settings":
             s = STATE.settings()
             for k in ("gameDir", "lang", "missionType", "theme", "cdk", "hosts", "airMethod", "autoUpdate", "oodleDll", "dataSource",
-                      "audioDevice", "battleLog", "startMinimized", "trayMinimize", "closeWithGame"):
+                      "audioDevice", "battleLog", "startMinimized", "trayMinimize", "closeWithGame", "launchGame"):
                 if k in body:
                     s[k] = body[k]
             if on_network(s.get("gameDir")) or on_network(s.get("oodleDll")):  # what the app runs and loads stays on this PC
