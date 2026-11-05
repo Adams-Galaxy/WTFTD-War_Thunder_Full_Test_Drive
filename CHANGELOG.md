@@ -4,6 +4,13 @@ What changed in each version of WTFTD. Downloads: [Releases](https://github.com/
 (only the latest version is kept there; from 0.19.0 on, each version's code stays available through its git tag).
 Versions follow `major.minor.patch`; "beta" until 1.0.
 
+## 0.25.5 - not released yet
+
+- **WTFTD opens with War Thunder from Steam** (Windows): Settings gives the line to paste in Steam's launch options for
+  War Thunder (*Copy*). Steam then starts WTFTD with the game's own command line: WTFTD starts the game, opens (or brings
+  forward the one running), and waits for the game to close, so that Steam still counts your play time. WTFTD doesn't
+  touch Steam's files: emptying the field in Steam stops it.
+
 ## 0.25.4 - 2026-11-05
 
 - **What changed compares your game with the dev server**: *Compare with the dev server* downloads the community datamine

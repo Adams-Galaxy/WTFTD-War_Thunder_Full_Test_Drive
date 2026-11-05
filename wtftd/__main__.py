@@ -23,6 +23,7 @@ from . import server
 from .server import ROOT, STATE, WATCH, free_port, page_closed, read_json, serve, wait_page_gone, write_json
 
 GAME_CHECK_S = 5
+GAME_APPEAR_S = 900  # started from Steam: the game's launcher may update it this long before its window comes
 FIND_WINDOW_S = 20
 PLACE_S = 2  # how often the window's place is looked at, kept when it changes
 PLACE = USER / "window.json"  # a file of its own: the settings are written by the page too
@@ -178,7 +179,34 @@ def already_running(path: Path = RUNNING, wait: float = CLOSING_S) -> bool:
     return False
 
 
+def wait_game(appear: float = GAME_APPEAR_S, poll: float = GAME_CHECK_S):
+    """Until the game has come (its launcher may update it first) and gone again; at once where it can't be seen."""
+    if not available():
+        return
+    start, seen = time.monotonic(), False
+    while True:
+        if game_running():
+            seen = True
+        elif seen or time.monotonic() - start > appear:
+            return
+        time.sleep(poll)
+
+
+def with_game(command: list[str]):
+    """Started by Steam in War Thunder's place (its launch options: WTFTD --with-game %command%): the game as Steam would have
+    started it, WTFTD with it (the one running comes to the front), and this process lasts as long as the game, so that Steam
+    sees it played."""
+    if command:
+        folder = Path(command[0]).parent
+        subprocess.Popen(command, cwd=str(folder) if folder.is_dir() else None)
+    if not already_running():
+        subprocess.Popen(server.app_command(), cwd=str(ROOT), creationflags=getattr(subprocess, "DETACHED_PROCESS", 0))
+    wait_game()
+
+
 def main():
+    if "--with-game" in sys.argv:  # Steam's launch options
+        return with_game(sys.argv[sys.argv.index("--with-game") + 1:])
     if "--build-dev" in sys.argv:  # started by the app (the other source's data): before the log below, which the app is writing
         from . import builder
         arg = lambda k: sys.argv[sys.argv.index(k) + 1] if k in sys.argv[:-1] else None

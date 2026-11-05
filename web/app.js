@@ -642,6 +642,9 @@ function bindUI() {
   $$('.tab').forEach(b => b.addEventListener('click', () => showView(S.menuPage[b.dataset.menu] || menuPages(b.dataset.menu)[0])));
   $$('.subtab').forEach(b => b.addEventListener('click', () => showView(b.dataset.view)));
   $('#btnSettings').addEventListener('click', openSettings);
+  $('#btnSteamCopy').addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText($('#setSteam').value); toast({ title: t('settings.steamCopied') }); } catch (e) { $('#setSteam').select(); }
+  });
   $('#dataMenu').addEventListener('click', dataMenuPick);
   document.addEventListener('click', e => { if (!e.target.closest('#dataMenu, #pillData')) closeDataMenu(); });
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDataMenu(); });
@@ -1797,6 +1800,8 @@ async function openSettings(part) {
   $('#setGameDir').placeholder = mac ? '~/Library/Application Support/Steam/steamapps/common/War Thunder' : 'D:\\SteamLibrary\\steamapps\\common\\War Thunder';
   $('#setOodle').placeholder = mac ? '…/liboo2coremac64.2.9.dylib' : '…\\oo2core_9_win64.dll';
   $('#setGameDirHint').textContent = st.gameDir ? t('settings.detected', { path: st.gameDir }) : t('settings.gameDirHint');
+  $('#rowSteam').classList.toggle('hidden', !st.steamLaunch);  // Steam on Windows: the line to paste in its launch options
+  $('#setSteam').value = st.steamLaunch || '';
   $('#setOodle').value = st.settings?.oodleDll || '';
   $('#setOodleFound').textContent = st.oodle ? t('settings.oodleFound', { path: st.oodle }) : t('settings.oodleNone');
   $('#setCdk').checked = st.cdk?.enabled !== false;

@@ -159,3 +159,42 @@ class Started(unittest.TestCase):
         self.addCleanup(other.server_close)
         threading.Thread(target=other.handle_request, daemon=True).start()
         self.assertFalse(self.started(port=other.server_address[1])[0])
+
+
+class FromSteam(unittest.TestCase):
+    """Steam's launch options (WTFTD --with-game %command%): the game first, WTFTD with it, and the process as long as the game."""
+
+    def run_it(self, running: bool, argv=("WTFTD", "--with-game", r"D:\Steam\War Thunder\launcher.exe", "-x")):
+        with mock.patch.object(app.sys, "argv", list(argv)), mock.patch.object(app.subprocess, "Popen") as started, \
+                mock.patch.object(app, "already_running", return_value=running), mock.patch.object(app, "wait_game") as waited:
+            app.main()
+        return started, waited
+
+    def test_the_game_then_wtftd(self):
+        started, waited = self.run_it(running=False)
+        game, wtftd = started.call_args_list
+        self.assertEqual(game.args[0], [r"D:\Steam\War Thunder\launcher.exe", "-x"])
+        self.assertEqual(wtftd.args[0], app.server.app_command())
+        waited.assert_called_once()
+
+    def test_the_running_one_is_shown_instead(self):
+        started, waited = self.run_it(running=True)
+        self.assertEqual(len(started.call_args_list), 1)  # the game only: already_running brought WTFTD forward
+        waited.assert_called_once()
+
+    def test_waits_for_the_game_to_come_and_go(self):
+        seen = iter([False, True, True, False, True])
+        with mock.patch.object(app, "available", lambda: True), mock.patch.object(app, "game_running", lambda: next(seen)), \
+                mock.patch.object(app.time, "sleep"):
+            app.wait_game(appear=60, poll=0)
+        self.assertEqual(next(seen), True)  # left at the first False after the game was seen
+        with mock.patch.object(app, "available", lambda: True), mock.patch.object(app, "game_running", lambda: False), \
+                mock.patch.object(app.time, "sleep"):
+            app.wait_game(appear=0, poll=0)  # never came: gone at once
+
+    def test_the_line_for_steam(self):
+        with mock.patch.object(app.server.sys, "platform", "win32"), mock.patch.object(app.server.game, "is_steam_install", lambda gd: True):
+            line = app.server.steam_launch_option(Path("."))
+        self.assertTrue(line.endswith(" --with-game %command%") and line.startswith('"'))
+        with mock.patch.object(app.server.game, "is_steam_install", lambda gd: False):
+            self.assertIsNone(app.server.steam_launch_option(Path(".")))

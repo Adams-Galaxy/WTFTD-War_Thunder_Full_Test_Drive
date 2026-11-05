@@ -167,6 +167,7 @@ kbd { font: 600 10.5px var(--font); color: var(--muted); border: 1px solid var(-
 .pill.ok .dot { background: var(--ok); box-shadow: 0 0 8px var(--ok); }
 .pill.bad .dot, .pill.off .dot { background: var(--danger); box-shadow: 0 0 8px var(--danger); }
 .pill.bad { cursor: pointer; border-color: rgba(255, 100, 100, .35); }
+#setSteam { flex: 1; min-width: 0; font-family: Consolas, ui-monospace, monospace; font-size: 11.5px; }  /* Steam's launch options line */
 .pill-play { font: inherit; font-size: 12px; }
 .pill-play .play { display: none; width: 12px; height: 12px; margin-left: -2px; }
 .pill-play.launch { cursor: pointer; }  /* closed: a click launches the game */

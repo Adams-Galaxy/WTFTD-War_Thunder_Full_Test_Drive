@@ -353,6 +353,23 @@ def switch_data():
     STATE.reload()
 
 
+def app_command() -> list[str]:
+    """How this WTFTD starts with no console: the exe, or pythonw and the source folder's entry script (from any folder: Steam
+    starts it from the game's)."""
+    if FROZEN:
+        return [sys.executable]
+    quiet = Path(sys.executable).with_name("pythonw.exe")
+    return [str(quiet if quiet.exists() else sys.executable), str(Path(__file__).resolve().parent.parent / "wtftd_app.py")]
+
+
+def steam_launch_option(gd) -> str | None:
+    """What to paste in Steam (War Thunder, Properties, Launch options) for WTFTD to open with the game: Steam then starts WTFTD
+    with the game's own command line, and WTFTD starts the game (see __main__.with_game). Windows, a Steam install."""
+    if sys.platform != "win32" or not gd or not game.is_steam_install(gd):
+        return None
+    return " ".join(f'"{x}"' for x in app_command()) + " --with-game %command%"
+
+
 def data_ahead(meta: dict, gd) -> dict | None:
     """The datamine as the source, a major version ahead of the installed game: its vehicles and BRs are the dev server's."""
     if meta.get("source") != "datamine" or not gd:
@@ -382,6 +399,7 @@ def api_status():
         "dataReady": (DATA / "vehicles.json").exists(),
         "dataSource": STATE.data_source(),
         "dataAhead": data_ahead(meta, gd),
+        "steamLaunch": steam_launch_option(gd),
         "other": {k: v for k, v in read_json(builder.DEV / "data" / "meta.json", {}).items() if k in ("source", "version", "built", "circuit")},
         "gameSourceIssue": "python" if not vromfs.available() else None if gd else "game",
         "datamineCopy": builder.DATAMINE.is_dir(),
