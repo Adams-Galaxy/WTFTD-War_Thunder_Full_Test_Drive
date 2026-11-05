@@ -260,6 +260,7 @@ def image_urls(kind: str, ident: str) -> list[str]:
 # macOS keeps the browser running when its last window is closed: the page says "bye" when it goes
 # away, and any API call after that (a reload) cancels it. __main__ uses this to quit with the window.
 PAGE = {"seen": 0.0, "bye": 0.0}
+SHOW_WINDOW = None  # set by __main__ when WTFTD has its own window: () -> was it found and brought to the front
 
 
 def page_closed(grace: float = 3.0) -> bool:
@@ -762,6 +763,8 @@ class Handler(BaseHTTPRequestHandler):
         if route == "bye":  # the app page is closing (navigator.sendBeacon)
             PAGE["bye"] = time.time()
             return self.send_json({"ok": True})
+        if route == "show-window":  # WTFTD started again: this one comes to the front. Not the page's doing: PAGE stays
+            return self.send_json({"shown": bool(SHOW_WINDOW and SHOW_WINDOW()), "window": SHOW_WINDOW is not None})
         PAGE["seen"] = time.time()
         if route == "mods/upload":  # the one body that can be large: a stream with limits of its own, not read_body's
             return self.mods_upload()

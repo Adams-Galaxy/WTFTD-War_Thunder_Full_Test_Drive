@@ -1,7 +1,10 @@
 """The app window reopens where it was closed: WTFTD keeps its place (Edge loses an app window's own, 127.0.0.1 has dots)."""
+import http.server
 import json
 import sys
 import tempfile
+import threading
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -101,3 +104,58 @@ class Usable(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Started(unittest.TestCase):
+    """WTFTD started a second time from the same folder: the running one comes to the front, a closing one is waited for."""
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.running = Path(tmp.name) / "running.json"
+        self.answer = {"shown": True, "window": True}
+        self.httpd = app.server.ThreadingHTTPServer(("127.0.0.1", 0), app.server.Handler)
+        self.addCleanup(self.httpd.server_close)
+        threading.Thread(target=self.httpd.serve_forever, daemon=True).start()
+        self.addCleanup(self.httpd.shutdown)
+        self.port = self.httpd.server_address[1]
+        p = mock.patch.object(app.server, "SHOW_WINDOW", lambda: self.answer["shown"])
+        p.start()
+        self.addCleanup(p.stop)
+
+    def started(self, port=None, wait=0.0):
+        self.running.write_text(json.dumps({"port": port or self.port}))
+        with mock.patch.object(app.webbrowser, "open") as opened:
+            return app.already_running(self.running, wait), opened
+
+    def test_nothing_running(self):
+        self.assertFalse(app.already_running(self.running))
+        self.assertFalse(self.started(port=app.free_port(49200))[0])  # the file stayed after a crash: nobody answers
+
+    def test_the_running_one_comes_to_the_front(self):
+        before = dict(app.server.PAGE)
+        stop, opened = self.started()
+        self.assertTrue(stop)
+        opened.assert_not_called()
+        self.assertEqual(app.server.PAGE, before)  # not the page's doing: a closing WTFTD still sees its page gone
+
+    def test_one_without_a_window_opens_its_page(self):
+        with mock.patch.object(app.server, "SHOW_WINDOW", None):
+            stop, opened = self.started()
+        self.assertTrue(stop)
+        opened.assert_called_once_with(f"http://127.0.0.1:{self.port}/")
+
+    def test_a_closing_one_is_waited_for(self):
+        self.answer["shown"] = False  # its window is gone
+        threading.Timer(0.3, lambda: (self.httpd.shutdown(), self.httpd.server_close())).start()
+        t0 = time.monotonic()
+        stop, opened = self.started(wait=5)
+        self.assertFalse(stop)  # this one starts, on the port freed
+        self.assertLess(time.monotonic() - t0, 3)
+        self.assertEqual(app.free_port(self.port), self.port)
+
+    def test_another_program_on_that_port(self):
+        other = http.server.HTTPServer(("127.0.0.1", 0), http.server.SimpleHTTPRequestHandler)
+        self.addCleanup(other.server_close)
+        threading.Thread(target=other.handle_request, daemon=True).start()
+        self.assertFalse(self.started(port=other.server_address[1])[0])

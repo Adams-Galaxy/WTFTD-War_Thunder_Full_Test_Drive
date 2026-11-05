@@ -12,7 +12,7 @@ from pathlib import Path
 TITLE = "WTFTD — War Thunder"
 WINDOW_CLASS = "Chrome_WidgetWin_1"
 WM_DESTROY, WM_CLOSE, WM_TIMER, WM_LBUTTONUP, WM_RBUTTONUP, WM_ICON = 0x2, 0x10, 0x113, 0x202, 0x205, 0x8001
-SW_HIDE, SW_MAXIMIZE, SW_MINIMIZE, SW_RESTORE = 0, 3, 6, 9
+SW_HIDE, SW_MAXIMIZE, SW_SHOW, SW_MINIMIZE, SW_RESTORE = 0, 3, 5, 6, 9
 SW_SHOWNORMAL, SW_SHOWMINIMIZED, SW_SHOWMAXIMIZED, WPF_RESTORETOMAXIMIZED = 1, 2, 3, 2
 NIM_ADD, NIM_DELETE, NIF_MESSAGE, NIF_ICON, NIF_TIP = 0, 2, 1, 2, 4
 LOOK_MS = 500
@@ -152,6 +152,16 @@ def minimize(**where) -> bool:
     return bool(window)
 
 
+def show(**where) -> bool:
+    """Brings the app window to the front, restored if it was minimized: WTFTD started a second time shows this one."""
+    window = find_window(**where)
+    if window:
+        user = _user32()
+        user.ShowWindow(window, SW_RESTORE if user.IsIconic(window) else SW_SHOW)
+        user.SetForegroundWindow(window)
+    return bool(window)
+
+
 def close(**where) -> bool:
     """Closes the app window as its own cross would: the page says bye and WTFTD quits the usual way."""
     window = find_window(**where)
@@ -176,6 +186,10 @@ class Tray(threading.Thread):
         if self.data:
             ctypes.windll.shell32.Shell_NotifyIconW(NIM_DELETE, ctypes.byref(self.data))
             self.data = None
+
+    def click(self) -> bool:
+        """Brings the window back from the notification area as a click on the icon would, from any thread."""
+        return bool(self.window and self.hwnd and self.user.PostMessageW(self.hwnd, WM_ICON, 0, WM_LBUTTONUP))
 
     def bring_back(self):
         self.remove_icon()

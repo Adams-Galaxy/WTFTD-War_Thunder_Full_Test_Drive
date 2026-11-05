@@ -12,17 +12,22 @@ import subprocess
 import sys
 import threading
 import time
+import urllib.error
+import urllib.request
 import webbrowser
 from pathlib import Path
 
 from .alarms import available, game_running
 from .paths import CACHE, FROZEN, USER, WEB, prepare
-from .server import ROOT, STATE, WATCH, page_closed, read_json, serve, wait_page_gone, write_json
+from . import server
+from .server import ROOT, STATE, WATCH, free_port, page_closed, read_json, serve, wait_page_gone, write_json
 
 GAME_CHECK_S = 5
 FIND_WINDOW_S = 20
 PLACE_S = 2  # how often the window's place is looked at, kept when it changes
 PLACE = USER / "window.json"  # a file of its own: the settings are written by the page too
+RUNNING = USER / "running.json"  # the port of the WTFTD running from this folder: started again, it shows that one
+CLOSING_S = 15  # a WTFTD closing (its window gone) is given this long to free its port
 # a window hidden, minimized or on another screen keeps its pings, curves and battle log going
 STAY_AWAKE = ("--disable-background-timer-throttling", "--disable-renderer-backgrounding", "--disable-backgrounding-occluded-windows")
 # macOS: Chromium browsers that support app windows (--app), executable inside the bundle
@@ -143,17 +148,51 @@ def window_options(tray) -> object | None:
     return icon
 
 
+def already_running(path: Path = RUNNING, wait: float = CLOSING_S) -> bool:
+    """Another WTFTD runs from this folder: its window comes to the front (its page opens, if it has no window of its own)
+    and this one stops. One closing is waited for: started on another port, the page lost the settings it keeps."""
+    port = read_json(path, {}).get("port")
+    if type(port) is not int or free_port(port) == port:  # nobody on it: the file stayed after a crash (Windows takes 2 s to refuse)
+        return False
+    if sys.platform == "win32":  # this process was started by the player: it may hand the front to the running one
+        import ctypes
+        ctypes.windll.user32.AllowSetForegroundWindow(-1)  # ASFW_ANY
+    try:
+        req = urllib.request.Request(f"http://127.0.0.1:{port}/api/show-window", data=b"", method="POST")  # no body: unread, Windows cut the answer
+        with urllib.request.urlopen(req, timeout=3) as r:
+            answer = json.load(r) if r.headers.get("Server", "").startswith("WTFTD") else None
+    except (OSError, ValueError) as e:  # not a WTFTD, or gone in between
+        if isinstance(e, urllib.error.HTTPError):
+            e.close()
+        return False
+    if not isinstance(answer, dict):
+        return False
+    if answer.get("shown"):
+        return True
+    if not answer.get("window"):
+        webbrowser.open(f"http://127.0.0.1:{port}/")
+        return True
+    end = time.monotonic() + wait  # a window it had is gone: closing
+    while time.monotonic() < end and free_port(port) != port:
+        time.sleep(0.25)
+    return False
+
+
 def main():
     if sys.stdout is None or (FROZEN and sys.platform == "darwin"):  # packaged app without a console: keep a log instead
         CACHE.mkdir(parents=True, exist_ok=True)
         sys.stdout = sys.stderr = open(CACHE / "wtftd.log", "w", encoding="utf-8", buffering=1)
     prepare()
     port = 8777
-    if "--port" in sys.argv:
+    if "--port" in sys.argv:  # a port of its own: a second WTFTD on purpose (tests, development)
         port = int(sys.argv[sys.argv.index("--port") + 1])
+    elif already_running():
+        return
     size = window_args()  # in logical pixels, like the browser's: before the overlay makes this process DPI-aware
     httpd, url = serve(port)
     threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    if "--port" not in sys.argv:
+        write_json(RUNNING, {"port": httpd.server_address[1]})
     print(f"WTFTD running at {url}  (Ctrl+C to quit)")
 
     exe = None if "--browser" in sys.argv or "--no-window" in sys.argv else find_app_browser()
@@ -173,6 +212,9 @@ def main():
             if available():
                 from . import tray
                 icon = window_options(tray)
+            if sys.platform == "win32":
+                from . import tray
+                server.SHOW_WINDOW = lambda: (icon.click() if icon else False) or tray.show()
             if sys.platform == "darwin":
                 # the browser outlives its closed window on macOS: quit when the page says bye
                 while proc.poll() is None and not page_closed():
@@ -200,6 +242,12 @@ def main():
             icon.stop()
         WATCH.stop()
         httpd.shutdown()
+        httpd.server_close()  # the port is free before the file says so
+        if read_json(RUNNING, {}).get("port") == httpd.server_address[1]:
+            try:
+                RUNNING.unlink()
+            except OSError:
+                pass
 
 
 if __name__ == "__main__":
