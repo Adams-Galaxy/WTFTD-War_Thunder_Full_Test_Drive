@@ -8,6 +8,21 @@ from unittest import mock
 from wtftd import armament, builder, patches, server, uninstall
 
 
+_NO_DEV = []
+
+
+def setUpModule():
+    """Not the dev server's data this PC may have built (.cache/dev): each test that wants one makes its own."""
+    tmp = tempfile.TemporaryDirectory()
+    _NO_DEV[:] = [tmp, mock.patch.object(patches, "DEV_DATA", Path(tmp.name) / "no-dev")]
+    _NO_DEV[1].start()
+
+
+def tearDownModule():
+    _NO_DEV[1].stop()
+    _NO_DEV[0].cleanup()
+
+
 def vehicle(vid="tank", **extra) -> dict:
     return {"id": vid, "c": "ground", "n": "usa", "r": 3, "br": [4.0, 4.3, 4.7], "s": {"spd": 50, "rel": 7.5, "armT": [100, 50, 30], "rp": 1000}, **extra}
 
@@ -52,7 +67,8 @@ class Compare(unittest.TestCase):
         old = db(vehicles=[vehicle(), vehicle("gone_one", n="ussr", c="air")])
         new = db("2.60.0.1", vehicles=[vehicle(), vehicle("brand_new")])
         new["names"]["units"]["brand_new"] = "New tank"
-        self.assertEqual(rows(old, new), [["brand_new", "new", None, "New tank"], ["gone_one", "gone", "Old tank", None, ["ussr", "air"]]])
+        self.assertEqual(rows(old, new), [["brand_new", "new", None, "New tank", ["usa", "ground", None, [4.0, 4.3, 4.7]]],
+                                          ["gone_one", "gone", "Old tank", None, ["ussr", "air"]]])
 
     def test_lists_say_what_came_and_went(self):
         old = db(vehicles=[vehicle(wp=["aim_9", "gbu_12"])])
@@ -250,11 +266,88 @@ class Build(unittest.TestCase):
         self.assertNotIn("patch", meta)
 
 
+class Dev(unittest.TestCase):
+    """The dev server's data (the datamine's newest version, built apart) beside the game's: one more entry, never kept."""
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.root = Path(tmp.name)
+        self.live, self.other = self.root / "data", self.root / "dev"
+        write(self.live, db("2.59.0.98"))
+        for name, value in (("FILE", self.root / "patches.json"), ("DATA", self.live), ("DEV_DATA", self.other)):
+            p = mock.patch.object(patches, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        patches._DEV.clear()
+
+    def test_none_until_built(self):
+        self.assertIsNone(patches.dev())
+        write(self.other, db("2.59.0.98"))
+        self.assertIsNone(patches.dev())  # the same version: nothing to set beside it
+
+    def test_the_dev_server_beside_the_game(self):
+        write(self.other, db("2.60.0.33", vehicles=[vehicle(br=[4.0, 4.7, 4.7])]))
+        d = patches.dev()
+        self.assertEqual((d["id"], d["dev"], d["from"], d["to"], d["rows"]), ("dev", 1, "2.59.0.98", "2.60.0.33", [["tank", "brrb", 4.3, 4.7]]))
+        self.assertNotIn("back", d)
+        self.assertIs(patches.dev(), d)  # compared once
+        self.assertEqual(patches.index()["patches"][0]["id"], "dev")
+        self.assertEqual(patches.rows("dev"), d["rows"])
+        self.assertFalse(patches.FILE.exists())  # never in the game's history
+
+    def test_a_datamine_behind_the_game(self):
+        write(self.other, db("2.59.0.94"))
+        self.assertTrue(patches.dev()["back"])
+
+
+class BuildDev(unittest.TestCase):
+    """builder.build_dev in its own process: the datamine into DEV/data, its progress in a file, the data of before kept on a failure."""
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.dev = Path(tmp.name) / "dev"
+        for target, name in ((builder, "DM"), (builder, "DATA"), (armament, "DATA")):  # build_dev sets them: its process is its own
+            p = mock.patch.object(target, name, getattr(target, name))
+            p.start()
+            self.addCleanup(p.stop)
+
+    def run_dev(self, build):
+        with mock.patch.object(builder, "DEV", self.dev), mock.patch.object(builder, "fetch_datamine") as fetch, \
+                mock.patch.object(builder, "_build", side_effect=build) as made:
+            builder.build_dev(self.dev / "status.json")
+        return fetch, made, json.loads((self.dev / "status.json").read_text(encoding="utf-8"))
+
+    def test_built_apart_without_history(self):
+        def build(progress, source, history):
+            (builder.DATA / "meta.json").parent.mkdir(parents=True, exist_ok=True)
+            (builder.DATA / "meta.json").write_text('{"version": "2.60.0.33"}')
+            progress("Building")
+            progress.set_frac(0.5)
+        fetch, made, st = self.run_dev(build)
+        self.assertEqual(made.call_args.args[1:], ("datamine",))
+        self.assertEqual(made.call_args.kwargs, {"history": False})
+        self.assertEqual(json.loads((self.dev / "data" / "meta.json").read_text())["version"], "2.60.0.33")
+        self.assertFalse((self.dev / "data.tmp").exists())
+        self.assertEqual((st["running"], st["error"], st["log"], st["progress"]), (False, None, ["Building"], 0.5))
+
+    def test_a_failure_keeps_the_data_of_before(self):
+        (self.dev / "data").mkdir(parents=True)
+        (self.dev / "data" / "meta.json").write_text('{"version": "2.60.0.31"}')
+        fetch, made, st = self.run_dev(RuntimeError("git failed"))
+        self.assertEqual((st["running"], st["error"]), (False, "git failed"))
+        self.assertEqual(json.loads((self.dev / "data" / "meta.json").read_text())["version"], "2.60.0.31")
+
+
 class Server(unittest.TestCase):
     def setUp(self):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         p = mock.patch.object(patches, "FILE", Path(tmp.name) / "patches.json")
+        p.start()
+        self.addCleanup(p.stop)
+        p = mock.patch.object(patches, "DEV_DATA", Path(tmp.name) / "no-dev")  # not the dev server's data of this PC
         p.start()
         self.addCleanup(p.stop)
         patches.FILE.write_text(json.dumps([{"id": "1.0-1.1", "from": "1.0", "to": "1.1", "at": 5, "rows": [["tank", "spd", 50, 60]]}]), encoding="utf-8")
@@ -270,6 +363,26 @@ class Server(unittest.TestCase):
         self.assertEqual(handler.send_json.call_args.args[0], [["tank", "spd", 50, 60]])
         server.Handler.get_api(handler, "changes/nope")
         self.assertEqual(handler.send_json.call_args.args[1], 404)
+
+    def test_the_dev_server_routes(self):
+        handler = mock.Mock()
+        with mock.patch.object(server.STATE, "data_source", lambda: "datamine"), mock.patch.object(server, "start_dev_build") as start:
+            server.Handler.post_api(handler, "dev-build", {})
+        start.assert_not_called()  # the game data is the datamine's already
+        self.assertEqual(handler.send_json.call_args.args[1], 400)
+        with mock.patch.object(server.STATE, "data_source", lambda: "game"), mock.patch.object(server, "start_dev_build") as start:
+            server.Handler.post_api(handler, "dev-build", {})
+        start.assert_called_once()
+        with mock.patch.object(server, "DEV_PROC", [mock.Mock(poll=lambda: None)]):
+            server.Handler.post_api(handler, "dev-remove", {})
+        self.assertEqual(handler.send_json.call_args.args[1], 400)  # not while it's being built
+
+    def test_the_datamine_ahead_of_the_game(self):
+        with mock.patch.object(server.vromfs, "version", lambda gd: "2.59.0.98"):
+            self.assertEqual(server.data_ahead({"source": "datamine", "version": "2.60.0.33"}, Path(".")), {"data": "2.60.0.33", "game": "2.59.0.98"})
+            self.assertIsNone(server.data_ahead({"source": "datamine", "version": "2.59.0.99"}, Path(".")))  # a live patch, not the dev server
+            self.assertIsNone(server.data_ahead({"source": "game", "version": "2.60.0.33"}, Path(".")))
+            self.assertIsNone(server.data_ahead({"source": "datamine", "version": "2.60.0.33"}, None))
 
     def test_the_update_says_how_many_changes(self):
         meta = {"version": "1.1", "vehicles": 1, "patch": "1.0-1.1", "changes": 7}

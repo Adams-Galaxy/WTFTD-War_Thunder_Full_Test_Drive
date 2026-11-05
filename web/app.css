@@ -156,6 +156,10 @@ kbd { font: 600 10.5px var(--font); color: var(--muted); border: 1px solid var(-
 .pill.ok .dot { background: var(--ok); box-shadow: 0 0 8px var(--ok); }
 .pill.bad .dot { background: var(--danger); box-shadow: 0 0 8px var(--danger); }
 .pill.bad { cursor: pointer; border-color: rgba(255, 100, 100, .35); }
+.pill-data { font: inherit; font-size: 12px; cursor: pointer; }
+.pill-data:hover { border-color: var(--line-hover); color: var(--text); }
+.pill-data.warn { border-color: rgba(255, 181, 71, .45); color: var(--warn); }
+.opt-list.flash { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 10px; transition: outline-color .4s; }
 
 /* ------------------------------------------------------------------ layout */
 .layout { display: flex; height: calc(100% - var(--top-h)); position: relative; }
@@ -645,6 +649,8 @@ option { background: var(--surface); }
 .update-banner.done { background: linear-gradient(90deg, rgba(95,207,138,.16), rgba(95,207,138,.04)); border-color: rgba(95,207,138,.3); color: var(--ok); }
 .update-banner.done b { color: var(--text); }
 .update-banner.err { background: rgba(255,100,100,.1); border-color: rgba(255,100,100,.3); color: var(--danger); }
+.update-banner.warn { background: rgba(255,181,71,.1); border-color: rgba(255,181,71,.3); color: var(--warn); }
+.update-banner.warn b { color: var(--text); }
 .update-banner .btn { margin-left: auto; }
 .update-banner .btn + .btn, .update-banner .btn + .icon-btn { margin-left: 0; }
 .spin { width: 14px; height: 14px; border-radius: 50%; border: 2px solid rgba(90,184,255,.3); border-top-color: var(--info); animation: spin .8s linear infinite; flex: none; }
@@ -1424,6 +1430,9 @@ td.hg-actions { height: 48px; }
 .ch-tabs { position: sticky; top: 0; z-index: 3; height: 46px; margin: 0; padding: 8px 0; align-items: center; flex-wrap: nowrap; overflow-x: auto; background: var(--bg); }
 .ch-tabs .chipbtn { flex: none; }
 .ch-note { display: flex; gap: 8px; align-items: flex-start; margin: 0 0 12px; color: var(--warn); }
+.ch-dev { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin: 0 0 12px; font-size: 12.5px; }
+.ch-dev:empty { display: none; }
+.ch-dev-err { flex-basis: 100%; color: var(--danger); }
 .ch-note svg { flex: none; margin-top: 2px; }
 .ch-rows .ar-scroll { max-width: 1100px; overflow: clip; }  /* the values stay near their names; clip, not a scroll box: the headers stay in view */
 .ch-table thead th { top: 46px; z-index: 2; box-shadow: inset 0 -1px var(--line); }  /* under the tabs */
@@ -1445,6 +1454,8 @@ td.hg-actions { height: 48px; }
 .ch-table .mb-link .flag { width: 22px; height: 14px; }
 .ch-table .tagx { margin-left: 8px; }
 .ch-sub { display: flex; flex-direction: column; gap: 1px; }
+.ch-who { display: inline-flex; align-items: center; gap: 8px; }
+.ch-who .flag { width: 22px; height: 14px; }
 .ch-sub .mb-link { display: inline; }
 .ch-more { margin-top: 8px; }
 .ch-line { display: flex; margin-top: 8px; font-size: 12px; color: var(--muted); }

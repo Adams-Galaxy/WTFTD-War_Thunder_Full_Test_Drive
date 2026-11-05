@@ -222,11 +222,14 @@ function renderStatus() {
   const game = st.gameFound
     ? `<span class="pill ok" title="${esc(st.gameDir)}"><span class="dot"></span>${esc(t('status.gameFound'))}</span>`
     : `<span class="pill bad" id="pillGame" title="${esc(t('settings.gameDirHint'))}"><span class="dot"></span>${esc(t('status.gameMissing'))}</span>`;
+  // where the data comes from, and a click to change it: the installed game, or the datamine (the dev server's when ahead of it)
+  const src = st.data?.source === 'game' ? 'game' : st.dataAhead ? 'dev' : 'datamine';
   const data = st.data?.version
-    ? `<span class="pill" title="${esc(t('settings.version', { version: st.data.version, date: new Date(st.data.built * 1000).toLocaleDateString(I18N.code) }))}">${esc(t('status.data', { version: st.data.version }))}</span>`
+    ? `<button class="pill pill-data${src === 'dev' ? ' warn' : ''}" id="pillData" title="${esc(`${t('settings.version', { version: st.data.version, date: new Date(st.data.built * 1000).toLocaleDateString(I18N.code) })} · ${t('source.from.' + (st.data.source || 'datamine'))}\n${t('status.dataHint')}`)}">${esc(t('status.data', { version: st.data.version }))} · ${esc(t('status.src.' + src))}</button>`
     : `<span class="pill bad"><span class="dot"></span>${esc(t('status.noData'))}</span>`;
   $('#status').innerHTML = game + data;
   $('#pillGame')?.addEventListener('click', openSettings);
+  $('#pillData')?.addEventListener('click', () => openSettings('source'));
   if (typeof renderAppVersion === 'function' && APP.info) renderAppVersion();
 }
 
@@ -1702,6 +1705,10 @@ function renderUpdateBanner(st) {
     el.innerHTML = `<b>${esc(t(patched ? 'update.available' : 'update.rebuild', { v: st.remote || S.status?.data?.version || '' }))}</b>
       <button class="btn btn-primary btn-sm" data-act="update">${esc(t('update.now'))}</button>`;
     el.querySelector('[data-act]').onclick = async () => { try { await api('update', {}); watchUpdates(); } catch (e) { toastErr(e); } };
+  } else if (S.status?.dataAhead) {  // the datamine runs ahead of the game: the dev server's vehicles and BRs, not the game's
+    el.className = 'update-banner warn';
+    el.innerHTML = `<b>${esc(t('update.ahead', S.status.dataAhead))}</b><button class="btn btn-sm" data-act="settings">${esc(t('update.aheadFix'))}</button>`;
+    el.querySelector('[data-act]').onclick = openSettings;
   } else {
     el.className = 'update-banner hidden';
   }
@@ -1717,7 +1724,7 @@ async function watchUpdates() {
 }
 
 // ------------------------------------------------------------------ settings & data update
-async function openSettings() {
+async function openSettings(part) {
   const st = S.status;
   let locales = [{ code: 'en', name: 'English' }];
   try { locales = await (await fetch('locales/index.json')).json(); } catch { /* keep default */ }
@@ -1751,6 +1758,11 @@ async function openSettings() {
   renderSource($('#setSource'), st.dataSource);
   $('#rowDatamine').classList.toggle('hidden', !(st.datamineCopy && st.data?.source === 'game'));
   $('#dlgSettings').showModal();
+  if (part === 'source') {  // the header's data button: straight to where the data comes from
+    $('#setSource').scrollIntoView({ block: 'center' });
+    $('#setSource').classList.add('flash');
+    setTimeout(() => $('#setSource').classList.remove('flash'), 1600);
+  }
 }
 
 // a host must be owned, and the hangar knows: with nothing marked there it has no opinion

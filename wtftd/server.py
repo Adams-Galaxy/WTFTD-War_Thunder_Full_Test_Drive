@@ -9,6 +9,7 @@ import re
 import shutil
 import socket
 import struct
+import subprocess
 import sys
 import threading
 import time
@@ -22,7 +23,7 @@ from urllib.parse import parse_qs, unquote, urlparse
 
 from . import DONATE, REPO, __version__, alarms, battle, bench, builder, cdk, challenges, flightlog, game, hangar, hud, maptex, mission, models, mods, patches, replays, sights, \
     terrain, uninstall, vromfs, waveout
-from .paths import CACHE, DATA, HOME, USER, WEB
+from .paths import CACHE, DATA, FROZEN, HOME, USER, WEB
 
 ROOT = HOME
 IMG_CACHE = CACHE / "img"
@@ -282,6 +283,48 @@ def wait_page_gone(first: float = 30.0, silence: float = 60.0):
         time.sleep(1)
 
 
+# --------------------------------------------------------------------------- the dev server's data
+
+DEV_STATUS = builder.DEV / "status.json"
+DEV_PROC: list = []  # the dev build started in this session: a process of its own, builder's DM and DATA are global
+
+
+def dev_running() -> bool:
+    return bool(DEV_PROC) and DEV_PROC[0].poll() is None
+
+
+def dev_status() -> dict:
+    """What changed's dev server part: its data (the datamine's newest version, built apart) and the build under way."""
+    st = read_json(DEV_STATUS, {}) if DEV_PROC else {}  # a build of an earlier session is over, whatever its file says
+    meta = read_json(builder.DEV / "data" / "meta.json", {})
+    return {"running": dev_running(), "log": (st.get("log") or [])[-1:], "progress": st.get("progress", 0.0),
+            "error": None if dev_running() else st.get("error"), "dev": meta.get("version"), "built": meta.get("built"),
+            "live": read_json(DATA / "meta.json", {}).get("version")}
+
+
+def start_dev_build():
+    if dev_running():
+        return
+    builder.DEV.mkdir(parents=True, exist_ok=True)
+    DEV_STATUS.unlink(missing_ok=True)
+    here = Path(__file__).resolve().parent.parent  # where python -m finds the package; the exe is the app itself
+    cmd = [sys.executable, "--build-dev"] if FROZEN else [sys.executable, "-m", "wtftd", "--build-dev"]
+    DEV_PROC[:] = [subprocess.Popen(cmd, cwd=str(here), stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                    creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))]
+
+
+def data_ahead(meta: dict, gd) -> dict | None:
+    """The datamine as the source, a major version ahead of the installed game: its vehicles and BRs are the dev server's."""
+    if meta.get("source") != "datamine" or not gd:
+        return None
+    try:
+        installed = vromfs.version(gd)
+    except Exception:  # updating, or not readable: nothing to say
+        return None
+    major = lambda v: tuple(int(x) for x in str(v).split(".")[:2] if x.isdigit())
+    return {"data": meta["version"], "game": installed} if major(meta.get("version")) > major(installed) else None
+
+
 # --------------------------------------------------------------------------- API
 
 def api_status():
@@ -298,6 +341,7 @@ def api_status():
         "data": meta,
         "dataReady": (DATA / "vehicles.json").exists(),
         "dataSource": STATE.data_source(),
+        "dataAhead": data_ahead(meta, gd),
         "gameSourceIssue": "python" if not vromfs.available() else None if gd else "game",
         "datamineCopy": builder.DATAMINE.is_dir(),
         "home": str(HOME),  # where WTFTD keeps its files (the welcome screen says so before the first download)
@@ -657,6 +701,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_game_bytes(path.read_bytes() if path else None)
         if route == "changes":
             return self.send_json(patches.index())
+        if route == "dev":
+            return self.send_json(dev_status())
         if route.startswith("changes/"):
             rows = patches.rows(route.split("/", 1)[1])
             return self.send_json(rows) if rows is not None else self.send_json({"error": "not found"}, 404)
@@ -1028,6 +1074,18 @@ class Handler(BaseHTTPRequestHandler):
             elif "data" in parts:
                 STATE.reload()
             return self.send_json(res)
+        if route == "dev-build":  # What changed: the dev server's data, on request (the datamine is ~1 GB the first time)
+            if STATE.data_source() != "game":
+                return self.send_json({"error": "The game data already comes from the datamine."}, 400)
+            start_dev_build()
+            return self.send_json(dev_status())
+        if route == "dev-remove":
+            if dev_running():
+                return self.send_json({"error": "The dev server's data is being built."}, 400)
+            shutil.rmtree(builder.DEV, ignore_errors=True)
+            if builder.DM != builder.DATAMINE and not STATE.update["running"]:  # the datamine copy only served it
+                builder.remove_datamine()
+            return self.send_json(dev_status())
         if route == "remove-datamine":  # never on its own: the player asked, and the data no longer comes from it
             if builder.DM == builder.DATAMINE or STATE.update["running"]:
                 return self.send_json({"error": "The game data still needs the datamine copy."}, 400)

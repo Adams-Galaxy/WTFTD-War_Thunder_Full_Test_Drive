@@ -179,6 +179,9 @@ def already_running(path: Path = RUNNING, wait: float = CLOSING_S) -> bool:
 
 
 def main():
+    if "--build-dev" in sys.argv:  # started by the app (What changed): before the log below, which the app is writing
+        from . import builder
+        return builder.build_dev(builder.DEV / "status.json")
     if sys.stdout is None or (FROZEN and sys.platform == "darwin"):  # packaged app without a console: keep a log instead
         CACHE.mkdir(parents=True, exist_ok=True)
         sys.stdout = sys.stderr = open(CACHE / "wtftd.log", "w", encoding="utf-8", buffering=1)

@@ -10,9 +10,10 @@ import json
 import re
 from pathlib import Path
 
-from .paths import USER
+from .paths import CACHE, DATA, USER
 
 FILE = USER / "patches.json"
+DEV_DATA = CACHE / "dev" / "data"  # builder.DEV's (builder imports this module): the datamine's newest version, built apart
 KEEP = 30  # patches, newest first
 WEAPON_FLAGS = ("ccm", "act", "ins", "dl", "loft", "ff", "wire", "iw")
 NAMED = {"weapon": "weapons", "bullet": "bullets", "sensor": "sensors"}  # a list's unit -> its section of data/lang
@@ -256,7 +257,9 @@ def compare(old: dict, new: dict) -> dict:
     bump = old["meta"].get("schema") != new["meta"].get("schema")
     names = old["names"], new["names"]
     a, b = _vehicles(old), _vehicles(new)
-    rows = [[i, "new", None, new["names"].get("units", {}).get(i, i)] for i in sorted(b.keys() - a.keys())]
+    # a new one's nation, type, class and BRs: the page has them from the new data, but not from a dev server's
+    rows = [[i, "new", None, new["names"].get("units", {}).get(i, i), [b[i].get("n"), b[i].get("c"), b[i].get("k"), b[i].get("br")]]
+            for i in sorted(b.keys() - a.keys())]
     rows += [[i, "gone", old["names"].get("units", {}).get(i, i), None, [a[i].get("n"), a[i].get("c")]] for i in sorted(a.keys() - b.keys())]
     rows += _rows(a, b, "v", bump, names) + _shell_rows(_shells(a), _shells(b), bump, names)
     a, b = _weapons(old), _weapons(new)
@@ -313,12 +316,33 @@ def _counts(rows: list) -> dict:
     return out
 
 
+_DEV: dict = {}  # (both builds) -> their comparison: two databases are read and compared once, not at each visit
+
+
+def dev(live: Path | None = None, other: Path | None = None) -> dict | None:
+    """The game's data beside the dev server's (the datamine's newest version, built apart on request): an entry like a patch's,
+    id "dev", from the game's version to the datamine's. None without it, or at the same version. Never kept in FILE."""
+    live, other = live or DATA, other or DEV_DATA
+    a, b = (_load(f / "meta.json") or {} for f in (live, other))
+    if not a.get("version") or not b.get("version") or a["version"] == b["version"]:
+        return None
+    key = (str(live), a.get("built"), b.get("built"), a["version"], b["version"])
+    if key not in _DEV:
+        _DEV.clear()
+        _DEV[key] = {**compare(read(live), read(other)), "id": "dev", "dev": 1}
+    return _DEV[key]
+
+
 def index() -> dict:
-    """What the page needs before opening a patch: the table, and the patches without their rows."""
+    """What the page needs before opening a patch: the table, and the patches without their rows; the dev server's first."""
     keys = ("group", "of", "label", "unit", "better", "digits")
+    d = dev()
     return {"groups": GROUPS, "fields": {f[0]: dict(zip(keys, (*f[1:3], *f[4:]))) for f in FIELDS},
-            "patches": [{**{k: v for k, v in p.items() if k != "rows"}, "counts": _counts(p["rows"])} for p in load()]}
+            "patches": [{**{k: v for k, v in p.items() if k != "rows"}, "counts": _counts(p["rows"])} for p in [*([d] if d else []), *load()]]}
 
 
 def rows(pid: str) -> list | None:
+    if pid == "dev":
+        d = dev()
+        return d["rows"] if d else None
     return next((p["rows"] for p in load() if p.get("id") == pid), None)

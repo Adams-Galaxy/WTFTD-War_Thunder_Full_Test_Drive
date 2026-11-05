@@ -61,6 +61,7 @@ SPARSE = [
 ]
 DATAMINE = DM
 GAMEFILES = CACHE / "gamefiles"  # the installed game's files, unpacked with the datamine's layout
+DEV = CACHE / "dev"  # the datamine's newest version built apart (build_dev): What changed sets it beside the game's
 
 # CSV column -> short language code used by the app
 LANG_COLUMNS = {
@@ -369,6 +370,47 @@ def fetch_gamefiles(game_dir: Path | None, progress=None):
     finally:
         shutil.rmtree(tmp, ignore_errors=True)  # after a failure: don't leave 650 MB behind
     report(progress, 0.45)
+
+
+def build_dev(status: Path):
+    """In a process of its own (`wtftd --build-dev`): the datamine's newest version, the dev server's while one is open, built
+    into DEV / "data" for What changed to set beside the game's. The app's data, its game files and its history are left
+    alone: DM and DATA are this process's. Progress and the end go to status (JSON), for the app to read."""
+    global DM, DATA
+    from . import armament
+    st = {"running": True, "log": [], "progress": 0.0, "error": None}
+
+    def save():
+        tmp = status.with_suffix(".tmp")
+        tmp.write_text(json.dumps(st), encoding="utf-8")
+        tmp.replace(status)
+
+    class Progress:
+        def __call__(self, msg):
+            st["log"] = [*st["log"], msg][-50:]
+            save()
+
+        def set_frac(self, frac):
+            st["progress"] = max(st["progress"], frac)
+            save()
+
+    status.parent.mkdir(parents=True, exist_ok=True)
+    save()
+    out, tmp = DEV / "data", DEV / "data.tmp"
+    try:
+        DM = DATAMINE
+        fetch_datamine(Progress())
+        shutil.rmtree(tmp, ignore_errors=True)
+        DATA = armament.DATA = tmp
+        _build(Progress(), "datamine", history=False)
+        shutil.rmtree(out, ignore_errors=True)
+        tmp.replace(out)
+    except Exception as e:  # the app shows it; the dev data of before, if any, stays
+        st["error"] = str(e) or type(e).__name__
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+        st["running"] = False
+        save()
 
 
 def remove_datamine():
@@ -2522,13 +2564,13 @@ def build(pull: bool = True, progress=None, source: str = "datamine", game_dir: 
     return meta
 
 
-def _build(progress, source: str):
+def _build(progress, source: str, history: bool = True):
     t0 = time.time()
     if not DM.exists():
         raise RuntimeError("Datamine not found. Run without --no-pull first.")
     DATA.mkdir(exist_ok=True)
     version = (DM / "version").read_text().strip() if (DM / "version").exists() else "?"
-    before = patches.snapshot(DATA, version)  # now: the first files are replaced long before "Writing database"
+    before = patches.snapshot(DATA, version) if history else None  # now: the first files are replaced long before "Writing database"
     log("Loading game localization...", progress)
     report(progress, 0.46)
     lang = Lang()

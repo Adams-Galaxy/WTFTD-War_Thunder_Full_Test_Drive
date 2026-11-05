@@ -4,6 +4,20 @@ What changed in each version of WTFTD. Downloads: [Releases](https://github.com/
 (only the latest version is kept there; from 0.19.0 on, each version's code stays available through its git tag).
 Versions follow `major.minor.patch`; "beta" until 1.0.
 
+## 0.25.4 - not released yet
+
+- **What changed compares your game with the dev server**: *Compare with the dev server* downloads the community datamine
+  (about 1 GB the first time) and builds its newest version apart, in its own process and its own folder, in a few
+  minutes; it then shows as one more entry, *Dev server … ↔ your game …*, with the same tabs. Your game data and your
+  patch history stay as they are. The datamine follows the dev server while one is open (2.60 against the game's 2.59 on
+  2026-11-05); *Update* and *Remove* are next to it. With the datamine as the game data's source there is nothing to
+  compare: it's offered when WTFTD reads your installed game.
+- **The datamine as the source, ahead of your game, is said**: a banner tells that its vehicles and BRs are the dev
+  server's, with a way to read the installed game instead.
+- **The data button at the top says where the data comes from** (*your game*, *datamine*, or *dev server (datamine)*) and
+  opens Settings at the source, to switch.
+- **What changed**: a new vehicle shows its flag, type and BR even when only the dev server has it.
+
 ## 0.25.3 - 2026-11-05
 
 - **BR filters go up to the highest BR in the game data** (15.0 now): they stopped at 14.3, written in the code. A

@@ -76,13 +76,15 @@ function chSubject(r) {
     return it ? `<button class="mb-link" data-chweapon="${esc(it.id)}">${ammoIcon(it.ic)}<span>${esc(r.name)}</span></button>` : esc(r.name);
   }
   if (f.group === 'map') return k === 'm.gone' ? esc(r.name) : mbMap(r[0]);
-  return v ? `${mbVehicle(r[0], flagHTML(v.n) + unitImgTag(r[0]))}${v.h || v.ra === 6 ? rarityTag(v) : ''}` : esc(r.name);
+  if (v) return `${mbVehicle(r[0], flagHTML(v.n) + unitImgTag(r[0]))}${v.h || v.ra === 6 ? rarityTag(v) : ''}`;
+  return Array.isArray(r[4]) && r[4][0] ? `<span class="ch-who">${flagHTML(r[4][0])}${esc(r.name)}</span>` : esc(r.name);  // only on the dev server, or gone
 }
 
 // the value column of what's new or removed: it has no before and after
 function chWhat(r) {
   const v = S.byId.get(r[0]), it = AR.byId.get(r[0]);
   if (v) return `${className(v.k)}${v.r ? ` · ${t('rank', { r: ROMAN[v.r] || v.r })}` : ''}`;
+  if (r[1] === 'new' && Array.isArray(r[4])) return className(r[4][2]);  // a dev server's: what the comparison kept of it
   return it ? t('arm.cat.' + it.c) : '—';
 }
 
@@ -100,7 +102,8 @@ function chSubjects(rows) {
 function chChange(r) {
   const k = r[1], f = CH.fields[k], v = S.byId.get(r[0]);
   if (f.of === '') {
-    const after = k === 'new' && v ? esc(`BR ${fmtBR(brOf(v))}`) : `<span class="chip ${k.endsWith('new') ? 'info' : 'dim'}">${esc(t(f.label))}</span>`;
+    const br = k !== 'new' ? null : v ? brOf(v) : Array.isArray(r[4]) ? r[4][3]?.[S.f.brMode] : null;
+    const after = br != null ? esc(`BR ${fmtBR(br)}`) : `<span class="chip ${k.endsWith('new') ? 'info' : 'dim'}">${esc(t(f.label))}</span>`;
     return `<span class="ch-k">${esc(chWhat(r))}</span><span></span><span></span><span>${after}</span>`;
   }
   const dir = chDir(f, r[2], r[3]), now = esc(chValue(r, f, r[3]));
@@ -152,7 +155,8 @@ function chRender() {
   const present = CH.groups.filter(g => CH.subjects[g]);
   const [up, down] = CH.subjects.br ? chUpDown(CH.subjects.br) : [0, 0];
   const ud = up || down ? `<span class="ch-ud"><span class="ch-d up">▲ ${I18N.num(up)}</span><span class="ch-d down">▼ ${I18N.num(down)}</span></span>` : '';
-  const notes = [p.back && t('ch.back', { from: p.from, to: p.to }), p.schema && t('ch.schema')].filter(Boolean);
+  const notes = [p.dev ? t(p.back ? 'ch.devBehind' : 'ch.devNote', { dev: p.to, live: p.from }) : p.back && t('ch.back', { from: p.from, to: p.to }),
+    p.schema && t('ch.schema')].filter(Boolean);
   const tab = present.includes(CH.tab) ? CH.tab : present[0];  // the one picked, while the filters leave it something
   body.innerHTML = `${notes.map(x => `<p class="hint ch-note">${icon('target', 'ic-sm')}<span>${esc(x)}</span></p>`).join('')}
     ${present.length ? `<div class="ar-cats ch-tabs" role="tablist">${present.map(g => `<button class="chipbtn${g === tab ? ' active' : ''}" role="tab" data-chtab="${g}">
@@ -181,9 +185,12 @@ function chFilters() {
   chRender();
 }
 
+// the game's patches, newest first: the dev server's entry isn't one
+const chPatches = () => CH.patches.filter(p => !p.dev);
+
 function chUnseen() {
-  const at = CH.patches.findIndex(p => p.id === CH.seen);
-  const list = CH.patches.slice(0, at < 0 ? undefined : at).filter(p => !p.back);
+  const real = chPatches(), at = real.findIndex(p => p.id === CH.seen);
+  const list = real.slice(0, at < 0 ? undefined : at).filter(p => !p.back);
   const n = list.reduce((sum, p) => sum + Object.values(p.counts).reduce((a, b) => a + b, 0), 0);
   $('#changeCount').textContent = n ? I18N.num(n) : '';
 }
@@ -194,7 +201,8 @@ const chBannerDue = st => !!st.patch && st.patch !== CH.seen && st.patch !== CH.
 async function chLoad() {
   Object.assign(CH, await api('changes'));
   chUnseen();
-  const last = CH.patches[0];
+  const last = chPatches()[0];
+  CH.touched.clear();
   if (!last || last.back) return;  // gone back: what the latest patch moved isn't what the panel shows
   const rows = CH.cache[last.id] ||= await api('changes/' + last.id);
   for (const r of rows) {
@@ -207,7 +215,7 @@ async function chLoad() {
 // the vehicle panel's quiet line
 function chPanelLine(v) {
   const n = CH.touched.get(v.id);
-  return n ? `<button class="mb-link ch-line" data-act="changes">${esc(t('ch.vehicleLine', { v: CH.patches[0].to, n: I18N.num(n) }))}</button>` : '';
+  return n ? `<button class="mb-link ch-line" data-act="changes">${esc(t('ch.vehicleLine', { v: chPatches()[0].to, n: I18N.num(n) }))}</button>` : '';
 }
 
 function chShowVehicle(v) {
@@ -222,21 +230,68 @@ function chShowVehicle(v) {
 async function openChangesView() {
   try {
     await CH.loading;
-    CH.seen = CH.patches[0]?.id || CH.seen;
+    chDev();
+    CH.seen = chPatches()[0]?.id || CH.seen;
     store.set('changesSeen', CH.seen);
     chUnseen();
     $('#updateBanner.done')?.classList.add('hidden');
-    $('#chPatch').innerHTML = CH.patches.map(p => `<option value="${esc(p.id)}">${esc(`${p.from} → ${p.to} · ${new Date(p.at * 1000).toLocaleDateString(I18N.code)}${p.back ? ` · ${t('ch.backShort')}` : ''}`)}</option>`).join('');
+    const day = p => new Date(p.at * 1000).toLocaleDateString(I18N.code);
+    $('#chPatch').innerHTML = CH.patches.map(p => `<option value="${esc(p.id)}">${esc(p.dev ? t('ch.devOption', { dev: p.to, live: p.from, date: day(p) })
+      : `${p.from} → ${p.to} · ${day(p)}${p.back ? ` · ${t('ch.backShort')}` : ''}`)}</option>`).join('');
     if (!CH.patches.length) return chRender();
     if (!AR.data) await openWeaponsView();  // names, carriers and links of the weapons
-    if (!CH.patches.some(p => p.id === CH.id)) await chPick(CH.patches[0].id);
+    if (!CH.patches.some(p => p.id === CH.id)) await chPick((chPatches()[0] || CH.patches[0]).id);  // the game's latest patch first
     else chRender();
     $('#chPatch').value = CH.id;
   } catch (e) { toastErr(e); }
 }
 
+// the dev server: the datamine's newest version, built apart on request and set beside the game's data as one more entry
+async function chDev() {
+  clearTimeout(CH.devPoll);
+  const box = $('#chDev');
+  if (S.status.dataSource !== 'game') { box.innerHTML = ''; return; }  // the game data is the datamine's already
+  let st;
+  try { st = await api('dev'); } catch { return; }
+  const was = CH.devRunning;
+  CH.devRunning = st.running;
+  const date = st.built ? new Date(st.built * 1000).toLocaleDateString(I18N.code) : '';
+  box.innerHTML = st.running
+    ? `<span class="spin"></span><b>${esc(t('ch.devBuilding', { n: Math.round((st.progress || 0) * 100) }))}</b><span class="muted">${esc(st.log[0] || '')}</span>`
+    : `${st.dev ? `<span>${esc(t('ch.devHave', { v: st.dev, date }))}</span><button class="btn btn-sm" data-dev="dev-build">${esc(t('ch.devUpdate'))}</button>
+        <button class="btn btn-sm" data-dev="dev-remove">${esc(t('ch.devRemove'))}</button>`
+      : `<span class="muted">${esc(t('ch.devHint'))}</span><button class="btn btn-sm" data-dev="dev-build">${esc(t('ch.devStart'))}</button>`}
+      ${st.error ? `<span class="ch-dev-err">${esc(t('ch.devError', { e: st.error }))}</span>` : ''}`;
+  if (st.running) CH.devPoll = setTimeout(chDev, 1500);
+  else if (was) {  // just built: its entry joins the list, and opens
+    delete CH.cache.dev;
+    CH.loading = chLoad();
+    await openChangesView();
+    if (CH.patches.some(p => p.dev)) {
+      await chPick('dev');
+      $('#chPatch').value = 'dev';
+    }
+  }
+}
+
 function bindChanges() {
   CH.loading = chLoad().catch(() => {});
+  $('#chDev').addEventListener('click', async e => {
+    const b = e.target.closest('[data-dev]');
+    if (!b) return;
+    b.disabled = true;
+    try {
+      await api(b.dataset.dev, {});
+      if (b.dataset.dev === 'dev-remove') {
+        delete CH.cache.dev;
+        if (CH.id === 'dev') CH.id = '';
+        CH.loading = chLoad();
+        return openChangesView();
+      }
+      CH.devRunning = true;  // the view opens what it built once it's done
+      chDev();
+    } catch (err) { toastErr(err); b.disabled = false; }
+  });
   $('#chNation').innerHTML = `<option value="">${esc(t('arm.allNations'))}</option>${NATIONS.map(n => `<option value="${n}">${esc(nationName(n))}</option>`).join('')}`;
   $('#chCat').innerHTML = `<option value="">${esc(t('ch.allTypes'))}</option>${CATS.slice(1).map(c => `<option value="${c}">${esc(t('cat.' + c))}</option>`).join('')}`;
   $('#chPatch').addEventListener('change', e => chPick(e.target.value).catch(toastErr));
