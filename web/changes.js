@@ -1,9 +1,9 @@
 /* WTFTD — What changed: everything that moved between two game versions (wtftd/patches.py, which also holds the table of what's
-   compared: labels, units and colours come from it). One patch at a time, its groups closed: a group's rows are made when it opens. */
+   compared: labels, units and colours come from it). One patch at a time, one group at a time in its tab. */
 'use strict';
 
 const CH_PAGE = 200;  // vehicles, weapons or maps added at a time: a patch can move every battle rating of the game
-const CH = { groups: [], fields: {}, patches: [], rows: null, id: '', cache: {}, subjects: {}, open: new Set(), more: {}, touched: new Map(),
+const CH = { groups: [], fields: {}, patches: [], rows: null, id: '', cache: {}, subjects: {}, tab: store.get('changesTab', 'br'), more: {}, touched: new Map(),
              q: '', nat: '', cat: '', mode: '', mine: false, seen: store.get('changesSeen', ''), hidden: '', loading: null };
 
 // a value that's a name, or a list of them: what the table's unit says
@@ -142,10 +142,11 @@ function chRender() {
   const [up, down] = CH.subjects.br ? chUpDown(CH.subjects.br) : [0, 0];
   const ud = up || down ? `<span class="ch-ud"><span class="ch-d up">▲ ${I18N.num(up)}</span><span class="ch-d down">▼ ${I18N.num(down)}</span></span>` : '';
   const notes = [p.back && t('ch.back', { from: p.from, to: p.to }), p.schema && t('ch.schema')].filter(Boolean);
+  const tab = present.includes(CH.tab) ? CH.tab : present[0];  // the one picked, while the filters leave it something
   body.innerHTML = `${notes.map(x => `<p class="hint ch-note">${icon('target', 'ic-sm')}<span>${esc(x)}</span></p>`).join('')}
-    ${present.length ? `<div class="vstats mb-totals ch-totals">${present.map(g => `<button class="vstat" data-chgroup="${g}"><span>${esc(t('ch.group.' + g))}</span><b>${I18N.num(CH.subjects[g].length)}</b></button>`).join('')}</div>` : `<div class="empty"><p>${esc(t('ch.none'))}</p></div>`}
-    ${present.map(g => `<details class="ch-group" data-g="${g}"${CH.open.has(g) ? ' open' : ''}><summary><span>${esc(t('ch.group.' + g))}</span><span class="tab-count">${I18N.num(CH.subjects[g].length)}</span>${g === 'br' ? ud : ''}</summary>
-      <div class="ch-rows">${CH.open.has(g) ? chTable(g) : ''}</div></details>`).join('')}`;
+    ${present.length ? `<div class="ar-cats ch-tabs" role="tablist">${present.map(g => `<button class="chipbtn${g === tab ? ' active' : ''}" role="tab" data-chtab="${g}">
+      ${esc(t('ch.group.' + g))}<span class="n">${I18N.num(CH.subjects[g].length)}</span>${g === 'br' ? ud : ''}</button>`).join('')}</div>
+    <div class="ch-rows">${chTable(tab)}</div>` : `<div class="empty"><p>${esc(t('ch.none'))}</p></div>`}`;
 }
 
 // a patch's rows, sorted once: by name, a vehicle's values together
@@ -240,22 +241,19 @@ function bindChanges() {
     chFilters();
   });
   const body = $('#chBody');
-  body.addEventListener('toggle', e => {  // it doesn't bubble: seen on the way down
-    const box = e.target, g = box.dataset?.g;
-    if (!g) return;
-    if (box.open) { CH.open.add(g); box.querySelector('.ch-rows').innerHTML = chTable(g); }
-    else { CH.open.delete(g); box.querySelector('.ch-rows').innerHTML = ''; }
-  }, true);
   body.addEventListener('click', e => {
-    const b = e.target.closest('[data-chgroup], [data-chmore], [data-chweapon]');
-    if (b?.dataset.chgroup) {
-      const box = $(`details[data-g="${b.dataset.chgroup}"]`);
-      box.open = true;
-      box.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    const b = e.target.closest('[data-chtab], [data-chmore], [data-chweapon]');
+    if (b?.dataset.chtab) {
+      CH.tab = b.dataset.chtab;
+      store.set('changesTab', CH.tab);
+      chRender();
+      // scrolled down another tab's list: this one starts right under the tabs, which stay at the top
+      const page = $('.content'), below = $('#chBody .ch-rows').getBoundingClientRect().top - page.getBoundingClientRect().top - $('#chBody .ch-tabs').offsetHeight;
+      if (below < 0) page.scrollTop += below;
     } else if (b?.dataset.chmore) {
       const g = b.dataset.chmore;
       CH.more[g] = (CH.more[g] || CH_PAGE) + CH_PAGE;
-      $(`details[data-g="${g}"] .ch-rows`).innerHTML = chTable(g);
+      $('#chBody .ch-rows').innerHTML = chTable(g);
     } else if (b?.dataset.chweapon) openWeapon(b.dataset.chweapon);
     else mbFollow(e);
   });
