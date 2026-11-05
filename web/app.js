@@ -223,9 +223,9 @@ function renderStatus() {
     ? `<span class="pill ok" title="${esc(st.gameDir)}"><span class="dot"></span>${esc(t('status.gameFound'))}</span>`
     : `<span class="pill bad" id="pillGame" title="${esc(t('settings.gameDirHint'))}"><span class="dot"></span>${esc(t('status.gameMissing'))}</span>`;
   // where the data comes from, and a click to change it: the installed game, or the datamine (the dev server's when ahead of it)
-  const src = st.data?.source === 'game' ? 'game' : st.dataAhead ? 'dev' : 'datamine';
+  const src = st.data?.source === 'game' ? (st.data.circuit === 'dev' ? 'gamedev' : 'game') : st.dataAhead ? 'dev' : 'datamine';
   const data = st.data?.version
-    ? `<button class="pill pill-data${src === 'dev' ? ' warn' : ''}" id="pillData" title="${esc(`${t('settings.version', { version: st.data.version, date: new Date(st.data.built * 1000).toLocaleDateString(I18N.code) })} · ${t('source.from.' + (st.data.source || 'datamine'))}\n${t('status.dataHint')}`)}">${esc(t('status.data', { version: st.data.version }))} · ${esc(t('status.src.' + src))}</button>`
+    ? `<button class="pill pill-data${src.endsWith('dev') ? ' warn' : ''}" id="pillData" title="${esc(`${t('settings.version', { version: st.data.version, date: new Date(st.data.built * 1000).toLocaleDateString(I18N.code) })} · ${t('source.from.' + (st.data.source || 'datamine'))}\n${t('status.dataHint')}`)}">${esc(t('status.data', { version: st.data.version }))} · ${esc(t('status.src.' + src))}</button>`
     : `<span class="pill bad"><span class="dot"></span>${esc(t('status.noData'))}</span>`;
   $('#status').innerHTML = game + data;
   $('#pillGame')?.addEventListener('click', openSettings);

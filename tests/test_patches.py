@@ -253,6 +253,20 @@ class Build(unittest.TestCase):
         self.assertGreaterEqual(meta["changes"], 1)
         self.assertTrue(self.file.exists())
 
+    def test_the_data_keeps_the_circuit_it_was_built_from(self):
+        with mock.patch.object(builder, "fetch_gamefiles"), mock.patch("wtftd.game.circuit", lambda gd: "dev"), \
+                mock.patch.object(builder, "_build", return_value={}) as made, mock.patch.object(builder, "DM", builder.DM):
+            builder.build(source="game", game_dir=Path("."))
+        self.assertEqual(made.call_args.kwargs, {"circuit": "dev"})
+        lang = mock.Mock()
+        lang.write.side_effect = lambda: ["en"]
+        with mock.patch.multiple(builder, Lang=mock.Mock(return_value=lang), apply_rarity=mock.Mock(), build_vehicles=mock.Mock(return_value=([vehicle()], {})),
+                                 build_scenarios=mock.Mock(return_value=[]), build_trees=mock.Mock(return_value={}), build_levels=mock.Mock(return_value={}),
+                                 build_bullet_icons=mock.Mock(return_value={}), build_battle_words=mock.Mock(return_value={}),
+                                 build_bases=mock.Mock(return_value={}), DATA=self.data, DM=self.dm), \
+                mock.patch.object(patches, "FILE", self.file), mock.patch.object(armament, "build_armament"):
+            self.assertEqual(builder._build(None, "game", circuit="dev")["circuit"], "dev")
+
     def test_a_failed_build_leaves_no_entry(self):
         with self.assertRaises(RuntimeError):
             self.run_build(fail="build_bases")  # vehicles.json is written by then, meta.json isn't
@@ -295,6 +309,14 @@ class Dev(unittest.TestCase):
         self.assertEqual(patches.index()["patches"][0]["id"], "dev")
         self.assertEqual(patches.rows("dev"), d["rows"])
         self.assertFalse(patches.FILE.exists())  # never in the game's history
+
+    def test_a_patch_built_from_a_dev_client_says_so(self):
+        new = db("2.60.0.33")
+        new["meta"]["circuit"] = "dev"
+        old = db("2.59.0.98")
+        old["meta"]["circuit"] = "production"
+        self.assertEqual(patches.compare(old, new).get("circuit"), "dev")
+        self.assertNotIn("circuit", patches.compare(new, old))  # back to the live game: marked as going back, as before
 
     def test_a_datamine_behind_the_game(self):
         write(self.other, db("2.59.0.94"))

@@ -2552,10 +2552,11 @@ def build(pull: bool = True, progress=None, source: str = "datamine", game_dir: 
     files of the data it has."""
     global DM
     before, DM = DM, GAMEFILES if source == "game" else DATAMINE
+    from .game import circuit
     try:
         if pull:
             fetch_gamefiles(game_dir, progress) if source == "game" else fetch_datamine(progress)
-        meta = _build(progress, source)
+        meta = _build(progress, source, circuit=circuit(game_dir) if source == "game" else None)
     except BaseException:
         DM = before
         raise
@@ -2564,7 +2565,7 @@ def build(pull: bool = True, progress=None, source: str = "datamine", game_dir: 
     return meta
 
 
-def _build(progress, source: str, history: bool = True):
+def _build(progress, source: str, history: bool = True, circuit: str | None = None):
     t0 = time.time()
     if not DM.exists():
         raise RuntimeError("Datamine not found. Run without --no-pull first.")
@@ -2600,6 +2601,8 @@ def _build(progress, source: str, history: bool = True):
         json.dump(build_bases(), f, separators=(",", ":"))
     codes = lang.write()
     meta = {"version": version, "schema": SCHEMA, "source": source, "built": int(time.time()), "vehicles": len(vehicles), "scenarios": len(scenarios), "langs": codes}
+    if circuit:  # the installed game's servers: "dev" for a dev server client
+        meta["circuit"] = circuit
     with open(DATA / "meta.json", "w", encoding="utf-8") as f:
         json.dump(meta, f, indent=1)
     try:

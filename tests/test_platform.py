@@ -38,6 +38,19 @@ class GameFolder(unittest.TestCase):
         self.root.mkdir()
         self.assertIsNone(game.resolve_game_dir(self.root))
 
+    def test_which_servers_an_install_plays_on(self):
+        files = self.install(Path("."))
+        self.assertIsNone(game.circuit(files))  # no config.blk yet
+        self.assertIsNone(game.circuit(None))
+        live = b'graphics{\n  vsync:b=yes\n}\nyunetwork{\n  curCircuit:t="production"\n}\nlogin:t="someone"\n'
+        (files / "config.blk").write_bytes(live)
+        self.assertEqual(game.circuit(files), "production")
+        (files / "config.blk").write_bytes(live.replace(b"production", b"dev"))
+        self.assertEqual(game.circuit(files), "dev")
+        (files / "config.blk").write_bytes(live)
+        (files / "matchingdevmode").write_bytes(b"")  # Gaijin's wiki: the dev client's folder has it, empty
+        self.assertEqual(game.circuit(files), "dev")
+
     def test_mac_launcher_app(self):
         files = self.install(game.MAC_GAME)
         self.assertEqual(game._mac_app(files), self.root / "WarThunderLauncher.app")

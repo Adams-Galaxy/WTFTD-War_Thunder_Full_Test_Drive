@@ -275,6 +275,8 @@ def compare(old: dict, new: dict) -> dict:
         entry["back"] = 1
     if bump:
         entry["schema"] = 1
+    if new["meta"].get("circuit") == "dev":  # built from a dev server client: the dev server's changes, not the live game's
+        entry["circuit"] = "dev"
     return entry
 
 

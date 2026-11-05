@@ -156,7 +156,7 @@ function chRender() {
   const [up, down] = CH.subjects.br ? chUpDown(CH.subjects.br) : [0, 0];
   const ud = up || down ? `<span class="ch-ud"><span class="ch-d up">▲ ${I18N.num(up)}</span><span class="ch-d down">▼ ${I18N.num(down)}</span></span>` : '';
   const notes = [p.dev ? t(p.back ? 'ch.devBehind' : 'ch.devNote', { dev: p.to, live: p.from }) : p.back && t('ch.back', { from: p.from, to: p.to }),
-    p.schema && t('ch.schema')].filter(Boolean);
+    p.circuit === 'dev' && t('ch.devClient'), p.schema && t('ch.schema')].filter(Boolean);
   const tab = present.includes(CH.tab) ? CH.tab : present[0];  // the one picked, while the filters leave it something
   body.innerHTML = `${notes.map(x => `<p class="hint ch-note">${icon('target', 'ic-sm')}<span>${esc(x)}</span></p>`).join('')}
     ${present.length ? `<div class="ar-cats ch-tabs" role="tablist">${present.map(g => `<button class="chipbtn${g === tab ? ' active' : ''}" role="tab" data-chtab="${g}">
@@ -237,7 +237,7 @@ async function openChangesView() {
     $('#updateBanner.done')?.classList.add('hidden');
     const day = p => new Date(p.at * 1000).toLocaleDateString(I18N.code);
     $('#chPatch').innerHTML = CH.patches.map(p => `<option value="${esc(p.id)}">${esc(p.dev ? t('ch.devOption', { dev: p.to, live: p.from, date: day(p) })
-      : `${p.from} → ${p.to} · ${day(p)}${p.back ? ` · ${t('ch.backShort')}` : ''}`)}</option>`).join('');
+      : `${p.from} → ${p.to} · ${day(p)}${p.back ? ` · ${t('ch.backShort')}` : ''}${p.circuit === 'dev' ? ` · ${t('ch.devClientShort')}` : ''}`)}</option>`).join('');
     if (!CH.patches.length) return chRender();
     if (!AR.data) await openWeaponsView();  // names, carriers and links of the weapons
     if (!CH.patches.some(p => p.id === CH.id)) await chPick((chPatches()[0] || CH.patches[0]).id);  // the game's latest patch first
@@ -251,6 +251,7 @@ async function chDev() {
   clearTimeout(CH.devPoll);
   const box = $('#chDev');
   if (S.status.dataSource !== 'game') { box.innerHTML = ''; return; }  // the game data is the datamine's already
+  if (S.status.data?.circuit === 'dev') { box.innerHTML = `<span class="muted">${esc(t('ch.devIsGame'))}</span>`; return; }  // a dev client's
   let st;
   try { st = await api('dev'); } catch { return; }
   const was = CH.devRunning;

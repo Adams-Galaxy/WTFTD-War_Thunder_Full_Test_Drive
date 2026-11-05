@@ -33,7 +33,10 @@ Only the latest release is supported: fixes ship in a new version.
   are written under `UserSkins` and `sound\mod` only. Large files reach the app through one route of its own, which keeps the local page
   check and its own size limits; every other request stays limited to 2 MB.
 - **What it reads:** with *Read my installed game*, the game's `aces`, `char`, `lang` and `mis.vromfs.bin` files, read
-  only, instead of downloading the datamine.
+  only, instead of downloading the datamine; and whether the install is a dev server client: a `matchingdevmode` file, or the
+  one `curCircuit` key of `config.blk`, read only, nothing else of that file.
+- **The dev server's data:** only when you click *Compare with the dev server* in What changed, the community datamine is
+  downloaded and built apart into WTFTD's cache, by a second WTFTD process that ends with it. *Remove* deletes both.
 - **What it reads for the 3D views:** the game's `.grp` and `.dxp.bin` packs, `dynModelDesc.bin`, `riDesc.bin`, `levels/*.bin` and
   the asset lists of `aces.vromfs.bin`,
   read only, handed to the app's own page on `127.0.0.1`. Nothing is stored and nothing leaves your PC.

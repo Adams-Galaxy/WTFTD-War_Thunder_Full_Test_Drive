@@ -121,6 +121,24 @@ def detect_game_dir() -> Path | None:
     return None
 
 
+CIRCUIT = re.compile(rb'curCircuit\s*:\s*t\s*=\s*"([A-Za-z0-9_-]{1,32})"')
+
+
+def circuit(game_dir: Path | None) -> str | None:
+    """Which servers this install plays on: "dev" for a dev server client (Gaijin's wiki: a folder of its own with an empty
+    matchingdevmode file and curCircuit "dev" in config.blk), else config.blk's own ("production"). Read only, that key alone:
+    config.blk holds the player's settings."""
+    if not game_dir:
+        return None
+    if (game_dir / "matchingdevmode").exists():
+        return "dev"
+    try:
+        found = CIRCUIT.search((game_dir / "config.blk").read_bytes())
+    except OSError:
+        return None
+    return found.group(1).decode() if found else None
+
+
 def is_steam_install(game_dir: Path) -> bool:
     return "steamapps" in str(game_dir).lower()
 

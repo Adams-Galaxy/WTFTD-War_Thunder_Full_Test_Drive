@@ -17,6 +17,9 @@ Versions follow `major.minor.patch`; "beta" until 1.0.
 - **The data button at the top says where the data comes from** (*your game*, *datamine*, or *dev server (datamine)*) and
   opens Settings at the source, to switch.
 - **What changed**: a new vehicle shows its flag, type and BR even when only the dev server has it.
+- **A dev server client as your game is recognized** (Gaijin's markers: a `matchingdevmode` file in its folder, or
+  `curCircuit "dev"` in its `config.blk`, read only and that key alone): the Data button says *your game · dev server*, a
+  patch built from it says *dev client*, and What changed doesn't offer to download what your game already is.
 
 ## 0.25.3 - 2026-11-05
 
