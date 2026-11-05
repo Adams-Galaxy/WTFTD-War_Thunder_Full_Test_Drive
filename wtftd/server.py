@@ -1474,6 +1474,8 @@ def level_map(level: str) -> dict | None:
 def free_port(preferred: int) -> int:
     for port in [preferred] + list(range(preferred + 1, preferred + 20)):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            if os.name != "nt":  # as the server will bind it: a port whose last connections are closing is free (macOS said not)
+                s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)  # Windows' would also take a port in use
             try:
                 s.bind(("127.0.0.1", port))
                 return port
