@@ -4,7 +4,7 @@ What changed in each version of WTFTD. Downloads: [Releases](https://github.com/
 (only the latest version is kept there; from 0.19.0 on, each version's code stays available through its git tag).
 Versions follow `major.minor.patch`; "beta" until 1.0.
 
-## 0.25.3 - not released yet
+## 0.25.3 - 2026-11-05
 
 - **BR filters go up to the highest BR in the game data** (15.0 now): they stopped at 14.3, written in the code. A
   filter set to the whole range stays whole when the top goes up.
