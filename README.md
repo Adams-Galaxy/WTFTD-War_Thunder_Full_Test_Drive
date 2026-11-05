@@ -1,9 +1,9 @@
-# WTFTD — War Thunder Full Test Drive
+# WTFTD - War Thunder Full Test Drive
 
-> **Beta** — it works, but some features are still untested in game (see *Known limits*). Feedback and bug
+> **Beta** - it works, but some features are still untested in game (see *Known limits*). Feedback and bug
 > reports are welcome in the issues.
 >
-> **Disclaimer** — I'm not a professional developer: WTFTD is a hobby project, built with the help of AI
+> **Disclaimer** - I'm not a professional developer: WTFTD is a hobby project, built with the help of AI
 > tools. The code is open and tested, but expect rough edges, and check it yourself if in doubt.
 > I first made it for myself and I'm sharing it completely openly. I'm the only one testing it, so if you
 > find a bug, don't hesitate to [report it](https://github.com/StonewarP/WTFTD-War_Thunder_Full_Test_Drive/issues/new/choose):
@@ -14,7 +14,7 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![Support on Ko-fi](https://img.shields.io/badge/Support-Ko--fi-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/stonewarp)
 
-Test drive **any** War Thunder vehicle — ground, aircraft, helicopters, boats, ships — with the
+Test drive **any** War Thunder vehicle - ground, aircraft, helicopters, boats, ships - with the
 loadout, ammunition, map, targets and conditions you choose, even vehicles you don't own. Hang any weapon
 of the game on any pylon, or **make your own weapons**: more explosive, more thrust, 100 G missiles, nuclear
 Sidewinders…
@@ -23,7 +23,7 @@ WTFTD takes an **official Test Drive / Test Flight mission** from the game files
 triggers and respawn logic), puts your vehicle and setup in it, and writes it to
 `War Thunder/UserMissions/`. In game: **Single missions → User missions**.
 
-**Full guide: [the wiki](https://github.com/StonewarP/WTFTD-War_Thunder_Full_Test_Drive/wiki)** — every feature, where it
+**Full guide: [the wiki](https://github.com/StonewarP/WTFTD-War_Thunder_Full_Test_Drive/wiki)** - every feature, where it
 is, how to use it, how it works and its limits.
 
 ![A tour of WTFTD: vehicles, stats, custom pylons with your own weapons, the Weapons page, the weapon editor, maps, the scenario editor](docs/demo.gif)
@@ -31,7 +31,7 @@ is, how to use it, how it works and its limits.
 ## Download
 
 **[⬇ Download WTFTD-&lt;version&gt;.exe](https://github.com/StonewarP/WTFTD-War_Thunder_Full_Test_Drive/releases)** (Windows 10/11) or
-**WTFTD-&lt;version&gt;.zip** (macOS, Apple silicon) — nothing to install: double-click it, the app opens in its own
+**WTFTD-&lt;version&gt;.zip** (macOS, Apple silicon) - nothing to install: double-click it, the app opens in its own
 window and finds your game by itself (Steam or standalone). Close the window to quit.
 
 - **First launch**: a welcome screen says where WTFTD keeps its files and what it downloads from where, and asks where
@@ -39,7 +39,7 @@ window and finds your game by itself (Steam or standalone). Close the window to 
   - *Read my installed game*: no download. WTFTD unpacks the game's own files on your PC (≈650 MB on disk, about
     3 minutes), always at your game's exact version, offline.
   - *Download the community datamine*: ≈1 GB from the community
-    [War Thunder datamine](https://github.com/gszabi99/War-Thunder-Datamine) (2–5 minutes). It works without the
+    [War Thunder datamine](https://github.com/gszabi99/War-Thunder-Datamine) (2-5 minutes). It works without the
     game, but it's community data and can be ahead of or behind your game.
 
   Either way WTFTD builds its database on your PC (no game data is shipped with it), and updates it after each game
@@ -59,7 +59,7 @@ Details: [Install and first launch](https://github.com/StonewarP/WTFTD-War_Thund
 
 1. **Pick a vehicle** (*Vehicles*: list or research trees, filters, stats, carried weapons).
 2. **Pick a map** (*Maps*: every official test drive / test flight scenario, with the game's tactical map).
-3. **Set it up** in the vehicle panel: loadout (pylon by pylon), ammunition, modifications, cheats, fuel —
+3. **Set it up** in the vehicle panel: loadout (pylon by pylon), ammunition, modifications, cheats, fuel -
    and the map in the scenario editor (targets, allies, your start), flat or **in 3D**.
 4. **Create mission**, start War Thunder (button in the app), open *Single missions → User missions*.
 
@@ -85,7 +85,7 @@ Each one links to its page in the wiki.
   vehicles, grid or research trees, filters by type, nation, rank, BR, stats (stock or all upgrades) and carried
   weapons, a comparison of up to 5, research path, economy.
 - **[Loadouts](https://github.com/StonewarP/WTFTD-War_Thunder_Full_Test_Drive/wiki/Loadouts-and-pylons)**: every
-  official preset, or any of the game's ~2,300 air weapons on any pylon — nuclear bombs, the missiles of ground vehicles
+  official preset, or any of the game's ~2,300 air weapons on any pylon - nuclear bombs, the missiles of ground vehicles
   and ships, guns. **[My weapons](https://github.com/StonewarP/WTFTD-War_Thunder_Full_Test_Drive/wiki/My-weapons)**:
   your own versions of the game's missiles, bombs, rockets and torpedoes.
 - **[Ammunition](https://github.com/StonewarP/WTFTD-War_Thunder_Full_Test_Drive/wiki/Ammunition)** with penetration by
@@ -132,7 +132,7 @@ weapons with `@override:` lines.
 
 Only new files are written (never a path that replaces a game file), every file is listed in `user/cdk_manifest.json`,
 and **Settings → Remove custom vehicle files** deletes them (do it before playing online if you want a clean install).
-One custom vehicle per type at a time: the last mission you create defines it. This is not endorsed by Gaijin — use at
+One custom vehicle per type at a time: the last mission you create defines it. This is not endorsed by Gaijin - use at
 your own risk. More: [Custom vehicles](https://github.com/StonewarP/WTFTD-War_Thunder_Full_Test_Drive/wiki/Custom-vehicles).
 
 ## Safety and fair play
@@ -143,7 +143,7 @@ your own risk. More: [Custom vehicles](https://github.com/StonewarP/WTFTD-War_Th
   `enable_mod:b=yes` to the `sound` block of `config.blk`, the game's own way, and no other byte. It's off by default,
   refused while the game runs, and turning it off or uninstalling puts the file back.
 - **In flight**: the tools only read what the game publishes on your own PC (`localhost:8111`): your own vehicle's
-  values, the map's fixed objects and, if you ask, your allies — **never an enemy**. The overlay is a separate window:
+  values, the map's fixed objects and, if you ask, your allies - **never an enemy**. The overlay is a separate window:
   nothing is injected and nothing touches the game. Gaijin's staff said overlays built on this local data are fine, and
   that enemy markers on one can count as an ESP overlay
   ([forum, 2024](https://forum.warthunder.com/t/tools-using-data-provided-on-port-8111/106664/197)): WTFTD never shows
@@ -242,6 +242,6 @@ WTFTD is free and always will be. If you enjoy it, you can support its developme
 
 ## License
 
-[MIT](LICENSE) — free to use, modify and share, keeping the copyright notice. `web/lzdecode.js` is a port of an MIT-licensed
+[MIT](LICENSE) - free to use, modify and share, keeping the copyright notice. `web/lzdecode.js` is a port of an MIT-licensed
 decoder, with its notice. War Thunder and its data belong
 to Gaijin Entertainment; WTFTD is a fan-made tool, not affiliated with or endorsed by Gaijin.
