@@ -86,7 +86,7 @@ Each one links to its page in the wiki.
   weapons, a comparison of up to 5, research path, economy.
 - **[Loadouts](https://github.com/StonewarP/WTFTD-War_Thunder_Full_Test_Drive/wiki/Loadouts-and-pylons)**: every
   official preset, or any of the game's ~2,300 air weapons on any pylon - nuclear bombs, the missiles of ground vehicles
-  and ships, guns. **[My weapons](https://github.com/StonewarP/WTFTD-War_Thunder_Full_Test_Drive/wiki/My-weapons)**:
+  and ships, guns - with several custom loadouts kept per aircraft. **[My weapons](https://github.com/StonewarP/WTFTD-War_Thunder_Full_Test_Drive/wiki/My-weapons)**:
   your own versions of the game's missiles, bombs, rockets and torpedoes.
 - **[Ammunition](https://github.com/StonewarP/WTFTD-War_Thunder_Full_Test_Drive/wiki/Ammunition)** with penetration by
   distance, **[Modifications](https://github.com/StonewarP/WTFTD-War_Thunder_Full_Test_Drive/wiki/Modifications)**,
