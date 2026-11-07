@@ -1766,7 +1766,8 @@ async function onUninstallClick(ev) {
 let updatePoll = null;
 function renderUpdateBanner(st) {
   const el = $('#updateBanner');
-  const stale = st.after !== S.status?.data?.version || st.source !== (S.status?.data?.source || 'datamine');  // the page still shows the old data
+  // the page still shows the old data (built: a rebuild for a new WTFTD keeps the game's version)
+  const stale = st.after !== S.status?.data?.version || st.source !== (S.status?.data?.source || 'datamine') || (!!st.built && st.built !== S.status?.data?.built);
   if (st.running) {
     const last = (st.log || []).at(-1) || '';
     el.className = 'update-banner';

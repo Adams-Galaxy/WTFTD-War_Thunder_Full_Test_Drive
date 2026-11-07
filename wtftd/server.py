@@ -539,7 +539,7 @@ def run_update():
                 miss.unlink()
             except OSError:
                 pass
-        st["after"], st["source"] = meta.get("version"), meta.get("source")
+        st["after"], st["source"], st["built"] = meta.get("version"), meta.get("source"), meta.get("built")
         st["newVehicles"] = max(0, int(meta.get("vehicles", 0)) - int(before.get("vehicles", 0) or 0))
         st["patch"], st["changes"] = meta.get("patch"), meta.get("changes", 0)
         st["done"], st["available"] = True, False

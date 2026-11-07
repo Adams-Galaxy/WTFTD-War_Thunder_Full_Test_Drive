@@ -486,12 +486,13 @@ class Server(unittest.TestCase):
             self.assertIsNone(server.data_ahead({"source": "datamine", "version": "2.60.0.33"}, None))
 
     def test_the_update_says_how_many_changes(self):
-        meta = {"version": "1.1", "vehicles": 1, "patch": "1.0-1.1", "changes": 7}
+        meta = {"version": "1.1", "vehicles": 1, "patch": "1.0-1.1", "changes": 7, "built": 1794061764}
         with mock.patch.object(server.builder, "build", return_value=meta), mock.patch.object(server.STATE, "reload"), \
                 mock.patch.object(server, "warm_weapon_icons"), mock.patch.object(server, "IMG_CACHE", Path(patches.FILE.parent)), \
                 mock.patch.object(server.STATE, "update", {}):
             server.run_update()
             self.assertEqual((server.STATE.update["patch"], server.STATE.update["changes"], server.STATE.update["error"]), ("1.0-1.1", 7, None))
+            self.assertEqual(server.STATE.update["built"], 1794061764)  # the page compares it: a rebuild at the same game version
 
 
 class Uninstall(unittest.TestCase):
