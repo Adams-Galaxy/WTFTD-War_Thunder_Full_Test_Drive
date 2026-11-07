@@ -61,7 +61,7 @@ Details: [Install and first launch](https://github.com/StonewarP/WTFTD-War_Thund
 2. **Pick a map** (*Maps*: every official test drive / test flight scenario, with the game's tactical map).
 3. **Set it up** in the vehicle panel: loadout (pylon by pylon), ammunition, modifications, cheats, fuel -
    and the map in the scenario editor (targets, allies, your start), flat or **in 3D**.
-4. **Create mission**, start War Thunder (button in the app), open *Single missions → User missions*.
+4. **Create mission** (the difficulty yours to pick, each of its settings changeable), start War Thunder (button in the app), open *Single missions → User missions*.
 
 While you fly (Windows), the **In flight** menu puts your own overlay over the game (your lines, a **fighter HUD**, a
 **minimap**), beeps before your aircraft breaks, and records the flight. Step by step:

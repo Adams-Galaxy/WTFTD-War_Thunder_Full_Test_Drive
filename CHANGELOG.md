@@ -29,6 +29,12 @@ Versions follow `major.minor.patch`; "beta" until 1.0.
   the right. A part taller than the window scrolls on its own. Esc, the same button or another tab brings back the side panel; the
   choice is kept for the next vehicle.
 - **Fixed: Enter in a name box cancelled it** (Save to My vehicles, map variants…): it now saves, like the Save button.
+- **A mission's own difficulty, each setting changeable.** The *Mission* window picks Arcade, Realistic or Simulator, or
+  leaves the choice to the game at launch as before. Once one is picked, the settings of the game's *Custom* difficulty
+  window show, filled with the game's preset for the kind of vehicle (aircraft, tank or ship), and each can be changed on
+  its own: Realistic with the lead marker, for example. ● marks a setting changed from the preset, *Reset* brings the
+  preset back. The game then no longer asks at launch, and the mission keeps these settings. The game's web interface
+  setting isn't offered: WTFTD needs it. The game data is rebuilt once to read the presets.
 
 - **What changed compares your game with the dev server**: *Compare with the dev server* downloads the community datamine
   (about 1 GB the first time) and builds its newest version apart, in its own process and its own folder, in a few
