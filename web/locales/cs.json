@@ -1210,6 +1210,8 @@
   "maps.edit": "Upravit na mapě",
   "mission.title": "Mise",
   "mission.hint": "Patří k misi (vozidlo + mapa). Název a název souboru zůstávají automatické, dokud je nezměníš.",
+  "mission.diffInGame": "Volí se ve hře při spuštění",
+  "mission.diffHint": "Zvolená zde: hra se na ni při spuštění už neptá a mise si ponechá tato nastavení. ● označuje nastavení změněné oproti předvolbě hry.",
   "adv.allModsOn": "Všechny modifikace",
   "adv.allModsOff": "Sériový",
   "step.start": "Start a palivo",

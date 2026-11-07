@@ -151,7 +151,8 @@ async function saveCombo() {
   S.combos.unshift({
     id: newId(), name: name.slice(0, 100), vehicle: v.id, cfg: vehicleOnly(c), sid: s.id,
     variantId: sv?.id || '', variantName: sv?.name || '', edits: c.edits?.sid === s.id ? clone(c.edits) : null,
-    map: clone(S.map), mission: { missionType: S.mission.missionType || '', title: o.title, fileName: o.fileName, description: o.description }, created: Date.now(),
+    map: clone(S.map), mission: { missionType: S.mission.missionType || '', title: o.title, fileName: o.fileName, description: o.description,
+      difficulty: o.difficulty, difficultySettings: clone(o.difficultySettings || {}) }, created: Date.now(),
   });
   await persistCombos();
   toast({ title: t('combo.saved', { name }), ms: 3000 });
@@ -170,7 +171,9 @@ async function applyCombo(cb) {
   saveMap();
   S.pick = { vehicle: v.id, scenario: cb.sid, variant: (S.variants || []).some(x => x.id === cb.variantId) ? cb.variantId : '' };
   savePick();
-  S.mission = { missionType: cb.mission?.missionType || '', title: cb.mission?.title || '', fileName: cb.mission?.fileName || '', description: cb.mission?.description || '', key: missionKey() };
+  const diff = DIFFS.includes(cb.mission?.difficulty) ? cb.mission.difficulty : '';  // older saves: the game's briefing asks
+  S.mission = { missionType: cb.mission?.missionType || '', title: cb.mission?.title || '', fileName: cb.mission?.fileName || '', description: cb.mission?.description || '', key: missionKey(),
+    difficulty: diff, diffSet: diff ? { ...S.mission.diffSet, [diff]: clone(cb.mission.difficultySettings || {}) } : S.mission.diffSet || {} };
   saveMission();
   renderPickbar();
   if (S.sel) renderDrawer();

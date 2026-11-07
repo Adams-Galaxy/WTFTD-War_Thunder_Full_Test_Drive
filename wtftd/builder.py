@@ -37,7 +37,7 @@ from pathlib import Path
 from . import patches, vromfs
 from .paths import CACHE, DATA, HOME as ROOT
 DM = CACHE / "datamine"
-SCHEMA = 34  # bump when data/*.json gains fields the app needs: installed data gets rebuilt
+SCHEMA = 35  # bump when data/*.json gains fields the app needs: installed data gets rebuilt
 REPO = "https://github.com/gszabi99/War-Thunder-Datamine.git"
 SPARSE = [
     "aces.vromfs.bin_u/gamedata/flightmodels",
@@ -452,7 +452,7 @@ def read_lang_csv(name: str) -> dict[str, dict[str, str]]:
 class Lang:
     def __init__(self):
         self.tables = {}
-        for n in ("units.csv", "units_weaponry.csv", "units_modifications.csv", "missions_locations.csv", "menu.csv"):
+        for n in ("units.csv", "units_weaponry.csv", "units_modifications.csv", "missions_locations.csv", "menu.csv", "menu_options.csv"):
             try:
                 self.tables[n] = read_lang_csv(n)
             except OSError:
@@ -1590,6 +1590,79 @@ def build_sensors(lang) -> dict:
     return out
 
 
+DIFFICULTIES = ("arcade", "realistic", "hardcore")
+# where gameparams keeps each kind's presets (no ship_hardcore: the aircraft one then)
+DIFF_PRESETS = {"air": "difficulty_presets", "tank": "custom_difficulty/tank_", "ship": "custom_difficulty/ship_"}
+# the game's Custom difficulty window (gui.vromfs scripts/options/optionsExt.nut): mission key, label, labels of its values
+# (none: on/off; "a|b" reads "a (b)").
+# shortcut: copied from the game's list, check it on big updates; allowWebUi left out, WTFTD needs port 8111
+DIFF_OPTIONS = [
+    ("engineControl", "options/engineControl", ["mainmenu/arcadeInstantAction", "mainmenu/instantAction", "mainmenu/fullRealInstantAction"]),
+    ("realGunnery", "options/realGunnery", None),
+    ("realDamageModels", "options/realDamageModels", None),
+    ("stallsAndSpins", "options/stallsAndSpins", None),
+    ("limitedBombsMissiles", "options/limitedArmament", None),
+    ("flutter", "options/flutter", None),
+    ("redOuts", "options/redOuts", None),
+    ("mortalPilots", "options/mortalPilots", None),
+    ("noArcadeBoost", "options/noArcadeBoost", None),
+    ("limitViews", "options/disableTpsViews", ["options/limitViewTps", "options/limitViewFps", "options/limitViewCockpit"]),
+    ("aircraftHelpers", "options/aircraftHelpers", None),
+    ("allowControlHelpers", "options/allowControlHelpers", ["options/allHelpers", "options/Instructor", "options/Realistic", "options/no"]),
+    ("forceInstructor", "options/forceInstructor", None),
+    ("collectiveDetection", "options/collectiveDetection", None),
+    ("distDetection", "options/distanceDetection", ["options/near", "options/normal", "options/far"]),
+    ("hudAimPrediction", "options/hudAimPrediction", None),
+    ("hudMarkers", "options/hudMarkers", ["options/no", "options/ally", "options/all", "options/ally|mainmenu/fullRealInstantAction"]),
+    ("hudMarkerArrows", "options/hudMarkerArrows", None),
+    ("hudAircraftMarkersMaxDist", "options/hudAircraftMarkersMaxDist", ["options/near", "options/normal", "options/far", "options/quality_max"]),
+    ("rocketSpotting", "options/rocketSpotting", None),
+    ("hudIndicators", "options/hudIndicators", None),
+    ("hudShowTankDistance", "options/hudShowTankDistance", None),
+    ("hudMapAircraftMarkers", "options/hudMapAircraftMarkers", ["options/no", "options/ally", "options/all", "options/player"]),
+    ("hudMapGroundMarkers", "options/hudMapGroundMarkers", ["options/no", "options/ally", "options/all"]),
+    ("hudMarkersBlink", "options/hudMarkersBlink", None),
+    ("hudRadar", "options/hudRadar", None),
+    ("hudDamageIndicator", "options/hudDamageIndicator", None),
+    ("hudLargeAwardMessages", "options/hudLargeAwardMessages", None),
+    ("hudWarnings", "options/hudWarnings", None),
+]
+
+
+def build_difficulty(lang) -> dict:
+    """{"presets": {kind: {difficulty: {key: value}}}, "options": [{"k", "n": values or 0 for on/off}]}: what a mission's
+    own difficulty starts from and what the app lets change (labels in the lang section "difficulty")."""
+    gp = load(DM / "aces.vromfs.bin_u" / "config" / "gameparams.blkx") or {}
+    presets = {}
+    for kind, path in DIFF_PRESETS.items():
+        for name in DIFFICULTIES:
+            block, _, prefix = path.partition("/")
+            p = (gp.get(block) or {}).get(prefix + name if prefix else name) or (gp.get("difficulty_presets") or {}).get(name)
+            if isinstance(p, dict):
+                presets.setdefault(kind, {})[name] = {k: v for k, v in p.items() if isinstance(v, (bool, int, float))}
+    options = []
+    for key, label, values in DIFF_OPTIONS if presets else ():
+        if not all(key in p for d in presets.values() for p in d.values()):
+            continue
+        options.append({"k": key, "n": len(values or ())})
+        lang.put("difficulty", key, label, fallback=humanize(key))
+        for i, v in enumerate(values or ()):
+            a, _, b = v.partition("|")
+            if not b:
+                lang.put("difficulty", f"{key}.{i}", a, fallback=str(i))
+                continue
+            first, second = lang.get(a) or {}, lang.get(b) or {}
+            lang.out["difficulty"][f"{key}.{i}"] = {c: f"{t} ({second.get(c) or second.get('en', '')})" for c, t in first.items()} or {"en": str(i)}
+    for name, label in zip(DIFFICULTIES, DIFF_OPTIONS[0][2]):
+        lang.put("difficulty", name, label, fallback=name.capitalize())
+    lang.put("difficulty", "title", "options/difficulty", fallback="Difficulty")
+    lang.put("difficulty", "reset", "mainmenu/btnReset", fallback="Reset")
+    out = {"presets": presets, "options": options}
+    with open(DATA / "difficulty.json", "w", encoding="utf-8") as fw:
+        json.dump(out, fw, separators=(",", ":"))
+    return out
+
+
 def build_objects(lang) -> list:
     """What the scenario editor can place besides vehicles: AA guns, trucks, buildings, radars... [{"id", "b": mission block}]."""
     out = []
@@ -2605,6 +2678,7 @@ def _build(progress, source: str, history: bool = True, circuit: str | None = No
         json.dump(build_battle_words(), f, ensure_ascii=False, separators=(",", ":"))
     with open(DATA / "bases.json", "w", encoding="utf-8") as f:
         json.dump(build_bases(), f, separators=(",", ":"))
+    build_difficulty(lang)
     codes = lang.write()
     meta = {"version": version, "schema": SCHEMA, "source": source, "built": int(time.time()), "vehicles": len(vehicles), "scenarios": len(scenarios), "langs": codes}
     if circuit:  # the installed game's servers: "dev" for a dev server client

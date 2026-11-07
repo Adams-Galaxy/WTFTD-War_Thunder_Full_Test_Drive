@@ -20,11 +20,13 @@ function saveMap() { store.set('mapset', S.map); }
 
 // the mission's own options: type, and a title / file name kept for the vehicle + map they were written for
 function missionKey() { return [S.pick.vehicle || S.cfg?.vehicle, S.pick.scenario, S.pick.variant || ''].join('|'); }
-S.mission = Object.assign({ missionType: '', title: '', fileName: '', description: '', key: '' }, store.get('mission', {}));
+// difficulty ('' = the game's briefing asks) and diffSet {difficulty: {setting: value}} hold for every mission, like its type
+S.mission = Object.assign({ missionType: '', title: '', fileName: '', description: '', key: '', difficulty: '', diffSet: {} }, store.get('mission', {}));
 function missionOpts() {
-  const own = S.mission.key === missionKey();
+  const own = S.mission.key === missionKey(), d = S.mission.difficulty || '';
   return { missionType: S.mission.missionType || S.status.settings?.missionType || 'singleMission',
-    title: own ? S.mission.title : '', fileName: own ? S.mission.fileName : '', description: own ? S.mission.description || '' : '' };
+    title: own ? S.mission.title : '', fileName: own ? S.mission.fileName : '', description: own ? S.mission.description || '' : '',
+    difficulty: d, difficultySettings: d ? S.mission.diffSet?.[d] || {} : undefined };
 }
 function saveMission() { store.set('mission', S.mission); }
 
@@ -37,7 +39,9 @@ function mapFromSetup(cfg) {
     heading: cfg.heading == null ? '' : cfg.heading,
   };
   saveMap();
-  S.mission = { missionType: cfg.missionType || '', title: cfg.title || '', fileName: cfg.fileName || '', description: cfg.description || '', key: '' };
+  const d = DIFFS.includes(cfg.difficulty) ? cfg.difficulty : '';
+  S.mission = { missionType: cfg.missionType || '', title: cfg.title || '', fileName: cfg.fileName || '', description: cfg.description || '', key: '',
+    difficulty: d, diffSet: d ? { ...S.mission.diffSet, [d]: clone(cfg.difficultySettings || {}) } : S.mission.diffSet || {} };
   setTimeout(() => { S.mission.key = missionKey(); saveMission(); });  // once the pick holds the mission's vehicle and map
 }
 
@@ -192,8 +196,14 @@ function onPickbarClick(e) {
   else $('#search').focus();
 }
 
-// ------------------------------------------------------------------ mission window (type, title, file name)
+// ------------------------------------------------------------------ mission window (type, title, file name, difficulty)
 function openMissionDialog() {
+  renderMissionDialog();
+  $('#dlgMission').showModal();
+  if (!S.difficulty) getData('difficulty.json').catch(() => ({})).then(d => { S.difficulty = d; if ($('#dlgMission').open) renderMissionDialog(); });
+}
+
+function renderMissionDialog() {
   const v = pickedVehicle(), o = missionOpts();
   const vid = v?.id || S.cfg?.vehicle || '';
   const auto = vid && S.cfg?.vehicle === vid ? autoTitle() : `Test Drive: ${v ? I18N.unit(v.id) : '…'}`;
@@ -202,11 +212,48 @@ function openMissionDialog() {
       <select data-mo="missionType">${['singleMission', 'testFlight'].map(m => `<option value="${m}"${o.missionType === m ? ' selected' : ''}>${esc(t('adv.missionType.' + m))}</option>`).join('')}</select></div>
     <div class="field"><label>${esc(t('adv.title'))}</label><input type="text" data-mo="title" value="${esc(o.title)}" placeholder="${esc(auto)}"></div>
     <div class="field"><label>${esc(t('adv.fileName'))}</label><input type="text" data-mo="fileName" value="${esc(o.fileName)}" placeholder="wtftd_${esc(vid || '…')}"></div>
-    <div class="field"><label>${esc(t('adv.description'))}</label><textarea data-mo="description" rows="3" maxlength="1000" placeholder="${esc(t('adv.descriptionHint'))}">${esc(o.description)}</textarea></div>`;
-  $('#dlgMission').showModal();
+    <div class="field"><label>${esc(t('adv.description'))}</label><textarea data-mo="description" rows="3" maxlength="1000" placeholder="${esc(t('adv.descriptionHint'))}">${esc(o.description)}</textarea></div>
+    ${difficultyHTML(v)}`;
+}
+
+// the mission's own difficulty: the game's preset for the kind of vehicle (data/difficulty.json), each setting changeable
+const DIFFS = ['arcade', 'realistic', 'hardcore'];
+const diffPreset = v => S.difficulty?.presets?.[{ armada: 'air', ships: 'ship' }[blockFor(v?.c || 'air')] || 'tank']?.[S.mission.difficulty];
+
+function difficultyHTML(v) {
+  if (!S.difficulty?.options?.length) return '';  // data built before the game's presets were read
+  const d = S.mission.difficulty, preset = diffPreset(v), own = S.mission.diffSet?.[d] || {};
+  const pick = `<div class="field"><label>${esc(I18N.diff('title'))}</label><select data-mdiff-pick><option value="">${esc(t('mission.diffInGame'))}</option>${
+    DIFFS.map(x => `<option value="${x}"${x === d ? ' selected' : ''}>${esc(I18N.diff(x))}</option>`).join('')}</select></div>`;
+  if (!preset) return pick;
+  const val = k => own[k] ?? preset[k], name = k => esc(I18N.diff(k)) + (k in own ? ' ●' : '');
+  const lists = S.difficulty.options.filter(o => o.n).map(o => `<div class="shell-pick part"><label>${name(o.k)}</label><select data-mdiff="${o.k}">${
+    Array.from({ length: o.n }, (_, i) => `<option value="${i}"${+val(o.k) === i ? ' selected' : ''}>${esc(I18N.diff(`${o.k}.${i}`))}</option>`).join('')}</select></div>`).join('');
+  const switches = S.difficulty.options.filter(o => !o.n).map(o => `<label class="switch"><input type="checkbox" data-mdiff="${o.k}"${val(o.k) ? ' checked' : ''}><span class="sw"></span><span>${name(o.k)}</span></label>`).join('');
+  const reset = Object.keys(own).length ? `<button class="btn btn-ghost btn-sm" data-mdiff-reset>${icon('refresh', 'ic-sm')}${esc(I18N.diff('reset'))}</button>` : '';
+  return `${pick}<p class="hint">${esc(t('mission.diffHint'))}</p>${lists}<div class="mod-switches">${switches}</div>${reset}`;
+}
+
+function onDifficultyInput(e) {
+  const el = e.target, d = S.mission.difficulty;
+  if (el.matches('[data-mdiff-reset], [data-mdiff-reset] *')) delete S.mission.diffSet?.[d];
+  else if (e.type !== 'change') return false;
+  else if (el.matches('[data-mdiff-pick]')) S.mission.difficulty = el.value;
+  else if (el.dataset.mdiff) {
+    const k = el.dataset.mdiff, preset = diffPreset(pickedVehicle());
+    if (!preset) return true;
+    // a switch keeps the preset's type: some on/off settings are 0/1 in the game's files
+    const v = el.type === 'checkbox' ? (typeof preset[k] === 'number' ? +el.checked : el.checked) : +el.value;
+    const own = ((S.mission.diffSet ||= {})[d] ||= {});
+    if (v === preset[k]) delete own[k]; else own[k] = v;
+  } else return false;
+  saveMission();
+  renderMissionDialog();
+  return true;
 }
 
 function onMissionInput(e) {
+  if (onDifficultyInput(e)) return;
   const key = e.target.dataset.mo;
   if (!key) return;
   if (S.mission.key !== missionKey()) Object.assign(S.mission, { title: '', fileName: '', description: '', key: missionKey() });
@@ -415,6 +462,7 @@ function bindMaps() {
   $('#pickbar').addEventListener('click', onPickbarClick);
   $('#pickbar').addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.matches('[data-pk]')) onPickbarClick(e); });
   $('#missionDlgBody').addEventListener('change', onMissionInput);
+  $('#missionDlgBody').addEventListener('click', onDifficultyInput);
   $('#missionDlgBody').addEventListener('input', e => { if (e.target.dataset.mo !== 'missionType') onMissionInput(e); });
   $('#mapKinds').addEventListener('click', e => {
     const b = e.target.closest('[data-mkind]');

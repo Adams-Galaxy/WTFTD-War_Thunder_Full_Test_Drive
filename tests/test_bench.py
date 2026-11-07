@@ -512,7 +512,8 @@ class Rate(unittest.TestCase):
 class Mission(unittest.TestCase):
     def test_alone_in_the_air_with_the_test_in_its_description(self):
         bare = builder._hangar_mission("air_archipelago", "armada", [0.0, 1500.0, 0.0], "WTFTD", speed=450.0)
-        with mock.patch.object(mission, "load_scenario", return_value=bare):
+        # without the game's presets (data/difficulty.json): the difficulty is only named, test_difficulty has the rest
+        with mock.patch.object(mission, "load_scenario", return_value=bare), mock.patch.object(mission, "_difficulty_data", return_value=None):
             name, text = mission.build({"scenario": "free_air_archipelago_air", "vehicle": "bf-109f-4", "block": "armada", "preset": "Bf-109F-4_default", "start": "air", "altitude": 5000,
                                         "speed": 600, "fuel": 40, "allMods": True, "weather": "clear", "environment": "Noon", "difficulty": "realistic", "fileName": "wtftd_bench_bf-109f-4",
                                         "title": "Test bench: Bf 109 F-4, Top speed, 5,000 m", "description": "Hold 5,000 m.", "bench": plan()})
