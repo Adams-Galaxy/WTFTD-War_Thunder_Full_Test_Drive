@@ -18,6 +18,7 @@ from .paths import DATA
 ENVIRONMENTS = ["Day", "Morning", "Noon", "Evening", "Dusk", "Dawn", "Night"]
 WEATHERS = ["clear", "good", "hazy", "thin_clouds", "cloudy", "cloudy_windy", "overcast", "poor", "rain", "thunder", "blind"]
 MISSION_TYPES = ["singleMission", "testFlight"]
+DIFFICULTIES = ("arcade", "realistic", "hardcore")  # the game's names (Simulator is "hardcore")
 
 UNIT_DEFAULTS = {
     "tankModels": {"army": 1, "count": 1, "formation_type": "rows", "formation_div": 3,
@@ -46,6 +47,32 @@ def load_scenario(sid: str) -> dict:
         raise MissionError(f"Unknown scenario: {sid}")
     with open(path, encoding="utf-8") as f:
         return json.load(f)
+
+
+def _difficulty_data() -> dict | None:
+    try:
+        return json.loads((DATA / "difficulty.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None  # data built before the file existed: the game's briefing asks as before
+
+
+def difficulty_block(name: str, changes, kind: str) -> dict | None:
+    """The mission's own difficulty (netDifficultyBlk): the game's preset for this kind of vehicle with the player's
+    changes, each checked against what the game's Custom window offers. None without the data."""
+    data = _difficulty_data() or {}
+    preset = ((data.get("presets") or {}).get(kind) or {}).get(name)
+    if not isinstance(preset, dict):
+        return None
+    allowed = {o.get("k"): o.get("n") for o in data.get("options") or [] if isinstance(o, dict)}
+    out = dict(preset)
+    for k, v in changes.items() if isinstance(changes, dict) else ():
+        n, was = allowed.get(k), type(preset.get(k))
+        if n == 0 and type(v) in (bool, int) and v in (0, 1):
+            out[k] = was(v) if was in (bool, int) else v  # some on/off settings are 0/1 in the game's files: keep its type
+        elif n and type(v) is int and 0 <= v < n:
+            out[k] = v
+    out["setDifficulty"] = 3  # Custom, as the game's own events write it
+    return out
 
 
 def _as_list(v):
@@ -1340,8 +1367,12 @@ def build(cfg: dict) -> tuple[str, str]:
         mission["environment"] = cfg["environment"]
     if cfg.get("weather") in WEATHERS:
         mission["weather"] = cfg["weather"]
-    if cfg.get("difficulty") in ("arcade", "realistic", "simulation"):
-        mission["difficulty"] = cfg["difficulty"]
+    if cfg.get("difficulty") in DIFFICULTIES:
+        kind = "air" if block == "armada" else "ship" if block == "ships" else "tank"
+        own = difficulty_block(cfg["difficulty"], cfg.get("difficultySettings"), kind)
+        # the game's briefing would put the player's pick over it: it no longer asks, and the engine takes the block
+        # (checked in game 2026-11-07: Realistic with aim prediction and the cockpit view locked)
+        mission.update({"difficulty": "custom", "openDiffLevels": False, "netDifficultyBlk": own} if own else {"difficulty": cfg["difficulty"]})
     # test flights: their templates pick targets and airfield by the rank the hangar passes them (a user mission keeps
     # the file's value, 1: low, a dirt strip and old targets); from rank V (jets) on, the high ones
     if "target_rank_index" in mission and isinstance(cfg.get("_rank"), int):

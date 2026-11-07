@@ -29,7 +29,7 @@ FILE = USER / "bench.json"
 MAX_RUNS = 2000
 MAX_REJECTED = 20  # the longest ones, in a flight that lasted
 SAFE_ID = re.compile(r"[A-Za-z0-9_\-.]{1,120}")
-DIFFICULTIES = ("arcade", "realistic", "simulation")
+DIFFICULTIES = ("arcade", "realistic", "hardcore")
 
 FULL, IDLE = 99.0, 10.0  # throttle in %. War Emergency Power and afterburner read above 100
 WINGS, BANKED = 10.0, 20.0  # degrees of bank

@@ -1198,6 +1198,8 @@
   "maps.edit": "マップで編集",
   "mission.title": "ミッション",
   "mission.hint": "ミッション（車両＋マップ）の設定です。タイトルとファイル名は変更しない限り自動です。",
+  "mission.diffInGame": "起動時にゲームで選択",
+  "mission.diffHint": "ここで選ぶと、起動時にゲームは尋ねなくなり、ミッションはこの設定を保ちます。● はゲームのプリセットから変更した設定です。",
   "adv.allModsOn": "すべての改良",
   "adv.allModsOff": "初期状態",
   "step.start": "出撃と燃料",

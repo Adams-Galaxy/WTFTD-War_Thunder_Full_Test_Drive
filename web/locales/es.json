@@ -1198,6 +1198,8 @@
   "maps.edit": "Editar en el mapa",
   "mission.title": "Misión",
   "mission.hint": "Pertenecen a la misión (vehículo + mapa). El título y el nombre de archivo son automáticos hasta que los cambies.",
+  "mission.diffInGame": "Elegida en el juego al iniciar",
+  "mission.diffHint": "Elegida aquí, el juego ya no la pregunta al iniciar y la misión conserva estos ajustes. ● marca un ajuste cambiado respecto al preajuste del juego.",
   "adv.allModsOn": "Todas las modificaciones",
   "adv.allModsOff": "De serie",
   "step.start": "Salida y combustible",

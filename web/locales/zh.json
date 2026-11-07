@@ -1198,6 +1198,8 @@
   "maps.edit": "在地图上编辑",
   "mission.title": "任务",
   "mission.hint": "这些属于任务（载具 + 地图）。标题和文件名在你修改前保持自动。",
+  "mission.diffInGame": "启动时在游戏中选择",
+  "mission.diffHint": "在此选择后，游戏启动时不再询问，任务会保留这些设置。● 表示相对游戏预设已更改的设置。",
   "adv.allModsOn": "全部改装",
   "adv.allModsOff": "原厂",
   "step.start": "出发与燃料",

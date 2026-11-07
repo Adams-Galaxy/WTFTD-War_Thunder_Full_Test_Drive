@@ -1221,6 +1221,8 @@
   "maps.edit": "Edit on the map",
   "mission.title": "Mission",
   "mission.hint": "These belong to the mission (vehicle + map). Title and file name stay automatic until you change them.",
+  "mission.diffInGame": "Chosen in the game at launch",
+  "mission.diffHint": "Picked here, the game no longer asks at launch and the mission keeps these settings. ● marks a setting changed from the game's preset.",
   "adv.allModsOn": "All modifications",
   "adv.allModsOff": "Stock",
   "step.start": "Start & fuel",
