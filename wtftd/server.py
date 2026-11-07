@@ -730,6 +730,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(read_json(USER / "setups.json", []))
         if route == "variants":  # scenario variants saved from the map editor
             return self.send_json(read_json(USER / "variants.json", []))
+        if route == "loadouts":  # custom pylon loadouts saved per vehicle
+            return self.send_json(read_json(USER / "loadouts.json", []))
         if route == "combos":  # saved missions: a vehicle setup + a map
             return self.send_json(read_json(USER / "combos.json", []))
         if route == "overlay":
@@ -1105,6 +1107,11 @@ class Handler(BaseHTTPRequestHandler):
             if not isinstance(body.get("variants"), list):
                 return self.send_json({"error": "variants must be a list"}, 400)
             write_json(USER / "variants.json", [v for v in body["variants"] if isinstance(v, dict)][:500])
+            return self.send_json({"ok": True})
+        if route == "loadouts":
+            if not isinstance(body.get("loadouts"), list):
+                return self.send_json({"error": "loadouts must be a list"}, 400)
+            write_json(USER / "loadouts.json", [x for x in body["loadouts"] if isinstance(x, dict)][:2000])
             return self.send_json({"ok": True})
         if route == "hangar":
             return self.send_json(hangar.save(body))

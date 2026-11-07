@@ -42,9 +42,10 @@ function cellHTML(d, slot, val, editable, active) {
     }
   }
   const cls = ['lcell', editable ? 'edit' : '', active ? 'active' : '', val && typeof val === 'object' ? 'nonstd' : '', val?.cw ? 'mine' : '', warn ? 'warn' : ''].join(' ');
+  const drag = val && S.cfg.pylons ? ` draggable="true" data-ldrag="${slot.i}"` : '';  // onto the Custom row: loadoutDrag
   return editable
-    ? `<button class="${cls}" data-lcell="${slot.i}" title="${esc(title + (warn ? ' — ⚠ ' + warn : ''))}">${inner}${warn ? '<i class="lwarn">!</i>' : ''}</button>`
-    : `<span class="${cls}" title="${esc(title)}">${inner}</span>`;
+    ? `<button class="${cls}" data-lcell="${slot.i}"${drag} title="${esc(title + (warn ? ' — ⚠ ' + warn : ''))}">${inner}${warn ? '<i class="lwarn">!</i>' : ''}</button>`
+    : `<span class="${cls}"${drag} title="${esc(title)}">${inner}</span>`;
 }
 
 // a pylon's catalog pick: the game's name, or the name of one of My weapons (the one saved with the pylon if deleted)
@@ -57,19 +58,71 @@ function loadoutGridHTML(v, d) {
   const slots = slotsSorted(d);
   const custom = !!c.pylons;
   const head = `<div class="lrow lhead"><span class="llabel"></span>${slots.map(s => `<span class="lcol"${s.e && !d.sl?.length ? ` title="${esc(s.e)}"` : ''}>${s.i}</span>`).join('')}</div>`;
-  const customRow = custom ? `<div class="lrow lcustom active"><span class="llabel">${icon('sliders', 'ic-sm')} ${esc(t('loadout.customRow'))}</span>
+  const bound = boundLoadout(c), name = bound?.name || t('loadout.customRow');
+  const customRow = custom ? `<div class="lrow lcustom active"><span class="llabel" title="${esc(name)}">${icon('sliders', 'ic-sm')} ${esc(name)}</span>
       ${slots.map(s => cellHTML(d, s, c.pylons[s.i], true, LP.slot === s.i)).join('')}</div>` : '';
+  const savedRows = cdkOn() ? savedLoadouts(v.id).map(sl => `<div class="lrow lsaved${custom && sl === bound ? ' current' : ''}" data-lsaved="${esc(sl.id)}" title="${esc(t('loadout.useSaved'))}">
+      <span class="llabel">${icon('star', 'ic-sm')} ${esc(sl.name)}</span>
+      ${slots.map(s => cellHTML(d, s, sl.pylons[s.i], false, false)).join('')}</div>`).join('') : '';
   const presetRows = d.pr.filter(p => presetPylons(p) || !p.w.length).map(p => {
     const active = !custom && c.preset === p.id;
     return `<div class="lrow${active ? ' active' : ''}" data-lrow="${esc(p.id)}" title="${esc(custom ? t('loadout.copyPreset') : t('loadout.usePreset'))}">
       <span class="llabel">${esc(presetLabel(v, p))}</span>
       ${slots.map(s => cellHTML(d, s, (presetPylons(p) || {})[s.i], false, false)).join('')}</div>`;
   }).join('');
-  const grid = `<div class="lgrid" style="--lcols:${slots.length}">${head}${customRow}${presetRows}</div>`;
+  const picker = custom && LP.slot != null ? pickerHTML(v, d) : '';  // right under the Custom row, above the presets
+  const grid = `<div class="lgrid" style="--lcols:${slots.length}">${head}${customRow}${picker}${savedRows}${presetRows}</div>`;
   const toggle = cdkOn()
-    ? `<label class="switch" style="margin:2px 0 8px"><input type="checkbox" data-bind-cfg="customPylons" ${custom ? 'checked' : ''}><span class="sw"></span><span>${esc(t('loadout.custom'))}</span></label>`
+    ? `<div class="lsave"><label class="switch"><input type="checkbox" data-bind-cfg="customPylons" ${custom ? 'checked' : ''}><span class="sw"></span><span>${esc(t('loadout.custom'))}</span></label>${custom ? loadoutBarHTML(c, bound) : ''}</div>`
     : `<p class="hint">${esc(t('loadout.note'))}</p>`;
-  return toggle + `<div class="lgrid-wrap">${grid}</div>` + (custom && LP.slot != null ? pickerHTML(v, d) : '') + (custom ? summaryHTML(d) : `<p class="hint" style="margin-top:8px">${esc(t('loadout.gridHint'))}</p>`);
+  return toggle + `<div class="lgrid-wrap">${grid}</div>` + (custom ? `<p class="hint" style="margin-top:8px">${esc(t('loadout.dragHint'))}</p>` + summaryHTML(d) : `<p class="hint" style="margin-top:8px">${esc(t('loadout.gridHint'))}</p>`);
+}
+
+// ------------------------------------------------------------------ saved custom loadouts (user/loadouts.json)
+// S.loadouts = [{ id, vehicle, name, pylons }]; cfg.loadout = the id of the one the Custom row edits
+S.loadouts = [];
+async function loadLoadouts() { try { S.loadouts = await api('loadouts'); } catch { S.loadouts = []; } }
+async function persistLoadouts() { try { await api('loadouts', { loadouts: S.loadouts }); } catch (e) { toastErr(e); } }
+const savedLoadouts = vid => S.loadouts.filter(x => x.vehicle === vid);
+const boundLoadout = c => (c?.pylons && c.loadout ? S.loadouts.find(x => x.id === c.loadout && x.vehicle === c.vehicle) || null : null);
+const loadoutDirty = (c, sl) => JSON.stringify(c.pylons) !== JSON.stringify(sl.pylons);
+
+function loadoutBarHTML(c, sl) {
+  const dirty = sl && loadoutDirty(c, sl);
+  return `<span class="lsave-state">${sl ? '' : esc(t('loadout.unsaved'))}${dirty ? `<span class="chip warn">${esc(t('loadout.modified'))}</span>` : ''}</span>
+    <button class="btn btn-sm" data-lbar="save" ${sl && !dirty ? 'disabled' : ''}>${icon('save', 'ic-sm')}<span>${esc(t('action.save'))}</span></button>
+    ${sl ? `<button class="btn btn-sm btn-ghost" data-lbar="rename">${esc(t('variant.rename'))}</button>` : ''}
+    <button class="btn btn-sm btn-ghost" data-lbar="new">+ ${esc(t('loadout.new'))}</button>
+    ${sl ? `<button class="icon-btn btn-danger" data-lbar="delete" title="${esc(t('action.delete'))}">${icon('trash', 'ic-sm')}</button>` : ''}`;
+}
+
+// the bar's buttons: save (the loadout being edited, else a new one), rename, new (a copy of the Custom row), delete
+async function loadoutBar(act) {
+  const c = S.cfg, sl = boundLoadout(c);
+  if (act === 'delete') {
+    const i = S.loadouts.indexOf(sl);
+    if (i < 0) return;
+    S.loadouts.splice(i, 1);
+    await persistLoadouts();
+    toast({ title: t('loadout.deleted', { name: sl.name }), actions: [{ label: t('variant.undo'), run: async () => {
+      S.loadouts.splice(i, 0, sl); await persistLoadouts(); if (S.sel) renderDrawer();
+    } }] });
+    return;
+  }
+  if (act === 'rename') {
+    const name = sl && await promptText(t('variant.rename'), sl.name);
+    if (!name) return;
+    sl.name = name.slice(0, 80);
+  } else if (act === 'save' && sl) sl.pylons = structuredClone(c.pylons);
+  else {
+    const name = await promptText(t('loadout.saveTitle'), `${t('loadout.customRow')} ${savedLoadouts(c.vehicle).length + 1}`);
+    if (!name) return;
+    const nl = { id: newId(), vehicle: c.vehicle, name: name.slice(0, 80), pylons: structuredClone(c.pylons) };
+    S.loadouts.push(nl);
+    c.loadout = nl.id;
+  }
+  await persistLoadouts();
+  toast({ title: t('loadout.saved', { name: boundLoadout(c).name }), ms: 2500 });
 }
 
 // ------------------------------------------------------------------ fixed presets (aircraft without WeaponSlots)
@@ -235,6 +288,7 @@ function pickerListHTML(d, slot) {
 // ------------------------------------------------------------------ events (called from the drawer handlers)
 function loadoutClick(b, v, d) {
   const c = S.cfg;
+  if (b.dataset.lbar) { loadoutBar(b.dataset.lbar).then(() => { if (S.sel) renderDrawer(); }); return true; }
   if (b.dataset.lcell !== undefined) { LP.slot = LP.slot === +b.dataset.lcell ? null : +b.dataset.lcell; LP.q = ''; return true; }
   if (b.dataset.lclose !== undefined) { LP.slot = null; return true; }
   if (b.dataset.lempty !== undefined) { delete c.pylons[LP.slot]; return true; }
@@ -250,7 +304,18 @@ function loadoutClick(b, v, d) {
 }
 
 function loadoutRowClick(row, v, d) {
-  const c = S.cfg, p = d.pr.find(x => x.id === row.dataset.lrow);
+  const c = S.cfg;
+  if (row.dataset.lsaved) {  // a saved loadout into the Custom row; unsaved changes there can be brought back
+    const sl = S.loadouts.find(x => x.id === row.dataset.lsaved), was = boundLoadout(c);
+    if (!sl) return;
+    const lost = c.pylons && Object.keys(c.pylons).length && (!was || loadoutDirty(c, was)) && loadoutDirty(c, sl)
+      ? { pylons: c.pylons, loadout: c.loadout } : null;
+    Object.assign(c, { pylons: structuredClone(sl.pylons), loadout: sl.id });
+    LP.slot = null;
+    if (lost) toast({ title: t('loadout.replaced'), actions: [{ label: t('variant.undo'), run: () => { Object.assign(c, lost); if (S.cfg === c && S.sel) renderDrawer(); } }] });
+    return;
+  }
+  const p = d.pr.find(x => x.id === row.dataset.lrow);
   if (!p) return;
   if (c.pylons) c.pylons = Object.fromEntries(Object.entries(presetPylons(p) || {}).map(([k, val]) => [+k, val]));  // copy into custom
   else c.preset = p.id;
@@ -265,6 +330,57 @@ function loadoutChange(el) {
     return true;
   }
   return false;
+}
+
+// ------------------------------------------------------------------ drag and drop onto the Custom row
+// a pylon's value as pylon `to` takes it: the same option, one with the same weapons, else its weapon as a catalog
+// pick ('' when empty); null when it can't go there (several weapons in the option, weapon outside the catalog)
+function fitPylon(d, from, to, val) {
+  if (!val) return '';
+  if (typeof val === 'object') return structuredClone(val);
+  const o = slotOption(d, from, val), slot = pylonsOf(d).find(s => s.i === to);
+  if (!o || !slot) return null;
+  const same = slot.o.find(x => x.n === val) || slot.o.find(x => JSON.stringify(x.w) === JSON.stringify(o.w));
+  if (same) return same.n;
+  const [k, n] = o.w[0];
+  return o.w.length === 1 && LP.weapons?.[k] ? { w: k, n: Math.min(n, 8) } : null;
+}
+
+// what dropping the dragged pylon on Custom pylon `to` writes: a copy, or with swap (Custom row only) both pylons
+function dropPlan(to, swap) {
+  const g = LP.drag, c = S.cfg, d = S.details.get(S.sel.id);
+  if (!g || !c.pylons || (g.custom && g.slot === to)) return null;
+  const plan = { [to]: fitPylon(d, g.slot, to, g.val) };
+  if (swap && g.custom) plan[g.slot] = fitPylon(d, to, g.slot, c.pylons[to]);
+  return Object.values(plan).includes(null) ? null : plan;
+}
+
+// every drag event of the drawer; true when a drop changed the loadout
+function loadoutDrag(e) {
+  const c = S.cfg, cell = e.target.closest?.('.lcell'), swap = e.ctrlKey || e.metaKey;
+  if (e.type === 'dragstart') {
+    if (!cell?.dataset.ldrag) return false;
+    const slot = +cell.dataset.ldrag, row = cell.closest('[data-lrow], [data-lsaved]');
+    const p = row?.dataset.lrow && S.details.get(S.sel.id).pr.find(x => x.id === row.dataset.lrow);
+    const from = !row ? c.pylons : p ? presetPylons(p) : S.loadouts.find(x => x.id === row.dataset.lsaved)?.pylons;
+    LP.drag = { slot, custom: !row, val: (from || {})[slot] };
+    e.dataTransfer.setData('text/plain', '');  // Firefox starts a drag only with data
+    e.dataTransfer.effectAllowed = 'copyMove';
+    return false;
+  }
+  if (e.type === 'dragend') { LP.drag = null; return false; }
+  const to = cell?.dataset.lcell !== undefined ? +cell.dataset.lcell : null;
+  const plan = to !== null ? dropPlan(to, swap) : null;
+  if (e.type === 'dragleave') cell?.classList.remove('ldrop');
+  if (e.type === 'dragover') {
+    cell?.classList.toggle('ldrop', !!plan);
+    if (plan) { e.preventDefault(); e.dataTransfer.dropEffect = swap && LP.drag.custom ? 'move' : 'copy'; }
+  }
+  if (e.type !== 'drop' || !plan) return false;
+  e.preventDefault();
+  LP.drag = null;
+  for (const [k, val] of Object.entries(plan)) { if (val) c.pylons[k] = val; else delete c.pylons[k]; }
+  return true;
 }
 
 function loadoutInput(el) {

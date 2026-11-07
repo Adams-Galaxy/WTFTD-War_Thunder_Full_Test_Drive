@@ -321,6 +321,24 @@ option { background: var(--surface); }
 }
 .layout.drawer-open .drawer { transform: none; }
 .dr-scroll { flex: 1; overflow-y: auto; }
+.dr-rest { display: contents; }
+/* full screen: over the whole window, every step open; the hero, the loadout and the other steps side by side,
+   each scrolling on its own when taller than the window */
+.drawer.full { left: 0; width: auto; }
+.drawer.full .drawer-resize, .drawer.full .step-chev { display: none; }
+.drawer.full .step-head { pointer-events: none; }
+.drawer.full .hero-top, .drawer.full .hero-actions { flex-wrap: wrap; gap: 6px 2px; }  /* the Full screen and Close buttons stay in view */
+.drawer.full .dr-scroll { display: grid; grid-template-columns: 320px minmax(0, 1.4fr) minmax(340px, 1fr); grid-template-rows: auto minmax(0, 1fr); overflow: hidden; }
+.drawer.full .hero { grid-row: 1 / -1; border-bottom: 0; }
+.drawer.full .ai-banner { grid-column: 2 / -1; margin-top: 12px; }
+.drawer.full .step[data-step="loadout"] { grid-column: 2; grid-row: 2; border-bottom: 0; }
+.drawer.full .dr-rest { grid-column: 3; grid-row: 2; display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); align-content: start; }
+.drawer.full .dr-rest .step { border-right: 1px solid var(--line); }
+.drawer.full :is(.hero, .step[data-step="loadout"], .dr-rest) { overflow-y: auto; min-height: 0; border-right: 1px solid var(--line); }
+@media (max-width: 1100px) {
+  .drawer.full .dr-scroll { display: block; overflow-y: auto; }
+  .drawer.full :is(.hero, .step[data-step="loadout"], .dr-rest) { display: block; overflow: visible; border-right: 0; }
+}
 .hero { position: relative; padding: 16px 18px 18px; border-bottom: 1px solid var(--line); overflow: hidden; }
 .hero::before {
   content: ""; position: absolute; inset: 0;
@@ -805,15 +823,21 @@ option { background: var(--surface); }
 
 
 /* ------------------------------------------------------------------ pylon grid (in-game layout) */
-.lgrid-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--bg-2); }
+.lgrid-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--bg-2); container-type: inline-size; }
 .lgrid { display: grid; grid-template-columns: minmax(110px, 1.4fr) repeat(var(--lcols), 40px); min-width: max-content; }
 .lrow { display: contents; }
 .lrow > * { border-bottom: 1px solid var(--line); }
 .llabel { display: flex; align-items: center; gap: 6px; padding: 0 8px; font-size: 12px; font-weight: 600; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; position: sticky; left: 0; background: var(--bg-2); z-index: 1; min-height: 40px; }
 .lhead > * { min-height: 24px; font-size: 10.5px; color: var(--muted); font-weight: 700; display: grid; place-items: center; }
 .lhead .llabel { min-height: 24px; }
-.lrow[data-lrow] { cursor: pointer; }
-.lrow[data-lrow]:hover > * { background: var(--surface-2); }
+.lrow[data-lrow], .lrow[data-lsaved] { cursor: pointer; }
+.lrow[data-lrow]:hover > *, .lrow[data-lsaved]:hover > * { background: var(--surface-2); }
+.lsaved .llabel .ic-sm { color: var(--accent-2); }
+.lrow.lsaved.current .llabel { color: var(--accent-2); box-shadow: inset 3px 0 var(--accent); }
+/* the Custom switch, then the saved loadouts' buttons */
+.lsave { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 2px 0 8px; }
+.lsave .switch { flex: 1 0 100%; padding-bottom: 0; }
+.lsave-state { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
 .lrow.active > * { background: var(--accent-soft); }
 .lrow.active .llabel { color: var(--accent-2); }
 .lcustom .llabel { color: var(--accent-2); }
@@ -822,13 +846,17 @@ option { background: var(--surface); }
 .lcell.edit:hover { background: var(--surface-3); }
 .lcell.active { outline: 2px solid var(--accent); outline-offset: -2px; }
 .lcell.nonstd { box-shadow: inset 0 -3px 0 var(--info); }
+.lcell > * { pointer-events: none; }  /* drags and drops on the cell, not its icon */
+.lcell[draggable="true"] { cursor: grab; }
+.lcell.ldrop { outline: 2px dashed var(--accent); outline-offset: -2px; background: var(--accent-soft); }
 .wicon { width: 30px; height: 30px; object-fit: contain; }
 .wicon-ph { width: 18px; height: 18px; border-radius: 4px; border: 1px dashed var(--line-2); display: inline-block; }
 .lcell .wicon-ph { opacity: .5; }
 .wcount { position: absolute; right: 2px; bottom: 1px; font: 700 10px var(--font-display); color: var(--text); background: var(--glass); padding: 0 3px; border-radius: 4px; }
 .lwarn { position: absolute; top: 1px; right: 2px; width: 13px; height: 13px; border-radius: 50%; background: var(--warn); color: #1b1305; font: 800 9.5px/13px var(--font); font-style: normal; text-align: center; }
 .lp-item .lwarn { position: static; flex: none; }
-.lpicker { margin-top: 10px; border: 1px solid var(--accent); border-radius: 10px; background: var(--surface); padding: 10px; }
+/* a full row of the grid, as wide as the visible part of it when the pylons scroll sideways */
+.lpicker { grid-column: 1 / -1; position: sticky; left: 0; width: 100cqw; border-block: 1px solid var(--accent); background: var(--surface); padding: 10px; }
 .lp-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
 .lp-head b { margin-right: auto; font-size: 13.5px; }
 .lcount { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
@@ -1133,6 +1161,7 @@ table.ar-table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
   padding: 8px; border-radius: 14px; border: 1px solid var(--line-2); background: var(--glass-strong); backdrop-filter: blur(12px); box-shadow: var(--shadow); }
 body.pick-on .pickbar { display: flex; }
 .layout.drawer-open .pickbar { right: calc(var(--drawer-w) + 16px); }
+.layout.drawer-open:has(> .drawer.full) .pickbar { display: none; }  /* the panel's own foot has Select */
 body.pick-on .compare-tray { max-width: calc(100% - var(--side-w) - 560px); }
 /* fixed size, filled or empty: the bar doesn't move when a vehicle or a map is picked */
 .pk-slot { display: flex; align-items: center; gap: 9px; min-width: 0; width: 240px; height: 50px; box-sizing: border-box; padding: 4px 6px 4px 4px; border-radius: 10px; cursor: pointer; border: 1px solid transparent; }

@@ -12,6 +12,23 @@ Versions follow `major.minor.patch`; "beta" until 1.0.
   touch Steam's files: emptying the field in Steam stops it.
 - **War Thunder can start with WTFTD** (Settings, App window, off by default; Windows): when WTFTD opens and the game isn't
   running yet. Started from Steam, the game is already on its way: it isn't launched twice.
+- **Custom pylons: the weapon list opens right under the Custom row**, above the official presets, instead of below all
+  of them; it stays in view when the pylons scroll sideways.
+- **Custom pylons: drag and drop.** Drag a pylon from any row onto a pylon of the Custom row to copy it there; hold Ctrl
+  to swap two pylons of the Custom row. A weapon that isn't an option of the pylon it lands on goes there as a
+  non-standard weapon; an option holding several weapons (a tank with bombs) only goes where the same weapons are offered.
+- **My vehicles says how many the filters hide.** The list follows the sidebar's filters while its tab counts every saved
+  vehicle; a line under the list now gives the number hidden, so 2 on the tab and 1 in the list no longer looks like a bug.
+- **Several custom loadouts per aircraft.** Above the pylon grid, **Save** keeps the Custom row under a name, **+ New**
+  adds another one (a copy of the Custom row), **Rename** and the bin act on the one being edited. Saved loadouts are rows
+  of the grid under the Custom row: click one to load it into the Custom row (unsaved changes there come back with *Undo*),
+  or drag its pylons onto the Custom row. *modified* shows until the changes are saved. They are kept in
+  `user/loadouts.json`, apart from My vehicles; a mission uses the Custom row as before.
+- **Full-screen vehicle panel** (the button next to *Close*): the panel covers the window with every step open at once,
+  the vehicle on the left, the loadout in the middle (all the pylons without scrolling sideways) and the other steps on
+  the right. A part taller than the window scrolls on its own. Esc, the same button or another tab brings back the side panel; the
+  choice is kept for the next vehicle.
+- **Fixed: Enter in a name box cancelled it** (Save to My vehicles, map variants…): it now saves, like the Save button.
 
 - **What changed compares your game with the dev server**: *Compare with the dev server* downloads the community datamine
   (about 1 GB the first time) and builds its newest version apart, in its own process and its own folder, in a few

@@ -43,6 +43,7 @@ const S = {
   cfg: null,      // current setup: the open panel's vehicle
   cfgs: new Map(),  // every vehicle's setup, kept while browsing (vehicle id -> setup)
   openStep: '',  // setup steps all start closed
+  drawerFull: store.get('drawerFull', false),  // the panel over the whole window, every step open
   showAllScen: false,
   pick: Object.assign({ vehicle: '', scenario: '' }, store.get('pick', {})),  // vehicle + map of the mission (maps.js)
   showUnofficial: false,
@@ -193,6 +194,7 @@ async function boot() {
   bindUI();
   applyFilters();
   refreshSetups();
+  loadLoadouts().then(() => { if (S.sel) renderDrawer(); });
   refreshMissions();
   watchUpdates();
   edBind();
@@ -671,7 +673,7 @@ function bindUI() {
 
   document.addEventListener('keydown', e => {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); showView('vehicles'); $('#search').focus(); $('#search').select(); }
-    else if (e.key === 'Escape' && !document.querySelector('dialog[open]') && S.sel) { closeDrawer(); }
+    else if (e.key === 'Escape' && !document.querySelector('dialog[open]') && S.sel) { if (S.drawerFull) toggleDrawerFull(); else closeDrawer(); }
   });
 
   $('#missionList').addEventListener('click', onMissionListClick);
@@ -681,7 +683,8 @@ function bindUI() {
 const menuPages = menu => MENUS[menu].filter(v => !$(`.subtab[data-view="${v}"]`)?.classList.contains('hidden'));  // Windows only pages
 
 function showView(name) {
-  const menu = Object.keys(MENUS).find(m => MENUS[m].includes(name)), pages = menuPages(menu);
+  if (S.drawerFull && S.sel && $('.subtab.active')?.dataset.view !== name) toggleDrawerFull();  // full screen would hide the new page
+  const menu =Object.keys(MENUS).find(m => MENUS[m].includes(name)), pages = menuPages(menu);
   S.menuPage[menu] = name;  // the menu comes back to it
   $$('.tab').forEach(b => b.classList.toggle('active', b.dataset.menu === menu));
   $('.tab.active')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
@@ -960,8 +963,14 @@ function penChart(g, loaded, belt = false) {
     <small class="muted">${esc(t('ammo.penNote'))}</small></div>`;
 }
 
+function toggleDrawerFull() {
+  S.drawerFull = !S.drawerFull;
+  store.set('drawerFull', S.drawerFull);
+  renderDrawer({ keepScroll: false });
+}
+
 function stepHTML(key, num, title, summary, body) {
-  const open = S.openStep === key;
+  const open = S.drawerFull || S.openStep === key;
   return `<section class="step${open ? ' open' : ''}" data-step="${key}">
     <button class="step-head" data-toggle="${key}"><span class="step-num">${num}</span><span class="step-title">${esc(title)}</span>
       <span class="step-sum">${summary}</span><svg class="step-chev"><use href="#i-chev"/></svg></button>
@@ -970,7 +979,9 @@ function stepHTML(key, num, title, summary, body) {
 
 function renderDrawer({ keepScroll = true, reveal = null } = {}) {
   const v = S.sel, d = S.details.get(v.id), c = S.cfg;
-  const prevScroll = keepScroll ? ($('#drawer .dr-scroll')?.scrollTop || 0) : 0;
+  // full screen: the hero, the loadout and the other steps each scroll on their own
+  const zones = ['.dr-scroll', '.hero', '.step[data-step="loadout"]', '.dr-rest'];
+  const prevScroll = zones.map(z => (keepScroll ? $('#drawer ' + z)?.scrollTop || 0 : 0));
   const scen = S.scenarios.find(s => s.id === c.scenario);
   const preset = d.pr.find(p => p.id === c.preset);
   const isFlyer = d.b === 'armada';
@@ -988,6 +999,7 @@ function renderDrawer({ keepScroll = true, reveal = null } = {}) {
   const condSum = c.fuel ? `${c.fuel} %` : t('cond.keep');
 
   $('#drawer').style.setProperty('--tint', NATION_TINT[v.n] || NATION_TINT.other);
+  $('#drawer').classList.toggle('full', S.drawerFull);
   $('#drawer').innerHTML = `
     <div class="drawer-resize" title="${esc(t('drawer.resize'))}"></div>
     <div class="dr-scroll">
@@ -1001,6 +1013,7 @@ function renderDrawer({ keepScroll = true, reveal = null } = {}) {
             ${compareButtonHTML(v)}
             <button class="icon-btn" data-act="model3d" title="${esc(t('model.view'))}">${icon('cube')}</button>
             <a class="icon-btn" href="https://wiki.warthunder.com/unit/${encodeURIComponent(v.id)}" target="_blank" rel="noopener" title="${esc(t('drawer.wiki'))}">${icon('ext')}</a>
+            <button class="icon-btn" data-act="full" title="${esc(t(S.drawerFull ? 'drawer.fullOff' : 'drawer.fullOn'))}">${icon(S.drawerFull ? 'shrink' : 'expand')}</button>
             <button class="icon-btn" data-act="close" title="${esc(t('drawer.close'))}">${icon('x')}</button>
           </div>
         </div>
@@ -1015,12 +1028,12 @@ function renderDrawer({ keepScroll = true, reveal = null } = {}) {
         ${S.ai ? '' : bnPanelHTML(v)}
       </div>
       ${S.ai ? `<div class="ai-banner">${icon('target', 'ic-sm')}<div><b>${esc(t('ai.title'))}</b>${esc(t('ai.hint'))}</div></div>` : ''}
-      ${stepHTML('loadout', 1, t('step.loadout'), esc(c.pylons ? t('loadout.customShort', { n: Object.keys(c.pylons).length }) : preset ? presetLabel(v, preset) : t('loadout.default')), () => loadoutBody(v, d))}
-      ${stepHTML('ammo', 2, t('step.ammo'), ammoSum, () => ammoBody(v, d))}
+      ${stepHTML('loadout', 1, t('step.loadout'), esc(c.pylons ? boundLoadout(c)?.name || t('loadout.customShort', { n: Object.keys(c.pylons).length }) : preset ? presetLabel(v, preset) : t('loadout.default')), () => loadoutBody(v, d))}
+      <div class="dr-rest">${stepHTML('ammo', 2, t('step.ammo'), ammoSum, () => ammoBody(v, d))}
       ${S.ai ? '' : `${cdkOn() ? stepHTML('mods', 3, t('step.mods'), esc(countMods(c.mods) ? t('mods.count', { n: countMods(c.mods) }) : t('mods.stockShort')), () => modsBody(v, d)) : ''}
       ${stepHTML('cheats', cdkOn() ? 4 : 3, t('step.cheats'), esc(cheatsSummary()), () => cheatsBody())}
       ${isFlyer ? stepHTML('conditions', cdkOn() ? 5 : 4, t('step.fuel'), esc(condSum), () => conditionsBody(isFlyer)) : ''}
-      ${stepHTML('advanced', cdkOn() ? (isFlyer ? 6 : 5) : (isFlyer ? 5 : 4), t('step.advanced'), esc(t(c.allMods ? 'adv.allModsOn' : 'adv.allModsOff')), () => advancedBody())}`}
+      ${stepHTML('advanced', cdkOn() ? (isFlyer ? 6 : 5) : (isFlyer ? 5 : 4), t('step.advanced'), esc(t(c.allMods ? 'adv.allModsOn' : 'adv.allModsOff')), () => advancedBody())}`}</div>
     </div>
     ${S.lastGen?.vid === v.id && !S.ai ? `<div class="gen-done">${icon('check', 'ic-sm')}
       <div><b>${esc(t('toast.generated', { file: S.lastGen.file }))}</b><span>${esc(t('toast.generatedHint', { title: S.lastGen.title }))}</span></div>
@@ -1037,9 +1050,9 @@ function renderDrawer({ keepScroll = true, reveal = null } = {}) {
         : `<button class="btn btn-primary btn-lg" data-act="select">${icon('play')}<span>${esc(t('pick.select'))}</span></button>`}
     </div>`}`;
   bindDrawer();
+  zones.forEach((z, i) => { const el = $('#drawer ' + z); if (el) el.scrollTop = prevScroll[i]; });
   const sc = $('#drawer .dr-scroll');
-  sc.scrollTop = prevScroll;
-  if (reveal) {
+  if (reveal && !S.drawerFull) {
     const el = $(`.step[data-step="${reveal}"]`, sc);
     if (el) {
       const top = el.offsetTop - 8;
@@ -1202,7 +1215,7 @@ const autoTitle = () => autoTitleFor(S.cfg);
 function bindDrawer() {
   const dr = $('#drawer');
   dr.onclick = e => {
-    const row = e.target.closest('[data-lrow]');
+    const row = e.target.closest('[data-lrow], [data-lsaved]');
     if (row) { loadoutRowClick(row, S.sel, S.details.get(S.sel.id)); return renderDrawer(); }
     const b = e.target.closest('button, a');
     if (!b) return;
@@ -1224,6 +1237,7 @@ function bindDrawer() {
     if (seg) { c[seg.dataset.seg] = b.dataset.v; return renderDrawer(); }
     switch (b.dataset.act) {
       case 'close': return S.ai ? aiEnd(false) : closeDrawer();
+      case 'full': return toggleDrawerFull();
       case 'aiApply': return aiEnd(true);
       case 'aiCancel': return aiEnd(false);
       case 'fav': return toggleFav(v.id);
@@ -1304,12 +1318,14 @@ function bindDrawer() {
     if (el.dataset.bindCfg === 'customPylons') {
       const p = S.details.get(S.sel.id).pr.find(x => x.id === c.preset);
       c.pylons = el.checked ? Object.fromEntries(Object.entries((p && presetPylons(p)) || {}).map(([k, val]) => [+k, val])) : null;
+      c.loadout = null;
       LP.slot = null;
       return renderDrawer();
     }
     if (loadoutChange(el)) return renderDrawer();
     if (el.dataset.pylon !== undefined) { if (el.value) c.pylons[el.dataset.pylon] = el.value; else delete c.pylons[el.dataset.pylon]; return renderDrawer(); }
   };
+  dr.ondragstart = dr.ondragover = dr.ondragleave = dr.ondragend = dr.ondrop = e => { if (loadoutDrag(e)) renderDrawer(); };
   dr.oninput = e => {
     const el = e.target;
     if (loadoutInput(el)) return;
@@ -1414,6 +1430,8 @@ function promptText(title, value) {
     $('#promptTitle').textContent = title;
     $('#promptInput').value = value;
     dlg.onclose = () => resolve(dlg.returnValue === 'ok' ? $('#promptInput').value.trim() : null);
+    // Enter would press the form's first button, Cancel
+    $('#promptInput').onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); dlg.close('ok'); } };
     dlg.showModal();
     $('#promptInput').select();
   });
@@ -1422,7 +1440,7 @@ function promptText(title, value) {
 async function saveSetup() {
   const c = S.cfg;
   const p = S.details.get(c.vehicle)?.pr.find(x => x.id === c.preset);
-  const name = await promptText(t('vehicle.saveName'), `${I18N.unit(c.vehicle)}${c.pylons ? ' · ' + t('loadout.customRow') : p && p.w.length ? ' · ' + presetLabel(S.byId.get(c.vehicle), p) : ''}`);
+  const name = await promptText(t('vehicle.saveName'), `${I18N.unit(c.vehicle)}${c.pylons ? ' · ' + (boundLoadout(c)?.name || t('loadout.customRow')) : p && p.w.length ? ' · ' + presetLabel(S.byId.get(c.vehicle), p) : ''}`);
   if (!name) return;
   const cfg = vehicleOnly(c);
   S.setups.unshift({ id: Date.now().toString(36), name, vehicle: c.vehicle, cfg, created: Date.now() });

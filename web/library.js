@@ -55,7 +55,7 @@ function renderSetups() {
         <button class="btn btn-sm btn-ghost" data-vopen="${esc(s.id)}" ${v ? '' : 'disabled'}>${esc(t('library.open'))}</button>
         <button class="icon-btn" data-vshare="${esc(s.id)}" title="${esc(t('share.button'))}">${icon('share')}</button>
         <button class="icon-btn btn-danger" data-vdel="${esc(s.id)}" title="${esc(t('action.delete'))}">${icon('trash')}</button></div></div>`;
-  }).join('');
+  }).join('') + (shown.length < S.setups.length ? `<p class="hint mb-note">${esc(t('setups.hidden', { n: S.setups.length - shown.length }))}</p>` : '');
 }
 
 // a saved vehicle into the bar, its setup kept for the mission (the open panel, if any, stays as it is)
