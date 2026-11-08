@@ -240,9 +240,9 @@ class Settings(unittest.TestCase):
         return alarms.clean({"lines": [{"text": "x", **fields}]}, WORDS)
 
     def test_what_comes_from_the_page_is_checked(self):
-        cfg = alarms.clean({"flashMs": 1, "volume": -5, "pollMs": 1, "logMs": "x", "outline": 40, "spacing": True, "outlineColor": "red",
+        cfg = alarms.clean({"volume": -5, "pollMs": 1, "logMs": "x", "outline": 40, "spacing": True, "outlineColor": "red",
                             "muteKey": [0], "holdKey": ["a"], "blocks": [{"x": "a", "scale": 9999}] * 9}, WORDS)
-        self.assertEqual((cfg["flashMs"], cfg["volume"], cfg["pollMs"]), (200, 0, 50))
+        self.assertEqual((cfg["volume"], cfg["pollMs"]), (0, 50))
         self.assertEqual((cfg["logMs"], cfg["outline"], cfg["spacing"], cfg["outlineColor"]), (1000, 4, 0, "#000000"))
         self.assertEqual((cfg["muteKey"], cfg["holdKey"]), ([], []))
         self.assertEqual([b["scale"] for b in cfg["blocks"]], [400] * alarms.MAX_BLOCKS)
@@ -769,6 +769,36 @@ class Watching(unittest.TestCase):
             clock[0] += 1  # no reading told it again: it stops by itself
             self.assertIsNone(self.watch.chime())
             self.assertEqual(self.beep.call_count, 2)
+
+    def test_flashes_on_the_beat(self):  # lit with each beep, as long as it sounds; without beeps, FLASH_MS
+        self.watch.set_config(airframe(at=90, ms=150, gap=700), {})
+        clock = [100.0]
+        with mock.patch.object(alarms.time, "monotonic", side_effect=lambda: clock[0]):
+            self.watch.ring(self.watch.cfg, [(0, 0)], {"airframe": 95}, {})  # a beep now, the next in 0.5 s
+            for at, lit in ((0.1, True), (0.2, False), (0.45, False)):
+                clock[0] = 100 + at
+                self.assertEqual(self.watch.lit(), lit, at)
+            self.watch.ring(self.watch.cfg, [(0, 0)], {"airframe": 100}, {})  # at the break: lit throughout
+            for clock[0] in (100.5, 100.6, 100.7, 100.75, 100.8):
+                self.watch.chime()  # the bell, between readings
+                self.assertTrue(self.watch.lit(), clock[0])
+            self.assertEqual(self.watch.lit(250), int(100.8 * 2000 / 250) % 2 == 0)  # an alarm's own cycle
+            self.watch.ringing = None
+            clock[0] = 100.8  # nothing rings: FLASH_MS, in its dark half
+            self.assertFalse(self.watch.lit())
+
+    def test_each_part_flashes_on_its_alarm_s_clock(self):
+        rules = [{**alarms.limit_alarm("gear"), "blink": ["value"]}, {**alarms.limit_alarm("flaps"), "blink": ["name"], "flashMs": 250}]
+        cfg = alarms.clean({"lines": [{"text": "GEAR {ias}", "rules": rules}]}, WORDS)
+        self.assertEqual([p[2] for p in alarms.lines_for(cfg, {"IAS, km/h": 700}, [(0, 0), (0, 1)])[0][5]], [250, True])
+        glow = alarms.clean({"lines": [{"text": "x", "rules": [{"limit": "gear", "glow": True, "glowFlash": True, "flashMs": 300}]}]}, WORDS)
+        self.assertEqual(alarms.glow_of(glow, [(0, 0)])[2], 300)
+
+    def test_the_overlay_s_flash_cycle_goes_to_the_alarms(self):  # saved before 0.27
+        lines = [{"text": "x", "rules": [{"limit": "gear"}]}]
+        self.assertEqual(alarms.clean({"flashMs": 800, "lines": lines}, WORDS)["lines"][0]["rules"][0]["flashMs"], 800)
+        self.assertEqual(alarms.clean({"flashMs": 500, "lines": lines}, WORDS)["lines"][0]["rules"][0]["flashMs"], 0)  # the default: with the beeps
+        self.assertNotIn("flashMs", alarms.clean({"flashMs": 800, "lines": lines}, WORDS))
 
     def test_try_an_alarm(self):  # My overlay's Try: the IAS line's airframe alarm at a value set by hand
         cfg = self.watch.base
@@ -1333,7 +1363,8 @@ class Configuration(unittest.TestCase):
         self.assertEqual((cfg["size"], cfg["opacity"]), (6, 100))
         self.assertEqual(cfg["lines"][0]["rules"][0], {"value": "", "op": ">", "at": 200, "join": "and", "more": [], "limit": "gear", "hz": 37,
                                                        "ms": 2000, "sound": "", "red": None, "full": 100, "gap": 0, "color": "",
-                                                       "blink": ["value"], "repeat": 0, "after": 10000, "glow": False, "glowSize": 50, "glowFlash": False})
+                                                       "blink": ["value"], "repeat": 0, "after": 10000, "glow": False, "glowSize": 50, "glowFlash": False,
+                                                       "flashMs": 0})
 
     def test_lines_are_limited(self):
         cfg = alarms.clean({"lines": [{"text": "x" * 500, "when": "?", "alarm": "?", "color": "?", "size": -3}, "no"] * 40}, WORDS)

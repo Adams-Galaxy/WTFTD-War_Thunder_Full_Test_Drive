@@ -767,6 +767,7 @@
   "ov.fullAt": "Contínuo em",
   "ov.addAlarm": "Adicionar um alarme",
   "ov.removeAlarm": "Remover",
+  "ov.withBeeps": "com os bipes",
   "ov.shownAs": "Limite mostrado como",
   "ov.shown.value": "Valor / limite",
   "ov.shown.percent": "% do limite",

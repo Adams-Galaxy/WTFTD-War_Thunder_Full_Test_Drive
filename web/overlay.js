@@ -103,11 +103,11 @@ function ovDraw() {
   const first = c.lines.flatMap(l => l.rules || []).find(r => r.glow);  // the first alarm with a halo, as the window shows it
   const glow = OV.trying ? OV.trialGlow : first && [first.color || c.alert, first.glowSize];  // or the tried alarm's, while it's on
   box.style.boxShadow = glow ? `inset 0 0 ${box.clientHeight * glow[1] / 100}px ${glow[0]}` : '';
-  box.style.setProperty('--ov-flash', `${c.flashMs}ms`);
+
   const k = box.clientWidth / OV.screen[0];
   const look = { fontFamily: `"${c.font}", monospace`, fontWeight: c.bold ? 700 : 400, fontStyle: c.italic ? 'italic' : 'normal' };
   const stroke = scale => (c.outline ? `${2 * c.outline * scale}px ${c.outlineColor}` : '');
-  const html = (rows, scale) => rows.map(([s, color, size, blinks, , parts]) => `<div style="color:${esc(color)};font-size:${size * scale}px;margin-bottom:${c.spacing * scale}px">${(parts || []).map(([p, tint, flash]) => `<span class="${flash ? 'ov-blink' : ''}" style="color:${esc(tint)}">${esc(p)}</span>`).join('') || '&nbsp;'}</div>`).join('');
+  const html = (rows, scale) => rows.map(([s, color, size, blinks, , parts]) => `<div style="color:${esc(color)};font-size:${size * scale}px;margin-bottom:${c.spacing * scale}px">${(parts || []).map(([p, tint, flash]) => `<span class="${flash ? 'ov-blink' : ''}" style="color:${esc(tint)};--ov-flash:${flash === true ? 400 : flash}ms">${esc(p)}</span>`).join('') || '&nbsp;'}</div>`).join('');
   [c, ...c.blocks].forEach((spot, i) => {
     const text = ovBlockEl(i), rows = OV.lines.filter(l => (l[4] || 0) === i), boxed = spot.frame || spot.background, pad = boxed ? (10 + spot.frame) * k : 0;
     Object.assign(text.style, look, { left: `${spot.x * k}px`, top: `${spot.y * k}px`, opacity: c.opacity / 100, webkitTextStroke: stroke(k),
@@ -174,6 +174,7 @@ function ovRuleHTML(r, i, j) {
   const look = row('', `<label class="ov-mini ov-swatch"><span>${esc(t('ov.alarmColor'))}</span><span class="ov-color"><input type="color" data-or="color" value="${esc(r.color || OV.cfg.alert)}">
         <button class="icon-btn${r.color ? '' : ' hidden'}" data-orclear title="${esc(t('ov.sameAsAlert'))}">${icon('x', 'ic-sm')}</button></span></label>
       <div class="ov-mini ov-flash"><span>${esc(t('ov.flash'))}</span><div class="ov-parts">${OV_PARTS.map(x => `<label><input type="checkbox" data-orblink="${x}"${(r.blink || []).includes(x) ? ' checked' : ''}>${esc(t('ov.part.' + x))}</label>`).join('')}</div></div>
+      ${num('flashMs', t('ov.flashMs'), r.flashMs || '', ` min="0" max="4000" step="50" placeholder="${esc(t('ov.withBeeps'))}"`)}
       ${num('repeat', t('ov.repeat'), r.repeat || '', ` min="0" max="10000" step="50" placeholder="${OV_REPEAT_MS}"`)}${num('after', t('ov.after'), r.after || '', ' min="0" max="10000" step="100" placeholder="0"')}`);
   const sw = (key, label) => `<label class="switch"><input type="checkbox" data-or="${key}"${r[key] ? ' checked' : ''}><span class="sw"></span><span>${esc(t(label))}</span></label>`;
   const glow = row('', `${sw('glow', 'ov.glow')}${num('glowSize', t('ov.glowSize'), r.glowSize, ` min="3" max="50"${r.glow ? '' : ' disabled'}`)}${sw('glowFlash', 'ov.glowFlash')}
@@ -247,7 +248,7 @@ function ovOwner(el, part) {
 const ovRuleOf = el => ovOwner(el, 'rule')[0][+el.closest('.ov-rule').dataset.j];
 // a new alarm: on one of the aircraft's limits, or on the line's first value (any above 0, else the G load above 9)
 function ovNewRule(l, kind) {
-  const common = { more: [], join: 'and', ms: 150, sound: '', red: null, gap: OV_GAP_MS, color: '', blink: [], repeat: 0, after: 0, glow: false, glowSize: 18, glowFlash: false };
+  const common = { more: [], join: 'and', ms: 150, sound: '', red: null, gap: OV_GAP_MS, color: '', blink: [], repeat: 0, after: 0, glow: false, glowSize: 18, glowFlash: false, flashMs: 0 };
   if (OV_LIMITS[kind]) return { ...common, limit: kind, value: '', op: '>', at: OV_LIMITS[kind][0], full: 100, hz: OV_LIMITS[kind][1] };
   const value = (l.text.match(/\{(\w+)/) || [])[1], known = ovCondNames().includes(value);
   return { ...common, limit: '', value: known ? value : 'g', op: '>', at: known ? 0 : 9, full: null, hz: 1000 };
@@ -523,7 +524,7 @@ function bindOverlay() {
       else if (key === 'color') { rule.color = el.value; $('[data-orclear]', box).classList.remove('hidden'); ovDraw(); }
       else if (key === 'sound') { rule.sound = el.value; ovRenderLines(); }
       else if (key === 'at' || key === 'hz' || key === 'ms') { if (!Number.isFinite(v)) return; rule[key] = v; }
-      else rule[key] = Number.isFinite(v) ? v : key === 'gap' ? OV_GAP_MS : key === 'repeat' || key === 'after' ? 0 : null;
+      else rule[key] = Number.isFinite(v) ? v : key === 'gap' ? OV_GAP_MS : ['repeat', 'after', 'flashMs'].includes(key) ? 0 : null;
       if (key === 'dyn' || key === 'full') $('[data-or="gap"]', box).disabled = rule.full == null;
     } else if ('olshown' in el.dataset) {
       const line = OV.cfg.lines[+el.closest('.ov-line').dataset.i];
@@ -571,7 +572,7 @@ function bindOverlay() {
   });
   view.addEventListener('click', async e => {
     const b = e.target.closest('button');
-    if (!b) return;
+    if (!b || !OV.cfg) return;  // a click before the settings came
     const row = b.closest('.ov-line'), i = row ? +row.dataset.i : -1, lines = OV.cfg.lines;
     if (b.dataset.ovv) return ovInsert(b.dataset.ovv);
     if ('ortrybtn' in b.dataset) {

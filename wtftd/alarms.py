@@ -57,6 +57,7 @@ TRY_S = 60  # My overlay's Try, left alone this long, stops: the page that start
 RING_S = 0.5  # what rings, not told again for this long (two readings at least), stops: muted, landed, the app gone
 HANGAR_IAS = 1  # km/h: the aircraft on show in the hangar reads 0 or 1
 REPEAT_MS = 300  # an alarm whose beeps don't close in, without a repeat of its own
+FLASH_MS = 500  # an alarm flashing "with its beeps" that doesn't beep (only red, or muted): this cycle
 BEEP_MS = 150
 GAP_MS = 700  # a dynamic alarm: the silence between its beeps at its threshold, none left at its break
 MAX_RULES = 6  # a line's alarms: an old line's 4 own ones and the aircraft's it followed fit
@@ -212,7 +213,7 @@ def defaults(words: dict) -> dict:
     return {"x": round(700 * scale), "y": round(55 * scale), "font": "Consolas", "size": round(40 * scale), "bold": False,
             "italic": False, "spacing": 0, "outline": 0, "outlineColor": "#000000", "blocks": [], "valueColor": "", "unitColor": "",
             "pctAlways": False, **_look({}),
-            "flashMs": 500, "volume": 100, "soundFocus": False, "soundEngine": False,
+            "volume": 100, "soundFocus": False, "soundEngine": False,
             "pollMs": round(POLL_S * 1000), "logMs": round(SAMPLE_S * 1000), "muteKey": [], "muteKeyName": "", "holdKey": [], "holdKeyName": "",
             "color": "#E6E6E6", "alert": "#FF0000", "opacity": 100, "show": True, "hotkey": [], "hotkeyName": "",
             **HUD_DEFAULTS, "mapMode": "off", "mapZoom": 1, "mapTrail": True, "mapOpacity": 85, "mapShape": "square", "mapUp": "north", "mapAllies": False, "mapAlliesGround": False, "mapDim": 30,
@@ -258,6 +259,19 @@ def _repeat_moved(cfg: dict) -> list:
         if isinstance(line, dict) and every != REPEAT_MS:
             rules = line.get("rules") if isinstance(line.get("rules"), list) else [line.get("rule")]
             line = {**line, "rules": [{**r, "repeat": r.get("repeat") or every} if isinstance(r, dict) else r for r in rules]}
+        out.append(line)
+    return out
+
+
+def _flash_moved(cfg: dict) -> list:
+    """The overlay's flash cycle, when it wasn't the default, given to the alarms without one (the default now: with
+    their beeps)."""
+    every = _num(cfg["flashMs"], FLASH_MS, 200, 4000)
+    out = []
+    for line in cfg["lines"]:
+        if isinstance(line, dict) and every != FLASH_MS:
+            rules = line.get("rules") if isinstance(line.get("rules"), list) else [line.get("rule")]
+            line = {**line, "rules": [{**r, "flashMs": r.get("flashMs") or every} if isinstance(r, dict) else r for r in rules]}
         out.append(line)
     return out
 
@@ -331,7 +345,8 @@ def _rule(rule) -> dict | None:
     beeps have come closer and closer from "gap" to one continuous sound (None: they keep "repeat", 0 = REPEAT_MS);
     color: the line's in that alarm ("" = the overlay's alert colour); blink: the parts of the line that flash; after: ms
     the alarm must last before it shows and beeps; glow: it lights a glow around the screen, in its colour, glowSize % of
-    the screen's height deep, flashing with glowFlash."""
+    the screen's height deep, flashing with glowFlash; flashMs: the cycle of its flashing (line and glow), 0 = with its
+    beeps."""
     if not isinstance(rule, dict):
         return None
     limit = rule.get("limit") if rule.get("limit") in ALARMS else ""
@@ -344,7 +359,8 @@ def _rule(rule) -> dict | None:
             "full": _value_at(rule.get("full")) if "full" in rule or not limit else 100, "gap": _num(rule.get("gap"), GAP_MS, 0, 5000),
             "color": _color(rule.get("color"), ""), "blink": [x for x in PARTS if x in blink],
             "repeat": _num(rule.get("repeat"), 0, 0, 10000), "after": _num(rule.get("after"), 0, 0, 10000),
-            "glow": _flag(rule.get("glow"), False), "glowSize": _num(rule.get("glowSize"), GLOW_SIZE, 3, 50), "glowFlash": _flag(rule.get("glowFlash"), False)}
+            "glow": _flag(rule.get("glow"), False), "glowSize": _num(rule.get("glowSize"), GLOW_SIZE, 3, 50), "glowFlash": _flag(rule.get("glowFlash"), False),
+            "flashMs": _num(rule.get("flashMs"), 0, 0, 4000) and max(100, _num(rule.get("flashMs"), 0, 0, 4000))}
 
 
 def _line(line: dict) -> dict:
@@ -390,6 +406,8 @@ def clean(cfg, words: dict) -> dict:
         cfg = {**cfg, "lines": _glow_moved(cfg)}
     if "repeat" in cfg and isinstance(cfg.get("lines"), list):  # and so was the repeat of the beeps that don't close in
         cfg = {**cfg, "lines": _repeat_moved(cfg)}
+    if "flashMs" in cfg and isinstance(cfg.get("lines"), list):  # and its flashing's cycle
+        cfg = {**cfg, "lines": _flash_moved(cfg)}
     out = {"x": _num(cfg.get("x"), base["x"], -20000, 20000), "y": _num(cfg.get("y"), base["y"], -20000, 20000),
            "font": cfg["font"] if isinstance(cfg.get("font"), str) and FONT.fullmatch(cfg["font"]) else base["font"],
            "size": _num(cfg.get("size"), base["size"], 6, 400), "bold": _flag(cfg.get("bold"), base["bold"]),
@@ -400,7 +418,7 @@ def clean(cfg, words: dict) -> dict:
            "pctAlways": _flag(cfg.get("pctAlways"), base["pctAlways"]),
            "italic": _flag(cfg.get("italic"), base["italic"]), "spacing": _num(cfg.get("spacing"), base["spacing"], -50, 200),
            "outline": _num(cfg.get("outline"), base["outline"], 0, 4), "outlineColor": _color(cfg.get("outlineColor"), base["outlineColor"]),
-           "flashMs": _num(cfg.get("flashMs"), base["flashMs"], 200, 4000), "volume": _num(cfg.get("volume"), base["volume"], 0, 100),
+           "volume": _num(cfg.get("volume"), base["volume"], 0, 100),
            "soundFocus": _flag(cfg.get("soundFocus"), base["soundFocus"]), "soundEngine": _flag(cfg.get("soundEngine"), base["soundEngine"]),
            "pollMs": _num(cfg.get("pollMs"), base["pollMs"], 50, 1000), "logMs": _num(cfg.get("logMs"), base["logMs"], 100, 10000),
            **_keys(cfg, "sheetKey", "sheetKeyName"), **_keys(cfg, "profileKey", "profileKeyName"), **_keys(cfg, "hotkey", "hotkeyName"), **_keys(cfg, "logKey", "logKeyName"), **_keys(cfg, "muteKey", "muteKeyName"),
@@ -624,6 +642,11 @@ def fill(text: str, values: dict) -> str:
     return "".join(x for x, _ in pieces(text, values)).rstrip()
 
 
+def clock(rule: dict):
+    """What an alarm's flashing follows: True, its beeps; else its own cycle, ms."""
+    return rule.get("flashMs") or True
+
+
 def shown(line: dict, values: dict, on: list, i: int = -1) -> bool:
     """on: the alarms whose lines are red, by (line, alarm) place; i: this line's place."""
     if line.get("if") and not met(line["if"], values):
@@ -658,13 +681,13 @@ def lines_for(cfg: dict, values: dict, on: list, feeds: dict | None = None) -> l
         color = (mine[-1]["color"] or cfg["alert"]) if mine else line["color"] or cfg["color"]
         tints = {"name": color, "value": color if mine else line.get("valueColor") or cfg["valueColor"] or color,
                  "unit": color if mine else line.get("unitColor") or cfg["unitColor"] or color}
-        flash = {part for rule in mine for part in rule.get("blink", ())}
+        flash = {part: clock(rule) for rule in mine for part in rule.get("blink", ())}  # the last alarm's, by part
         parts = []
         for piece, kind in pieces(line["text"], values):
-            if parts and parts[-1][1:] == (tints[kind], kind in flash):
-                parts[-1] = (parts[-1][0] + piece, tints[kind], kind in flash)
+            if parts and parts[-1][1:] == (tints[kind], flash.get(kind, False)):
+                parts[-1] = (parts[-1][0] + piece, tints[kind], flash.get(kind, False))
             else:
-                parts.append((piece, tints[kind], kind in flash))
+                parts.append((piece, tints[kind], flash.get(kind, False)))
         row(text, color, line["size"] or cfg["size"], block, parts)
     return out
 
@@ -1050,7 +1073,7 @@ class Watch:
         self._saved = (None, None)
         self._key, self._lim, self._unbreakable = None, None, False
         self._last_beep = 0.0
-        self.ringing = None  # (until when, seconds between beeps, sounds, volume): what the bell plays, see ring
+        self.ringing = None  # (until when, seconds between beeps, sounds, volume, seconds a beep lasts): what the bell plays, see ring
         self._bell = threading.Lock()
         self._wake = threading.Event()  # a trial starting: no waiting out a second's sleep
         self.broken = set()  # gear or flaps torn off: their alarms stay silent until the next spawn
@@ -1432,17 +1455,18 @@ class Watch:
         if not close:
             self.ringing = None
             return
-        sounds, played, waits = [], set(), []  # the same alarm on two lines (IAS and Mach) beeps once
+        sounds, played, waits, lasts = [], set(), [], []  # the same alarm on two lines (IAS and Mach) beeps once
         for name, c in close:
             sound = sound_of(cfg, name)
             ms = sound_ms(sound, self.sounds)
             waits.append(pace(cfg, name, c, ms))
             sound = {**sound, "ms": max(sound["ms"], cfg["pollMs"] * 2)} if c == 1 else sound
+            lasts.append(max(ms, sound["ms"]) / 1000)
             if (sound["sound"], sound["hz"], sound["ms"]) not in played:
                 played.add((sound["sound"], sound["hz"], sound["ms"]))
                 sounds.append(sound)
         fresh = max(RING_S, 2 * cfg["pollMs"] / 1000)
-        self.ringing = (time.monotonic() + fresh, min(waits), sounds, cfg["volume"])
+        self.ringing = (time.monotonic() + fresh, min(waits), sounds, cfg["volume"], max(lasts))
         self.chime()
 
     def chime(self) -> float | None:
@@ -1458,6 +1482,15 @@ class Watch:
             for sound in r[2]:
                 play(sound, r[3], self.sounds)
             return r[1]
+
+    def lit(self, beat=True) -> bool:
+        """Whether what flashes on this clock is lit now. True: with each beep, as long as it sounds, while alarms ring
+        (so it closes in with them, and stays lit when they're continuous), else at FLASH_MS (an alarm only red, or
+        muted); a number: that cycle, ms."""
+        r, now = self.ringing, time.monotonic()
+        if beat is True and r and now <= r[0]:
+            return now - self._last_beep < r[4]
+        return int(now * 2000 / (FLASH_MS if beat is True else beat)) % 2 == 0
 
     def bell(self):
         """The beeps between two readings, each on its time."""
@@ -1509,7 +1542,7 @@ class Watch:
 def glow_of(cfg: dict, places: list) -> tuple | None:
     """The glow to show: the last of these alarms that has one, (colour, depth %, flashes); None if none has."""
     rules = [r for r in (sound_of(cfg, x) for x in places) if r.get("glow")]
-    return (rules[-1]["color"] or cfg["alert"], rules[-1]["glowSize"], rules[-1]["glowFlash"]) if rules else None
+    return (rules[-1]["color"] or cfg["alert"], rules[-1]["glowSize"], rules[-1]["glowFlash"] and clock(rules[-1])) if rules else None
 
 
 def first_glow(cfg: dict) -> tuple | None:
@@ -1696,15 +1729,16 @@ def run_overlay(watch: Watch):
                 return
             cfg, lines, shapes = watch.shown_cfg(), watch.display, watch.hud_frame()
             frame = watch.map_frame()
-            lit = int(time.monotonic() * 2000 / cfg["flashMs"]) % 2 == 0
+            lit = watch.lit()  # the HUD's alert: with the beeps
             state = cfg, shapes, lit if any(s[-1] for s in shapes) else None
             if state != drawn:
                 drawn = state
                 draw(cfg, lit, shapes)
-            words = cfg, lines, lit if any(x[3] for x in lines) else None
+            clocks = sorted({p[2] for x in lines for p in x[5] if len(p) > 2 and p[2]}, key=str)  # the flashing parts' rhythms
+            words = cfg, lines, tuple(watch.lit(c) for c in clocks)
             if words != text_drawn:
                 text_drawn = words
-                shown_text[0] = bool(lines and gdi() and painter[0].paint_text(text_hwnd, cfg, lines, lit))
+                shown_text[0] = bool(lines and gdi() and painter[0].paint_text(text_hwnd, cfg, lines, watch.lit))
             if frame and (frame, cfg["mapOpacity"]) != map_drawn:
                 map_drawn = frame, cfg["mapOpacity"]
                 draw_map(frame, cfg["mapOpacity"] / 100)
@@ -1733,8 +1767,8 @@ def run_overlay(watch: Watch):
                 painted = want[:2]
                 paint_glow(glow_hwnd, screen(), glow_pixels(screen(), *painted))
             shown_glow = spec and spec[:2] == painted and (watch.preview or watch.trial or (not watch.hidden and game_focused()))
-            user32.ShowWindow(glow_hwnd, SW_SHOWNOACTIVATE if shown_glow and (lit or not spec[2]) else SW_HIDE)
-            root.after(HUD_FRAME_MS if shapes else MAP_FRAME_MS if frame else int(POLL_S * 1000), refresh)
+            user32.ShowWindow(glow_hwnd, SW_SHOWNOACTIVATE if shown_glow and (not spec[2] or watch.lit(spec[2])) else SW_HIDE)
+            root.after(HUD_FRAME_MS if shapes or watch.ringing else MAP_FRAME_MS if frame else int(POLL_S * 1000), refresh)  # ringing: flashes on the beat
 
         refresh()
         root.mainloop()

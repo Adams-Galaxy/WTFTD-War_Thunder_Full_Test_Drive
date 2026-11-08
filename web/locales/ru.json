@@ -767,6 +767,7 @@
   "ov.fullAt": "Непрерывно при",
   "ov.addAlarm": "Добавить тревогу",
   "ov.removeAlarm": "Убрать",
+  "ov.withBeeps": "с сигналами",
   "ov.shownAs": "Предел показан как",
   "ov.shown.value": "Значение / предел",
   "ov.shown.percent": "% предела",

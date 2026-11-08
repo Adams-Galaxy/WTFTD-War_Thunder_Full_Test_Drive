@@ -369,8 +369,8 @@ class Painter:
                                      x1 - x0 + 2 * pad - spot["frame"], y1 - y0 + 2 * pad - spot["frame"])
                 gp.GdipDeletePen(pen)
         outline = cfg["outline"]
-        for x, y, text, tint, size, blinks in parts:
-            if blinks and not lit or not text.strip():
+        for x, y, text, tint, size, blinks in parts:  # lit: a bool, or the clock of what flashes (alarms.Watch.lit)
+            if blinks and not (lit(blinks) if callable(lit) else lit) or not text.strip():
                 continue
             _, family, style, _ = self._text_font(cfg, size)
             path, brush = P(), P()

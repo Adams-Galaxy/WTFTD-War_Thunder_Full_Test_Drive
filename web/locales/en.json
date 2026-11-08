@@ -785,6 +785,7 @@
   "ov.fullAt": "Continuous at",
   "ov.addAlarm": "Add an alarm",
   "ov.removeAlarm": "Remove",
+  "ov.withBeeps": "with the beeps",
   "ov.shownAs": "Limit shown as",
   "ov.shown.value": "Value / limit",
   "ov.shown.percent": "% of the limit",
