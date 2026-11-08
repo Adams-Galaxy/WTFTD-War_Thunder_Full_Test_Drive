@@ -137,6 +137,20 @@ class Limits(unittest.TestCase):
         pct = alarms.percents({"v": 1000, "m": 0, **self.LIM}, {"Ny": -0.8, "Mfuel, kg": 2500})
         self.assertAlmostEqual(pct["load"], 49, delta=0.1)
 
+    def test_turn_against_the_reference(self):
+        lim = {"v": 1000, "m": 0, "turn": [20.0, 18.0]}
+        state = {"TAS, km/h": 720, "Ny": 4, "throttle 1, %": 100}
+        out = alarms.computed(lim, state, WORDS)
+        self.assertEqual(out["turn_ref"], 20.0)
+        self.assertAlmostEqual(out["turn_pct"], 20.0 / out["turn"] * 100)
+        self.assertEqual(alarms.computed(lim, {**state, "throttle 1, %": 110}, WORDS)["turn_ref"], 18.0)  # with WEP
+        self.assertNotIn("turn_pct", alarms.computed(lim, {**state, "Ny": 1}, WORDS))  # flying straight: no turn
+
+    def test_a_gauge(self):
+        self.assertEqual(alarms.fill("{turn_pct:bar}", {"turn_pct": 64}), "██████░░░░")
+        self.assertEqual(alarms.fill("{x:bar} {y:bar}", {"x": 140, "y": -5}), "██████████ ░░░░░░░░░░")  # full past 100 %
+        self.assertEqual(alarms.fill("{turn_pct:bar}", {}), alarms.NO_VALUE)  # nothing to show: N/A, hidden with Hide when N/A
+
     def test_aoa_moves_with_the_flaps(self):
         self.assertEqual(alarms.aoa_limits(self.LIM, {"flaps, %": 50}), (-15, 25))
 

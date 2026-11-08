@@ -26,7 +26,7 @@ const OV_VALUES = {
   vehicle: ['vehicle'],
   speed: ['speed', 'ias', 'tas', 'mach', 'hspeed', 'accel', 'sep', 'vne', 'mne', 'margin', 'airframe_pct', 'swept'],
   gearflaps: ['gear', 'gear_max', 'gear_pct', 'flaps', 'flaps_max', 'flaps_pct', 'airbrake'],
-  flight: ['alt', 'vy', 'aoa', 'aoa_crit', 'aoa_low', 'aoa_pct', 'aos', 'g', 'g_max', 'g_lim', 'g_neg', 'load_pct', 'turn', 'turn_rate', 'turn_radius', 'roll', 'pitch', 'bank', 'heading'],
+  flight: ['alt', 'vy', 'aoa', 'aoa_crit', 'aoa_low', 'aoa_pct', 'aos', 'g', 'g_max', 'g_lim', 'g_neg', 'load_pct', 'turn', 'turn_ref', 'turn_pct', 'turn_rate', 'turn_radius', 'roll', 'pitch', 'bank', 'heading'],
   engine: ['throttle', 'rpm', 'thrust', 'thrust_total', 'twr', 'mass', 'power', 'oil', 'fuel', 'fuel_max', 'fuel_pct', 'burn', 'fuel_time', 'range', 'wep', 'wep_s'],
   stats: ['kd', 'winrate', 'battles', 'kills', 'deaths', 'live_kd', 'live_kills', 'live_deaths'],
 };

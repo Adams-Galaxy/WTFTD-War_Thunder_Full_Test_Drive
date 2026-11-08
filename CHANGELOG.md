@@ -4,6 +4,15 @@ What changed in each version of WTFTD. Downloads: [Releases](https://github.com/
 (only the latest version is kept there; from 0.19.0 on, each version's code stays available through its git tag).
 Versions follow `major.minor.patch`; "beta" until 1.0.
 
+## Not released yet
+
+- **Turn time against the aircraft's reference**: the game's card gives each aircraft's best turn, without and with WEP
+  (980 of 1,234 flight models). New values for lines, alarms and curves: **reference turn time** (the WEP one while a
+  throttle is past 100 %) and **turn, % of reference** (the reference over this turn's time). The game data is rebuilt
+  once.
+- **Gauges in a line**: `{name:bar}` draws a % as a bar of ten blocks, full from 100 %: `{turn_pct:bar}`,
+  `{load_pct:bar}`, `{fuel_pct:bar}`...
+
 ## 0.27.0 - 2026-11-08
 
 - **Overlay: every alarm lives on its line.** Under each line of *My overlay → Lines*, its alarms (up to six), added from

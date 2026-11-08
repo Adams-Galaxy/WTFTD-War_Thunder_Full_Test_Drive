@@ -37,7 +37,7 @@ from pathlib import Path
 from . import patches, vromfs
 from .paths import CACHE, DATA, HOME as ROOT
 DM = CACHE / "datamine"
-SCHEMA = 36  # bump when data/*.json gains fields the app needs: installed data gets rebuilt
+SCHEMA = 37  # bump when data/*.json gains fields the app needs: installed data gets rebuilt
 REPO = "https://github.com/gszabi99/War-Thunder-Datamine.git"
 SPARSE = [
     "aces.vromfs.bin_u/gamedata/flightmodels",
@@ -1143,6 +1143,11 @@ def flight_limits(fm: dict, cat: str) -> dict:
              for e, k in zip(engines, kinds) if k.get("Booster")]
     if any(f > 0 and r > 0 for f, r in boost):
         out["boost"] = [x for x in boost if x[0] > 0 and x[1] > 0]  # take-off rockets: their fuel, kg, and burn, kg/s
+    alt = (fm.get("Passport") or {}).get("Alt") or {}
+    turn = [x[1] if isinstance(x, list) and len(x) == 2 and isinstance(x[1], (int, float)) and x[1] > 0 else None
+            for x in (alt.get("minTurnTimeNom"), alt.get("minTurnTimeWep"))]
+    if turn[0]:
+        out["turn"] = [round(turn[0], 1), round(turn[1] or turn[0], 1)]  # the game's card: best turn, s, without and with WEP
     return out
 
 

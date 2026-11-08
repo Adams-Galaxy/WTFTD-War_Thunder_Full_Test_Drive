@@ -86,7 +86,7 @@ FIELDS = {"ias": ("IAS, km/h", 0), "tas": ("TAS, km/h", 0), "mach": ("M", 2), "a
 COMPUTED = {"vne": 0, "mne": 2, "gear_max": 0, "flaps_max": 0, "margin": 0, "airframe_pct": 0, "gear_pct": 0,
             "flaps_pct": 0, "fuel_pct": 0, "hspeed": 0, "turn": 1, "turn_rate": 1, "turn_radius": 0, "accel": 1, "sep": 1,
             "burn": 0, "range": 0, "mass": 0, "thrust_total": 0, "twr": 2, "g_lim": 1, "g_neg": 1, "load_pct": 0,
-            "aoa_crit": 1, "aoa_low": 1, "aoa_pct": 0, "wep_s": 0}  # see computed(): name -> decimals
+            "aoa_crit": 1, "aoa_low": 1, "aoa_pct": 0, "wep_s": 0, "turn_ref": 1, "turn_pct": 0}  # see computed(): name -> decimals
 SERIES = [*FIELDS, *COMPUTED]  # the numbers curves and logs follow
 # their columns in a log, when the game's field name isn't one
 COLUMNS = {"speed": "Speed, km/h", "heading": "Heading, deg", "g_max": "Max G", "pitch": "Pitch, deg", "bank": "Bank, deg", "vne": "Max speed, km/h",
@@ -96,9 +96,11 @@ COLUMNS = {"speed": "Speed, km/h", "heading": "Heading, deg", "g_max": "Max G", 
            "turn_rate": "Turn rate, deg/s", "turn_radius": "Turn radius, m", "accel": "Acceleration, m/s2", "sep": "SEP, m/s",
            "burn": "Fuel consumption, kg/min", "range": "Range, km", "mass": "Mass without weapons, kg",
            "thrust_total": "Thrust, kgf", "twr": "Thrust/weight", "g_lim": "G limit", "g_neg": "Negative G limit", "load_pct": "G load, % of limit",
-           "aoa_crit": "Critical AoA, deg", "aoa_low": "Critical negative AoA, deg", "aoa_pct": "AoA limit, %", "wep_s": "WEP left, s"}
+           "aoa_crit": "Critical AoA, deg", "aoa_low": "Critical negative AoA, deg", "aoa_pct": "AoA limit, %", "wep_s": "WEP left, s",
+           "turn_ref": "Reference turn, s", "turn_pct": "Turn, % of reference"}
 POSITION = ["East, m", "North, m", "Map heading, deg"]  # only in the logs, for the Tacview export
-FIELD = re.compile(r"\{([^{}:]+)(?::(\d))?\}")
+FIELD = re.compile(r"\{([^{}:]+)(?::(\d|bar))?\}")  # {mach:3}: its decimals; {turn_pct:bar}: a gauge of a %
+BAR = 10  # a gauge's blocks: 10 % each
 NO_VALUE = "N/A"  # what the game doesn't send, what the aircraft doesn't have
 
 # shown if on; alarm: any line's alarm, own: one of its own alarms
@@ -120,7 +122,7 @@ FONT = re.compile(r"[\w .+-]{1,64}")
 
 # fills the preview when the game isn't flying: every line shows, with an alarm on
 SAMPLE_LIM = {"v": 1540, "m": 2.1, "gear": 700, "flaps": [[0.2, 1018], [1, 600]], "fuel": [9400], "eng": 2, "mass": 17520,
-              "load": [-550000, 1450000], "aoa": [[-20, 28], [-22, 29]]}
+              "load": [-550000, 1450000], "aoa": [[-20, 28], [-22, 29]], "turn": [18.8, 18.3]}
 SAMPLE_STATE = {"IAS, km/h": 640, "TAS, km/h": 790, "M": 0.75, "H, m": 3200, "Vy, m/s": 12.5, "AoA, deg": 4.2,
                 "AoS, deg": 0.1, "Ny": 3.1, "Wx, deg/s": 20, "Mfuel, kg": 6200, "Mfuel0, kg": 9400, "throttle 1, %": 100,
                 "RPM 1": 13300, "thrust 1, kgs": 12500, "power 1, hp": 0, "oil temp 1, C": 79, "gear, %": 100,
@@ -545,6 +547,11 @@ def computed(lim: dict | None, state: dict, words: dict, rates: dict | None = No
         out.update(g_neg=load[0], g_lim=load[1])
     if aoa := aoa_limits(lim, state):
         out.update(aoa_low=aoa[0], aoa_crit=aoa[1])
+    if lim.get("turn"):  # the game's best turn, with WEP when a throttle is past 100 %; how near this turn is to it
+        wep = any(isinstance(v, (int, float)) and v > 100 for k, v in state.items() if k.startswith("throttle "))
+        out["turn_ref"] = lim["turn"][1 if wep else 0]
+        if out.get("turn"):
+            out["turn_pct"] = out["turn_ref"] / out["turn"] * 100
     return out
 
 
@@ -623,6 +630,9 @@ def _value(m: re.Match, values: dict) -> str:
         return v
     if v is None or isinstance(v, bool):
         return NO_VALUE
+    if places == "bar":  # a % as a gauge, full from 100 %
+        lit = round(min(max(v, 0), 100) / 100 * BAR)
+        return "█" * lit + "░" * (BAR - lit)
     return f"{v:.{int(places)}f}" if places else f"{v:.{default}f}" if default is not None else f"{v:g}"
 
 
