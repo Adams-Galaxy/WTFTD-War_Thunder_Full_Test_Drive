@@ -787,6 +787,8 @@
   "ov.fullAt": "Continu à",
   "ov.addAlarm": "Ajouter une alarme",
   "ov.removeAlarm": "Retirer",
+  "ov.barSize": "Blocs",
+  "ov.barStep": "Pas (%)",
   "ov.sec.trigger": "Déclenchement",
   "ov.sec.sound": "Son",
   "ov.sec.look": "Apparence",

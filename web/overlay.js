@@ -242,29 +242,38 @@ function ovShownKind(l) {
   const shown = Object.keys(OV_SHOWN).find(k => OV_SHOWN[k][3].some(x => l.text.includes(x)));
   return shown || (l.rules || []).find(x => x.limit && OV_SHOWN[x.limit])?.limit || null;
 }
-// what follows the line's name, shown so
-function ovShownText(kind, how) {
+// what follows the line's name, shown so; bar: its gauge's spec, 'bar', 'bar20' or 'bar20/5'
+function ovShownText(kind, how, bar = 'bar') {
   const [value, pct, tail] = OV_SHOWN[kind];
-  return { value, percent: `{${pct}} %`, gauge: `{${pct}:bar}`, valuePct: `${value}  {${pct}} %`, valueGauge: `${value}  {${pct}:bar}` }[how] + tail;
+  return { value, percent: `{${pct}} %`, gauge: `{${pct}:${bar}}`, valuePct: `${value}  {${pct}} %`, valueGauge: `${value}  {${pct}:${bar}}` }[how] + tail;
 }
+// a line's gauge: [its blocks, the % each is worth, that worth set by hand], 10 blocks of 10 % unless its text says;
+// and back to its spec
+function ovBarOf(l) {
+  const m = l.text.match(/:bar(\d*)(?:\/([\d.]+))?\}/), size = Math.min(40, Math.max(1, +(m?.[1] || 10)));
+  return [size, +(m?.[2] || 0) || +(100 / size).toFixed(1), !!m?.[2]];
+}
+const ovBarSpec = (size, step) => (size === 10 && step === 10 ? 'bar' : step === +(100 / size).toFixed(1) ? `bar${size}` : `bar${size}/${step}`);
 function ovShownAs(l, kind) {
   const at = l.text.indexOf('{'), rest = at < 0 ? '' : l.text.slice(at).trim();
-  const same = OV_SHOWN_AS.find(how => ovShownText(kind, how).trim() === rest);  // as the buttons wrote it
+  const spec = ovBarSpec(...ovBarOf(l).slice(0, 2)), same = OV_SHOWN_AS.find(how => ovShownText(kind, how, spec).trim() === rest);  // as the buttons wrote it
   if (same) return same;
-  const pct = OV_SHOWN[kind][1], bar = l.text.includes(`{${pct}:bar}`), num = l.text.includes(`{${pct}}`), value = l.text.includes(OV_SHOWN[kind][0].match(/\{\w+\}/)[0]);
+  const pct = OV_SHOWN[kind][1], bar = l.text.includes(`{${pct}:bar`), num = l.text.includes(`{${pct}}`), value = l.text.includes(OV_SHOWN[kind][0].match(/\{\w+\}/)[0]);
   return bar ? (value ? 'valueGauge' : 'gauge') : num ? (value ? 'valuePct' : 'percent') : 'value';  // written by hand
 }
 // the line's buttons, under its text: its value, its %, a gauge, or the value with one of them
 function ovShownHTML(l, i) {
   const kind = ovShownKind(l);
   if (!kind) return '';
-  const now = ovShownAs(l, kind);
-  return `<div class="ov-showas"><span>${esc(t('ov.showAs'))}</span>${OV_SHOWN_AS.map(how => `<label><input type="radio" name="ovshown-${i}" data-olshown value="${how}"${how === now ? ' checked' : ''}>${esc(t('ov.shown.' + how))}</label>`).join('')}</div>`;
+  const now = ovShownAs(l, kind), [size, step] = ovBarOf(l);
+  const gauge = now === 'gauge' || now === 'valueGauge' ? `<span class="ov-bar-set">${ovField(t('ov.barSize'), `<input type="number" data-olbar="size" min="1" max="40" value="${size}">`)}
+      ${ovField(t('ov.barStep'), `<input type="number" data-olbar="step" min="0.1" max="100" step="any" value="${step}">`)}</span>` : '';
+  return `<div class="ov-showas"><span>${esc(t('ov.showAs'))}</span>${OV_SHOWN_AS.map(how => `<label><input type="radio" name="ovshown-${i}" data-olshown value="${how}"${how === now ? ' checked' : ''}>${esc(t('ov.shown.' + how))}</label>`).join('')}${gauge}</div>`;
 }
 // rewrites what follows the line's name (the text before its first value)
-function ovSetShown(l, how) {
+function ovSetShown(l, how, bar = ovBarSpec(...ovBarOf(l).slice(0, 2))) {
   const kind = ovShownKind(l), at = l.text.indexOf('{'), name = at < 0 ? `${l.text.trimEnd()} ` : l.text.slice(0, at);
-  if (kind) l.text = name + ovShownText(kind, how);
+  if (kind) l.text = name + ovShownText(kind, how, bar);
 }
 
 // a line's alarms, in sight under it, and a menu to add one
@@ -567,6 +576,14 @@ function bindOverlay() {
     } else if ('olshown' in el.dataset) {
       ovSetShown(OV.cfg.lines[+el.closest('.ov-line').dataset.i], el.value);
       ovRenderLines();
+    } else if (el.dataset.olbar) {  // the gauge's blocks or step: its spec rewritten in the line, the field kept as typed
+      const line = OV.cfg.lines[+el.closest('.ov-line').dataset.i], v = parseFloat(el.value), [size, step, set] = ovBarOf(line);
+      if (!Number.isFinite(v) || v <= 0) return;
+      const blocks = Math.min(40, Math.max(1, Math.round(v))), auto = +(100 / blocks).toFixed(1);  // a step not set: full at 100 % still
+      const spec = el.dataset.olbar === 'size' ? ovBarSpec(blocks, set ? step : auto) : ovBarSpec(size, +v.toFixed(1));
+      if (el.dataset.olbar === 'size' && !set) $('[data-olbar="step"]', el.closest('.ov-line')).value = auto;
+      line.text = line.text.replace(/:bar[\d./]*\}/g, `:${spec}}`);
+      $('[data-ol="text"]', el.closest('.ov-line')).value = line.text;
     } else if ('ortry' in el.dataset) {
       const r = ovRuleOf(el);
       OV.trying.value = parseFloat(el.value);

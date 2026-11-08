@@ -99,8 +99,10 @@ COLUMNS = {"speed": "Speed, km/h", "heading": "Heading, deg", "g_max": "Max G", 
            "aoa_crit": "Critical AoA, deg", "aoa_low": "Critical negative AoA, deg", "aoa_pct": "AoA limit, %", "wep_s": "WEP left, s",
            "turn_ref": "Reference turn, s", "turn_pct": "Turn, % of reference"}
 POSITION = ["East, m", "North, m", "Map heading, deg"]  # only in the logs, for the Tacview export
-FIELD = re.compile(r"\{([^{}:]+)(?::(\d|bar))?\}")  # {mach:3}: its decimals; {turn_pct:bar}: a gauge of a %
-BAR = 10  # a gauge's blocks: 10 % each
+# {mach:3}: its decimals; {turn_pct:bar}: a gauge of a %, {turn_pct:bar20/5}: of 20 blocks of 5 % each
+FIELD = re.compile(r"\{([^{}:]+)(?::(\d|bar(?:\d{1,2})?(?:/\d{1,3}(?:\.\d)?)?))?\}")
+BAR = 10  # a gauge's blocks: 10 % each, unless it says
+GAUGE = re.compile(r"bar(\d*)(?:/([\d.]+))?")
 NO_VALUE = "N/A"  # what the game doesn't send, what the aircraft doesn't have
 
 # shown if on; alarm: any line's alarm, own: one of its own alarms
@@ -630,9 +632,12 @@ def _value(m: re.Match, values: dict) -> str:
         return v
     if v is None or isinstance(v, bool):
         return NO_VALUE
-    if places == "bar":  # a % as a gauge, full from 100 %
-        lit = round(min(max(v, 0), 100) / 100 * BAR)
-        return "█" * lit + "░" * (BAR - lit)
+    if places and places.startswith("bar"):  # a % as a gauge: its blocks, each worth its step (full from 100 % unless set)
+        size, step = GAUGE.fullmatch(places).groups()
+        size = min(max(int(size or BAR), 1), 40)
+        step = float(step) if step and float(step) > 0 else 100 / size
+        lit = min(max(round(v / step), 0), size)
+        return "█" * lit + "░" * (size - lit)
     return f"{v:.{int(places)}f}" if places else f"{v:.{default}f}" if default is not None else f"{v:g}"
 
 

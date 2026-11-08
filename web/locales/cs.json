@@ -769,6 +769,8 @@
   "ov.fullAt": "Nepřetržitě při",
   "ov.addAlarm": "Přidat alarm",
   "ov.removeAlarm": "Odebrat",
+  "ov.barSize": "Bloky",
+  "ov.barStep": "Krok (%)",
   "ov.sec.trigger": "Spuštění",
   "ov.sec.sound": "Zvuk",
   "ov.sec.look": "Vzhled",

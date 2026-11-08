@@ -769,6 +769,8 @@
   "ov.fullAt": "連続音になる値",
   "ov.addAlarm": "警告を追加",
   "ov.removeAlarm": "削除",
+  "ov.barSize": "ブロック数",
+  "ov.barStep": "刻み (%)",
   "ov.sec.trigger": "作動",
   "ov.sec.sound": "音",
   "ov.sec.look": "見た目",

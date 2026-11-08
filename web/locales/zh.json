@@ -769,6 +769,8 @@
   "ov.fullAt": "持续鸣响于",
   "ov.addAlarm": "添加警报",
   "ov.removeAlarm": "移除",
+  "ov.barSize": "格数",
+  "ov.barStep": "步长 (%)",
   "ov.sec.trigger": "触发",
   "ov.sec.sound": "声音",
   "ov.sec.look": "外观",

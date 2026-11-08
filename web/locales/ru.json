@@ -769,6 +769,8 @@
   "ov.fullAt": "Непрерывно при",
   "ov.addAlarm": "Добавить тревогу",
   "ov.removeAlarm": "Убрать",
+  "ov.barSize": "Блоки",
+  "ov.barStep": "Шаг (%)",
   "ov.sec.trigger": "Срабатывание",
   "ov.sec.sound": "Звук",
   "ov.sec.look": "Вид",

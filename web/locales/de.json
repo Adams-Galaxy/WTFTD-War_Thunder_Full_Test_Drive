@@ -769,6 +769,8 @@
   "ov.fullAt": "Dauerton bei",
   "ov.addAlarm": "Alarm hinzufügen",
   "ov.removeAlarm": "Entfernen",
+  "ov.barSize": "Blöcke",
+  "ov.barStep": "Schritt (%)",
   "ov.sec.trigger": "Auslösung",
   "ov.sec.sound": "Ton",
   "ov.sec.look": "Aussehen",

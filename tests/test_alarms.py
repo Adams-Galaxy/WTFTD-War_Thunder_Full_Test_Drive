@@ -150,6 +150,10 @@ class Limits(unittest.TestCase):
         self.assertEqual(alarms.fill("{turn_pct:bar}", {"turn_pct": 64}), "██████░░░░")
         self.assertEqual(alarms.fill("{x:bar} {y:bar}", {"x": 140, "y": -5}), "██████████ ░░░░░░░░░░")  # full past 100 %
         self.assertEqual(alarms.fill("{turn_pct:bar}", {}), alarms.NO_VALUE)  # nothing to show: N/A, hidden with Hide when N/A
+        self.assertEqual(alarms.fill("{x:bar20}", {"x": 52}), "█" * 10 + "░" * 10)  # 20 blocks: 5 % each
+        self.assertEqual(alarms.fill("{x:bar12/10}", {"x": 112}), "█" * 11 + "░")  # 12 blocks of 10 %: past 100 % shows
+        self.assertEqual(alarms.fill("{x:bar4/2.5}", {"x": 6}), "██░░")
+        self.assertEqual(alarms.fill("{x:bar99}", {"x": 50}), "█" * 20 + "░" * 20)  # 40 blocks at most
 
     def test_aoa_moves_with_the_flaps(self):
         self.assertEqual(alarms.aoa_limits(self.LIM, {"flaps, %": 50}), (-15, 25))
@@ -954,12 +958,12 @@ class Watching(unittest.TestCase):
             for key in ("ov.redFrom", "ov.beepFrom", "ov.dynamic", "ov.gap", "ov.redFromValue", "ov.fullAt", "ov.addAlarm", "ov.removeAlarm", "ov.withBeep",
                         "ov.noFull", "ov.alarm.load", "ov.alarm.aoa", "ov.when.own", "ov.alarmValue", "ov.alarmColor", "ov.flash", "ov.after",
                         "ov.feed.chat", "ov.feed.log", "ov.sheetKey", "ov.profileKey", "ov.v.g_lim", "ov.v.wep", "ov.try", "ov.tryStop", "ov.tryHint", "ov.showAs", "ov.shown.value",
-                        "ov.shown.percent", "ov.shown.gauge", "ov.shown.valuePct", "ov.shown.valueGauge", "ov.fullAtPct"):
+                        "ov.shown.percent", "ov.shown.gauge", "ov.shown.valuePct", "ov.shown.valueGauge", "ov.fullAtPct", "ov.barSize", "ov.barStep"):
                 self.assertTrue(words.get(key), (code, key))
         page = (alarms.WEB / "index.html").read_text(encoding="utf-8")
         self.assertNotIn('id="ovAlarms"', page)  # the alarms live on the lines
         self.assertNotIn('id="ovStyle"', page)  # and so does how a line shows its limit
-        for bit in ("data-ortoggle", "ov.sec.trigger", "ov.sec.sound", "ov.sec.look", "ovRuleSummary", "'valueGauge'"):  # folded alarms, gauges by buttons
+        for bit in ("data-ortoggle", "ov.sec.trigger", "ov.sec.sound", "ov.sec.look", "ovRuleSummary", "'valueGauge'", 'data-olbar="size"', 'data-olbar="step"'):  # folded alarms, gauges by buttons
             self.assertIn(bit, script)
         self.assertIn('data-ovkey="sheetKey"', page)
 

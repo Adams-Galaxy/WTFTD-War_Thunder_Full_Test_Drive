@@ -4,6 +4,12 @@ What changed in each version of WTFTD. Downloads: [Releases](https://github.com/
 (only the latest version is kept there; from 0.19.0 on, each version's code stays available through its git tag).
 Versions follow `major.minor.patch`; "beta" until 1.0.
 
+## Not released yet
+
+- **A gauge's length and step**: with *Gauge* or *Value and gauge*, a line sets its gauge's **Blocks** (1 to 40) and
+  **Step** (% each block is worth): 20 blocks of 5 % for a finer one, 12 of 10 % to see past 100 %. Changing the blocks
+  keeps it full at 100 % until a step is set. Written by hand: `{turn_pct:bar20/5}`.
+
 ## 0.28.0 - 2026-11-08
 
 - **Turn time against the aircraft's reference**: the game's card gives each aircraft's best turn, without and with WEP

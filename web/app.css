@@ -1316,6 +1316,9 @@ body.no-sidebar .sidebar, body.no-sidebar #compareTray { display: none; }
 .ov-line.ov-blocks { grid-template-columns: auto minmax(180px, 1fr) 118px 58px 58px 46px 26px auto; }
 .ov-showas { grid-column: 2 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; font-size: 12px; color: var(--muted); }
 .ov-showas label { display: flex; align-items: center; gap: 4px; color: var(--text-2); cursor: pointer; }
+.ov-bar-set { display: flex; gap: 6px; align-items: end; }
+.ov-bar-set .ov-mini { width: 80px; }
+.ov-bar-set .ov-mini > span:first-child { white-space: nowrap; }
 .ov-line .icon-btn { width: 26px; height: 26px; }
 .ov-move { display: flex; flex-direction: column; }
 .ov-move .icon-btn { height: 16px; font-size: 9px; border: 0; }
