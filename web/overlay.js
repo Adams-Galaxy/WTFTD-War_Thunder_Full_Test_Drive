@@ -88,7 +88,8 @@ function ovBlockEl(i) {
 function ovDraw() {
   const box = $('#ovScreen'), c = OV.cfg;
   box.style.aspectRatio = `${OV.screen[0]} / ${OV.screen[1]}`;
-  box.style.boxShadow = c.glow ? `inset 0 0 ${box.clientHeight * c.glowSize / 100}px ${c.glowColor || c.alert}` : '';
+  const glow = c.lines.flatMap(l => l.rules || []).find(r => r.glow);  // the first alarm with a halo, as the window shows it
+  box.style.boxShadow = glow ? `inset 0 0 ${box.clientHeight * glow.glowSize / 100}px ${glow.color || c.alert}` : '';
   box.style.setProperty('--ov-flash', `${c.flashMs}ms`);
   const k = box.clientWidth / OV.screen[0];
   const look = { fontFamily: `"${c.font}", monospace`, fontWeight: c.bold ? 700 : 400, fontStyle: c.italic ? 'italic' : 'normal' };
@@ -155,9 +156,11 @@ function ovRuleHTML(r, i, j) {
   const look = row('', `<label class="ov-mini ov-swatch"><span>${esc(t('ov.alarmColor'))}</span><span class="ov-color"><input type="color" data-or="color" value="${esc(r.color || OV.cfg.alert)}">
         <button class="icon-btn${r.color ? '' : ' hidden'}" data-orclear title="${esc(t('ov.sameAsAlert'))}">${icon('x', 'ic-sm')}</button></span></label>
       <div class="ov-mini ov-flash"><span>${esc(t('ov.flash'))}</span><div class="ov-parts">${OV_PARTS.map(x => `<label><input type="checkbox" data-orblink="${x}"${(r.blink || []).includes(x) ? ' checked' : ''}>${esc(t('ov.part.' + x))}</label>`).join('')}</div></div>
-      ${num('repeat', t('ov.repeat'), r.repeat || '', ` min="0" max="10000" step="50" placeholder="${esc(OV.cfg.repeat)}"`)}${num('after', t('ov.after'), r.after || '', ' min="0" max="10000" step="100" placeholder="0"')}
+      ${num('repeat', t('ov.repeat'), r.repeat || '', ` min="0" max="10000" step="50" placeholder="${esc(OV.cfg.repeat)}"`)}${num('after', t('ov.after'), r.after || '', ' min="0" max="10000" step="100" placeholder="0"')}`);
+  const sw = (key, label) => `<label class="switch"><input type="checkbox" data-or="${key}"${r[key] ? ' checked' : ''}><span class="sw"></span><span>${esc(t(label))}</span></label>`;
+  const glow = row('', `${sw('glow', 'ov.glow')}${num('glowSize', t('ov.glowSize'), r.glowSize, ` min="3" max="50"${r.glow ? '' : ' disabled'}`)}${sw('glowFlash', 'ov.glowFlash')}
       <button class="btn btn-sm btn-ghost" data-ordel>${icon('trash', 'ic-sm')}<span>${esc(t('ov.removeAlarm'))}</span></button>`);
-  return `<div class="ov-rule" data-j="${j}">${levels}${sound}${look}</div>`;
+  return `<div class="ov-rule" data-j="${j}">${levels}${sound}${look}${glow}</div>`;
 }
 
 // a line's alarms, in sight under it, and a menu to add one
@@ -175,7 +178,7 @@ function ovOwner(el, part) {
 const ovRuleOf = el => ovOwner(el, 'rule')[0][+el.closest('.ov-rule').dataset.j];
 // a new alarm: on one of the aircraft's limits, or on the line's first value (any above 0, else the G load above 9)
 function ovNewRule(l, kind) {
-  const common = { more: [], join: 'and', ms: 150, sound: '', red: null, gap: OV_GAP_MS, color: '', blink: [], repeat: 0, after: 0 };
+  const common = { more: [], join: 'and', ms: 150, sound: '', red: null, gap: OV_GAP_MS, color: '', blink: [], repeat: 0, after: 0, glow: false, glowSize: 18, glowFlash: false };
   if (OV_LIMITS[kind]) return { ...common, limit: kind, value: '', op: '>', at: OV_LIMITS[kind][0], full: 100, hz: OV_LIMITS[kind][1] };
   const value = (l.text.match(/\{(\w+)/) || [])[1], known = ovCondNames().includes(value);
   return { ...common, limit: '', value: known ? value : 'g', op: '>', at: known ? 0 : 9, full: null, hz: 1000 };
@@ -304,8 +307,8 @@ function ovRenderProfiles(st) {
   $('#ovActive').textContent = st.aircraft ? t('ov.active', { aircraft: I18N.unit(st.aircraft), profile: ovProfileName(st.active) }) : '';
 }
 
-// the colours that can follow the text, or the alert colour for the glow: a cross takes them back to it
-const ovFollowed = key => OV.cfg[key] || (key === 'glowColor' ? OV.cfg.alert : OV.cfg.color);
+// the colours that can follow the text's: a cross takes them back to it
+const ovFollowed = key => OV.cfg[key] || OV.cfg.color;
 function ovShowClears() {
   $$('#view-overlay [data-ovclear]').forEach(b => b.classList.toggle('hidden', !OV.cfg[b.dataset.ovclear]));
 }
@@ -454,7 +457,7 @@ function bindOverlay() {
       if (el.type === 'number' && Number.isNaN(value)) return;
       OV.cfg[el.dataset.ov] = value;
       if (el.dataset.ov === 'size' || el.dataset.ov === 'color') ovRenderLines();  // what lines without their own show
-      if (el.dataset.ov === 'alert') $('#ovGlowColor').value = ovFollowed('glowColor');
+      if (el.dataset.ov === 'alert') ovRenderLines();  // the alarms that follow it show it
       if (['mapX', 'mapY', 'mapSize', 'mapOpacity'].includes(el.dataset.ov)) ovDrawMap();
       ovShowClears();
       ovDraw();
@@ -467,7 +470,9 @@ function bindOverlay() {
     } else if (el.dataset.or) {  // one of a line's alarms: an empty field is none (red with its beep, no continuous sound)
       const rule = ovRuleOf(el), key = el.dataset.or, v = parseFloat(el.value), box = el.closest('.ov-rule');
       if (key === 'dyn') rule.full = el.checked ? 100 : null;
-      else if (key === 'color') { rule.color = el.value; $('[data-orclear]', box).classList.remove('hidden'); }
+      else if (key === 'glow' || key === 'glowFlash') { rule[key] = el.checked; $('[data-or="glowSize"]', box).disabled = !rule.glow; ovDraw(); }
+      else if (key === 'glowSize') { if (!Number.isFinite(v)) return; rule[key] = v; ovDraw(); }
+      else if (key === 'color') { rule.color = el.value; $('[data-orclear]', box).classList.remove('hidden'); ovDraw(); }
       else if (key === 'sound') { rule.sound = el.value; ovRenderLines(); }
       else if (key === 'at' || key === 'hz' || key === 'ms') { if (!Number.isFinite(v)) return; rule[key] = v; }
       else rule[key] = Number.isFinite(v) ? v : key === 'gap' ? OV_GAP_MS : key === 'repeat' || key === 'after' ? 0 : null;

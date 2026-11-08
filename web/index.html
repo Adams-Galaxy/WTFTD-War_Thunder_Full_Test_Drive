@@ -314,7 +314,10 @@
             <div class="field"><label for="ovOutline" data-i18n="ov.outline"></label><input id="ovOutline" type="number" data-ov="outline" min="0" max="4"></div>
             <div class="field"><label for="ovOutlineColor" data-i18n="ov.outlineColor"></label><input id="ovOutlineColor" type="color" data-ov="outlineColor"></div>
           </div>
-          <div class="field"><label for="ovOpacity" data-i18n="ov.opacity"></label><input id="ovOpacity" type="number" data-ov="opacity" min="10" max="100"></div>
+          <div class="field-row">
+            <div class="field"><label for="ovOpacity" data-i18n="ov.opacity"></label><input id="ovOpacity" type="number" data-ov="opacity" min="10" max="100"></div>
+            <div class="field"><label for="ovFlashMs" data-i18n="ov.flashMs"></label><input id="ovFlashMs" type="number" data-ov="flashMs" min="200" max="4000" step="100"></div>
+          </div>
         </div>
       </div></section>
       <section class="ov-panel hidden" data-panel="hud"><div class="ov-cards">
@@ -387,17 +390,6 @@
             <label class="switch"><input type="checkbox" data-ov="soundFocus"><span class="sw"></span><span data-i18n="ov.soundFocus"></span></label>
             <label class="switch"><input type="checkbox" data-ov="soundEngine"><span class="sw"></span><span data-i18n="ov.soundEngine"></span></label>
             <input type="file" id="ovSoundFile" accept="audio/*" hidden>
-          </div>
-          <div class="ov-card">
-            <h3 class="ov-h" data-i18n="ov.glowCard"></h3>
-            <label class="switch"><input type="checkbox" data-ov="glow"><span class="sw"></span><span data-i18n="ov.glow"></span></label>
-            <label class="switch"><input type="checkbox" data-ov="glowFlash"><span class="sw"></span><span data-i18n="ov.glowFlash"></span></label>
-            <div class="field-row">
-              <div class="field"><label for="ovGlowColor" data-i18n="ov.glowColor"></label>
-                <div class="ov-color"><input id="ovGlowColor" type="color" data-ov="glowColor"><button class="icon-btn hidden" data-ovclear="glowColor" data-i18n-title="ov.sameAsAlert"><svg class="ic-sm"><use href="#i-x"/></svg></button></div></div>
-              <div class="field"><label for="ovGlowSize" data-i18n="ov.glowSize"></label><input id="ovGlowSize" type="number" data-ov="glowSize" min="3" max="50"></div>
-              <div class="field"><label for="ovFlashMs" data-i18n="ov.flashMs"></label><input id="ovFlashMs" type="number" data-ov="flashMs" min="200" max="4000" step="100"></div>
-            </div>
           </div>
         </div>
       </section>

@@ -210,13 +210,13 @@ def defaults(words: dict) -> dict:
     return {"x": round(700 * scale), "y": round(55 * scale), "font": "Consolas", "size": round(40 * scale), "bold": False,
             "italic": False, "spacing": 0, "outline": 0, "outlineColor": "#000000", "blocks": [], "valueColor": "", "unitColor": "",
             "pctAlways": False, **_look({}),
-            "glowSize": GLOW_SIZE, "glowColor": "", "glowFlash": False, "flashMs": 500, "volume": 100, "soundFocus": False, "soundEngine": False,
+            "flashMs": 500, "volume": 100, "soundFocus": False, "soundEngine": False,
             "pollMs": round(POLL_S * 1000), "logMs": round(SAMPLE_S * 1000), "muteKey": [], "muteKeyName": "", "holdKey": [], "holdKeyName": "",
             "color": "#E6E6E6", "alert": "#FF0000", "opacity": 100, "show": True, "hotkey": [], "hotkeyName": "",
             **HUD_DEFAULTS, "mapMode": "off", "mapZoom": 1, "mapTrail": True, "mapOpacity": 85, "mapShape": "square", "mapUp": "north", "mapAllies": False, "mapAlliesGround": False, "mapDim": 30,
             **{f"mapMark{k}": 100 for k in minimap.MARKS},  # the minimap: off until the player turns it on
             "mapSize": round(560 * scale), "mapX": round(40 * scale), "mapY": round(1100 * scale),
-            "logKey": [], "logKeyName": "", "hideCrash": False, "hideUnknown": False, "glow": False, "repeat": REPEAT_MS,
+            "logKey": [], "logKeyName": "", "hideCrash": False, "hideUnknown": False, "repeat": REPEAT_MS,
             "sheetKey": [], "sheetKeyName": "", "profileKey": [], "profileKeyName": "",
             "lines": [*lines, _line({"text": "REC", "when": "log", "color": "#FF0000"})]}
 
@@ -234,6 +234,18 @@ def limit_alarm(name: str, red=None) -> dict:
     """A line's alarm on one of the aircraft's limits (mach: the airframe's), its defaults: beeps closing in up to 100 %."""
     name = "airframe" if name == "mach" else name
     return {"limit": name, "at": ALARMS[name][0], "red": red, "full": 100, "hz": ALARMS[name][1]}
+
+
+def _glow_moved(cfg: dict) -> list:
+    """The overlay's glow (on, size, flashing) given to every alarm of its lines; its colour follows each alarm's now."""
+    glow = {"glow": cfg["glow"] is True, "glowSize": cfg.get("glowSize"), "glowFlash": cfg.get("glowFlash") is True}
+    out = []
+    for line in cfg["lines"]:
+        if isinstance(line, dict):
+            rules = line.get("rules") if isinstance(line.get("rules"), list) else [line.get("rule")]
+            line = {**line, "rules": [{**glow, **r} if isinstance(r, dict) else r for r in rules]}
+        out.append(line)
+    return out
 
 
 def _migrated(cfg: dict, words: dict) -> list:
@@ -304,7 +316,8 @@ def _rule(rule) -> dict | None:
     value (its first one against "at"). at: the beep; red: the line goes red from there (None: with the beep); full: the
     beeps have come closer and closer from "gap" to one continuous sound (None: they keep "repeat", 0 = the overlay's);
     color: the line's in that alarm ("" = the overlay's alert colour); blink: the parts of the line that flash; after: ms
-    the alarm must last before it shows and beeps."""
+    the alarm must last before it shows and beeps; glow: it lights a glow around the screen, in its colour, glowSize % of
+    the screen's height deep, flashing with glowFlash."""
     if not isinstance(rule, dict):
         return None
     limit = rule.get("limit") if rule.get("limit") in ALARMS else ""
@@ -316,7 +329,8 @@ def _rule(rule) -> dict | None:
             "ms": _num(rule.get("ms"), BEEP_MS, 10, 2000), "sound": _sound(rule.get("sound")), "red": _value_at(rule.get("red")),
             "full": _value_at(rule.get("full")) if "full" in rule or not limit else 100, "gap": _num(rule.get("gap"), GAP_MS, 0, 5000),
             "color": _color(rule.get("color"), ""), "blink": [x for x in PARTS if x in blink],
-            "repeat": _num(rule.get("repeat"), 0, 0, 10000), "after": _num(rule.get("after"), 0, 0, 10000)}
+            "repeat": _num(rule.get("repeat"), 0, 0, 10000), "after": _num(rule.get("after"), 0, 0, 10000),
+            "glow": _flag(rule.get("glow"), False), "glowSize": _num(rule.get("glowSize"), GLOW_SIZE, 3, 50), "glowFlash": _flag(rule.get("glowFlash"), False)}
 
 
 def _line(line: dict) -> dict:
@@ -358,18 +372,18 @@ def clean(cfg, words: dict) -> dict:
         return base
     if isinstance(cfg.get("alarms"), dict) and isinstance(cfg.get("lines"), list):  # saved before 0.27 (none saved: the defaults)
         cfg = {**cfg, "lines": _migrated(cfg, words)}
+    if "glow" in cfg and isinstance(cfg.get("lines"), list):  # before 0.27 the glow was the overlay's, for every alarm
+        cfg = {**cfg, "lines": _glow_moved(cfg)}
     out = {"x": _num(cfg.get("x"), base["x"], -20000, 20000), "y": _num(cfg.get("y"), base["y"], -20000, 20000),
            "font": cfg["font"] if isinstance(cfg.get("font"), str) and FONT.fullmatch(cfg["font"]) else base["font"],
            "size": _num(cfg.get("size"), base["size"], 6, 400), "bold": _flag(cfg.get("bold"), base["bold"]),
            "color": _color(cfg.get("color"), base["color"]), "alert": _color(cfg.get("alert"), base["alert"]),
            "opacity": _num(cfg.get("opacity"), base["opacity"], 10, 100), "show": _flag(cfg.get("show"), base["show"]),
            "hideCrash": _flag(cfg.get("hideCrash"), base["hideCrash"]), "hideUnknown": _flag(cfg.get("hideUnknown"), base["hideUnknown"]),
-           "glow": _flag(cfg.get("glow"), base["glow"]),
            "valueColor": _color(cfg.get("valueColor"), ""), "unitColor": _color(cfg.get("unitColor"), ""), **_look(cfg),
            "pctAlways": _flag(cfg.get("pctAlways"), base["pctAlways"]),
            "italic": _flag(cfg.get("italic"), base["italic"]), "spacing": _num(cfg.get("spacing"), base["spacing"], -50, 200),
            "outline": _num(cfg.get("outline"), base["outline"], 0, 4), "outlineColor": _color(cfg.get("outlineColor"), base["outlineColor"]),
-           "glowSize": _num(cfg.get("glowSize"), base["glowSize"], 3, 50), "glowColor": _color(cfg.get("glowColor"), ""), "glowFlash": _flag(cfg.get("glowFlash"), base["glowFlash"]),
            "flashMs": _num(cfg.get("flashMs"), base["flashMs"], 200, 4000), "volume": _num(cfg.get("volume"), base["volume"], 0, 100),
            "soundFocus": _flag(cfg.get("soundFocus"), base["soundFocus"]), "soundEngine": _flag(cfg.get("soundEngine"), base["soundEngine"]),
            "pollMs": _num(cfg.get("pollMs"), base["pollMs"], 50, 1000), "logMs": _num(cfg.get("logMs"), base["logMs"], 100, 10000),
@@ -953,7 +967,8 @@ class Watch:
         self.on = []  # the alarms on, for the cockpit window's HUD
         self.flying = False
         self.crash = False  # in the wreck, until the next spawn
-        self.warn = False  # an alarm is on: the glow around the screen
+        self.warn = False  # an alarm is on
+        self.glow = None  # the glow it lights, see glow_of
         self.pilot = None  # the player's name in the battle log, see read_log
         self.past = {}  # the player's numbers from My battles, read at the start of a battle
         self.tally = battle.Tally()  # and this battle's so far
@@ -1267,6 +1282,7 @@ class Watch:
         on = self.held(cfg, [] if wreck else own_alerts(cfg, values, pct), "beep")
         red = self.held(cfg, [] if wreck else own_alerts(cfg, values, pct, red=True), "red")  # their lines red
         self.warn, self.on = bool(red or on), [sound_of(cfg, x)["limit"] for x in on]  # the HUD lights its speed with these
+        self.glow = glow_of(cfg, red + [x for x in on if x not in red])
         note = self.words["unknown"] if not lim else self.words["unbreakable"] if self._unbreakable else None
         tint = cfg["alert"] if not lim else cfg["color"]
         status = [(note, tint, cfg["size"], False, 0, [(note, tint, False)])] if note else []
@@ -1316,7 +1332,7 @@ class Watch:
         cfg = self.preview or self.profiles.get(self.profile)
         on = self.held(cfg, own_alerts(cfg, values), "beep") if cfg and self.enabled else []
         red = self.held(cfg, own_alerts(cfg, values, red=True), "red") if cfg and self.enabled else []
-        self.warn = bool(red or on)
+        self.warn, self.glow = bool(red or on), glow_of(cfg, red + [x for x in on if x not in red]) if cfg else None
         if cfg and self.enabled:
             self.read_feeds(cfg)
         if self.preview or not self.enabled:
@@ -1344,8 +1360,16 @@ class Watch:
             self.overlay.join(1)
 
 
-def glow_color(cfg: dict) -> str:
-    return cfg["glowColor"] or cfg["alert"]
+def glow_of(cfg: dict, places: list) -> tuple | None:
+    """The glow to show: the last of these alarms that has one, (colour, depth %, flashes); None if none has."""
+    rules = [r for r in (sound_of(cfg, x) for x in places) if r.get("glow")]
+    return (rules[-1]["color"] or cfg["alert"], rules[-1]["glowSize"], rules[-1]["glowFlash"]) if rules else None
+
+
+def first_glow(cfg: dict) -> tuple | None:
+    """The glow of the overlay's first alarm that has one: painted ahead of time, shown in the preview."""
+    place = next(((i, j) for i, line in enumerate(cfg["lines"]) for j, r in enumerate(line.get("rules") or []) if r.get("glow")), None)
+    return glow_of(cfg, [place]) if place else None
 
 
 def glow_pixels(size: tuple, color: str, reach: int = GLOW_SIZE) -> bytes:
@@ -1557,11 +1581,13 @@ def run_overlay(watch: Watch):
             user32.ShowWindow(hwnd, SW_SHOWNOACTIVATE if shapes and (watch.preview or on_game) else SW_HIDE)
             user32.ShowWindow(text_hwnd, SW_SHOWNOACTIVATE if shown_text[0] and (watch.preview or on_game) else SW_HIDE)
             user32.ShowWindow(map_hwnd, SW_SHOWNOACTIVATE if frame and painter and painter[0] and (watch.preview or on_game) else SW_HIDE)
-            if cfg["glow"] and (glow_color(cfg), cfg["glowSize"]) != painted:  # ahead of the first alarm: it takes a moment on a big screen
-                painted = glow_color(cfg), cfg["glowSize"]
+            spec = first_glow(cfg) if watch.preview else watch.glow
+            want = spec or first_glow(cfg)  # ahead of the first alarm: painting takes a moment on a big screen
+            if want and want[:2] != painted:
+                painted = want[:2]
                 paint_glow(glow_hwnd, screen(), glow_pixels(screen(), *painted))
-            warn = watch.preview or (watch.warn and not watch.hidden and game_focused())
-            user32.ShowWindow(glow_hwnd, SW_SHOWNOACTIVATE if cfg["glow"] and warn and (lit or not cfg["glowFlash"]) else SW_HIDE)
+            shown_glow = spec and spec[:2] == painted and (watch.preview or (not watch.hidden and game_focused()))
+            user32.ShowWindow(glow_hwnd, SW_SHOWNOACTIVATE if shown_glow and (lit or not spec[2]) else SW_HIDE)
             root.after(HUD_FRAME_MS if shapes else MAP_FRAME_MS if frame else int(POLL_S * 1000), refresh)
 
         refresh()

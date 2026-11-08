@@ -240,9 +240,9 @@ class Settings(unittest.TestCase):
         return alarms.clean({"lines": [{"text": "x", **fields}]}, WORDS)
 
     def test_what_comes_from_the_page_is_checked(self):
-        cfg = alarms.clean({"glowSize": 999, "flashMs": 1, "volume": -5, "pollMs": 1, "logMs": "x", "outline": 40, "spacing": True, "outlineColor": "red",
+        cfg = alarms.clean({"flashMs": 1, "volume": -5, "pollMs": 1, "logMs": "x", "outline": 40, "spacing": True, "outlineColor": "red",
                             "muteKey": [0], "holdKey": ["a"], "blocks": [{"x": "a", "scale": 9999}] * 9}, WORDS)
-        self.assertEqual((cfg["glowSize"], cfg["flashMs"], cfg["volume"], cfg["pollMs"]), (50, 200, 0, 50))
+        self.assertEqual((cfg["flashMs"], cfg["volume"], cfg["pollMs"]), (200, 0, 50))
         self.assertEqual((cfg["logMs"], cfg["outline"], cfg["spacing"], cfg["outlineColor"]), (1000, 4, 0, "#000000"))
         self.assertEqual((cfg["muteKey"], cfg["holdKey"]), ([], []))
         self.assertEqual([b["scale"] for b in cfg["blocks"]], [400] * alarms.MAX_BLOCKS)
@@ -547,43 +547,46 @@ class Glow(unittest.TestCase):
         self.assertEqual(self.alpha(small, 400, 200, 40), 0)
         self.assertGreater(self.alpha(big, 400, 200, 40), 0)
 
-    def test_its_colour_follows_the_alert_s_by_default(self):
-        cfg = alarms.clean({"alert": "#123456"}, WORDS)
-        self.assertEqual((cfg["glowColor"], alarms.glow_color(cfg)), ("", "#123456"))
-        self.assertEqual(alarms.clean(None, WORDS)["glowColor"], "")
+    def test_each_alarm_its_glow_in_its_colour(self):
+        cfg = alarms.clean({"alert": "#123456", "lines": [{"text": "x", "rules": [{"limit": "gear", "glow": True, "glowSize": 30},
+                                                                                  {"limit": "flaps", "glow": True, "color": "#00FF80", "glowFlash": True},
+                                                                                  {"limit": "airframe"}]}]}, WORDS)
+        self.assertEqual(alarms.glow_of(cfg, [(0, 0)]), ("#123456", 30, False))  # the overlay's alert colour by default
+        self.assertEqual(alarms.glow_of(cfg, [(0, 0), (0, 1)]), ("#00FF80", alarms.GLOW_SIZE, True))  # the last one on that has one
+        self.assertIsNone(alarms.glow_of(cfg, [(0, 2)]))
+        self.assertEqual(alarms.first_glow(cfg), ("#123456", 30, False))
+        self.assertEqual(alarms.glow_pixels((8, 4), "#00FF80")[:4], bytes((90, 180, 0, 180)))
 
-    def test_a_colour_of_its_own(self):
-        cfg = alarms.clean({"alert": "#123456", "glowColor": "#00ff80"}, WORDS)
-        self.assertEqual(alarms.glow_color(cfg), "#00ff80")
-        self.assertEqual(alarms.glow_pixels((8, 4), alarms.glow_color(cfg))[:4], bytes((90, 180, 0, 180)))
-        self.assertEqual(cfg["alert"], "#123456")  # the lines keep theirs
+    def test_off_by_default(self):
+        self.assertFalse(alarms.clean(None, WORDS)["lines"][0]["rules"][0]["glow"])
+        self.assertIsNone(alarms.first_glow(alarms.clean(None, WORDS)))
 
-    def test_an_odd_colour_is_the_alert_s(self):
-        for odd in ("red", "#12", "#GGGGGG", "#12345678", 7, True, None, ["#00FF00"]):
-            self.assertEqual(alarms.glow_color(alarms.clean({"alert": "#123456", "glowColor": odd}, WORDS)), "#123456", odd)
+    def test_the_overlay_s_glow_goes_to_every_alarm(self):  # saved before 0.27
+        cfg = alarms.clean({"glow": True, "glowSize": 25, "glowFlash": True, "glowColor": "#00FF00", "lines": [{"text": "x", "rules": [{"limit": "gear"}]}]}, WORDS)
+        rule = cfg["lines"][0]["rules"][0]
+        self.assertEqual((rule["glow"], rule["glowSize"], rule["glowFlash"]), (True, 25, True))
+        self.assertNotIn("glow", cfg)
+        self.assertEqual(alarms.clean(cfg, WORDS), cfg)
 
     def test_a_profile_has_its_own(self):
         watch = alarms.Watch(lambda path: None, dict, save=lambda: None)
-        watch.set_config(alarms.clean({"alert": "#FF0000"}, WORDS), {"j_10c": alarms.clean({"glowColor": "#00FF00"}, WORDS)})
-        self.assertEqual(alarms.glow_color(watch.cfg), "#FF0000")
+        mine = alarms.clean({"lines": [{"text": "x", "rules": [{"limit": "gear", "glow": True, "color": "#00FF00"}]}]}, WORDS)
+        watch.set_config(alarms.clean(None, WORDS), {"j_10c": mine})
+        self.assertIsNone(alarms.first_glow(watch.cfg))
         watch.current = "j_10c"
         watch.pick()
-        self.assertEqual(alarms.glow_color(watch.cfg), "#00FF00")
+        self.assertEqual(alarms.first_glow(watch.cfg)[0], "#00FF00")
 
-    def test_the_page_offers_it(self):
+    def test_the_page_offers_it_on_each_alarm(self):
         page = (alarms.WEB / "index.html").read_text(encoding="utf-8")
         script = (alarms.WEB / "overlay.js").read_text(encoding="utf-8")
-        self.assertIn('data-ov="glowColor"', page)
-        self.assertIn('data-ovclear="glowColor"', page)
-        self.assertIn("c.glowColor || c.alert", script)  # the preview
+        self.assertNotIn('data-ov="glow', page)  # no longer the overlay's
+        self.assertIn("sw('glow', 'ov.glow')", script)
+        self.assertIn("glow.color || c.alert", script)  # the preview
         for code in ("en", "fr", "de", "es", "it", "pt", "pl", "cs", "ru", "ja", "zh"):
             words = json.loads((alarms.WEB / "locales" / f"{code}.json").read_text(encoding="utf-8"))
-            self.assertTrue(words["ov.glowColor"] and words["ov.sameAsAlert"], code)
+            self.assertTrue(words["ov.glow"] and words["ov.glowSize"] and words["ov.glowFlash"], code)
 
-    def test_off_by_default(self):
-        self.assertFalse(alarms.clean(None, WORDS)["glow"])
-        self.assertTrue(alarms.clean({"glow": True}, WORDS)["glow"])
-        self.assertFalse(alarms.clean({"glow": "yes"}, WORDS)["glow"])
 
 
 class Watching(unittest.TestCase):
@@ -1233,12 +1236,13 @@ class Configuration(unittest.TestCase):
         self.assertEqual(cfg, alarms.defaults(WORDS))
 
     def test_numbers_stay_in_range(self):
-        rule = {"limit": "gear", "at": 900, "hz": 1, "ms": 99999, "gap": -5, "repeat": -1, "after": 99999, "color": "red", "blink": ["value", "x"]}
+        rule = {"limit": "gear", "at": 900, "hz": 1, "ms": 99999, "gap": -5, "repeat": -1, "after": 99999, "color": "red", "blink": ["value", "x"],
+                "glow": "yes", "glowSize": 999}
         cfg = alarms.clean({"size": 1, "opacity": 900, "repeat": 1, "lines": [{"text": "x", "rules": [rule]}]}, WORDS)
         self.assertEqual((cfg["size"], cfg["opacity"], cfg["repeat"]), (6, 100, 100))
         self.assertEqual(cfg["lines"][0]["rules"][0], {"value": "", "op": ">", "at": 200, "join": "and", "more": [], "limit": "gear", "hz": 37,
                                                        "ms": 2000, "sound": "", "red": None, "full": 100, "gap": 0, "color": "",
-                                                       "blink": ["value"], "repeat": 0, "after": 10000})
+                                                       "blink": ["value"], "repeat": 0, "after": 10000, "glow": False, "glowSize": 50, "glowFlash": False})
 
     def test_lines_are_limited(self):
         cfg = alarms.clean({"lines": [{"text": "x" * 500, "when": "?", "alarm": "?", "color": "?", "size": -3}, "no"] * 40}, WORDS)
