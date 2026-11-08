@@ -767,6 +767,7 @@
   "ov.fullAt": "持续鸣响于",
   "ov.addAlarm": "添加警报",
   "ov.removeAlarm": "移除",
+  "ov.fullAtPct": "持续鸣响于 (极限的 %)",
   "ov.withBeeps": "随鸣响",
   "ov.shownAs": "极限显示为",
   "ov.shown.value": "数值 / 极限",

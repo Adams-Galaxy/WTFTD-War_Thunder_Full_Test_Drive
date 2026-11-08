@@ -767,6 +767,7 @@
   "ov.fullAt": "Dauerton bei",
   "ov.addAlarm": "Alarm hinzufügen",
   "ov.removeAlarm": "Entfernen",
+  "ov.fullAtPct": "Dauerton bei (% des Limits)",
   "ov.withBeeps": "mit den Pieptönen",
   "ov.shownAs": "Grenze angezeigt als",
   "ov.shown.value": "Wert / Grenze",

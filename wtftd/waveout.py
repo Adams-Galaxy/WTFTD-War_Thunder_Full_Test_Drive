@@ -10,6 +10,8 @@ from ctypes import wintypes as w
 
 WAVE_MAPPER = 0xFFFFFFFF  # Windows' default output
 WHDR_DONE = 1
+WHDR_BEGINLOOP, WHDR_ENDLOOP = 4, 8
+FOREVER = 0xFFFFFFFF  # loops: as good as for ever, Loop.stop ends it
 
 
 class Format(ctypes.Structure):  # WAVEFORMATEX
@@ -53,19 +55,53 @@ def devices() -> list:
     return out
 
 
-def play(data: bytes, device: str = "") -> bool:
-    """Plays a .wav to its end, on this output if it's still there, else on the default one. False if it couldn't."""
+def _open(data: bytes, device: str):
+    """(winmm, handle, frames, format) of a .wav on this output, else on the default one; None if it can't."""
     try:
         with wave.open(io.BytesIO(data), "rb") as sound:
             params, frames = sound.getparams(), sound.readframes(sound.getnframes())
         names, mm = devices(), _winmm()
     except (AttributeError, OSError, EOFError, wave.Error):
-        return False
+        return None
     align = params.nchannels * params.sampwidth
     fmt = Format(1, params.nchannels, params.framerate, params.framerate * align, align, params.sampwidth * 8, 0)
-    handle, head = w.HANDLE(), Header(frames, len(frames))
+    handle = w.HANDLE()
     if mm.waveOutOpen(ctypes.byref(handle), names.index(device) if device in names else WAVE_MAPPER, ctypes.byref(fmt), 0, 0, 0):
+        return None
+    return mm, handle, frames, fmt
+
+
+class Loop:
+    """A .wav played over and over, without a gap, until stop(): waveOut loops the buffer itself. Nothing if it can't."""
+
+    def __init__(self, data: bytes, device: str = ""):
+        self.opened = _open(data, device)
+        if not self.opened:
+            return
+        mm, handle, self.frames, _ = self.opened  # the frames stay here while the device reads them
+        self.head, size = Header(self.frames, len(self.frames)), ctypes.sizeof(Header)
+        mm.waveOutPrepareHeader(handle, ctypes.byref(self.head), size)
+        self.head.flags |= WHDR_BEGINLOOP | WHDR_ENDLOOP
+        self.head.loops = FOREVER
+        if mm.waveOutWrite(handle, ctypes.byref(self.head), size):
+            self.stop()
+
+    def stop(self):
+        if self.opened:
+            mm, handle, _, _ = self.opened
+            self.opened = None
+            mm.waveOutReset(handle)
+            mm.waveOutUnprepareHeader(handle, ctypes.byref(self.head), ctypes.sizeof(Header))
+            mm.waveOutClose(handle)
+
+
+def play(data: bytes, device: str = "") -> bool:
+    """Plays a .wav to its end, on this output if it's still there, else on the default one. False if it couldn't."""
+    opened = _open(data, device)
+    if not opened:
         return False
+    mm, handle, frames, fmt = opened
+    head = Header(frames, len(frames))
     size = ctypes.sizeof(head)
     try:
         mm.waveOutPrepareHeader(handle, ctypes.byref(head), size)

@@ -161,8 +161,9 @@ function ovRuleHTML(r, i, j) {
   const gap = num('gap', t('ov.gap'), r.gap, ` min="0" max="5000" step="50"${r.full == null ? ' disabled' : ''}`);
   const withBeep = ` placeholder="${esc(t('ov.withBeep'))}"`;
   const levels = r.limit
-    ? row(t('ov.alarm.' + r.limit), `${num('red', t('ov.redFrom'), r.red, ` min="1" max="200"${withBeep}`)}${num('at', t('ov.beepFrom'), r.at, ' min="1" max="200"')}${gap}
-        <label class="switch"><input type="checkbox" data-or="dyn"${r.full != null ? ' checked' : ''}><span class="sw"></span><span>${esc(t('ov.dynamic'))}</span></label>`)
+    ? row(t('ov.alarm.' + r.limit), `${num('red', t('ov.redFrom'), r.red, ` min="1" max="200"${withBeep}`)}${num('at', t('ov.beepFrom'), r.at, ' min="1" max="200"')}
+        <label class="switch"><input type="checkbox" data-or="dyn"${r.full != null ? ' checked' : ''}><span class="sw"></span><span>${esc(t('ov.dynamic'))}</span></label>
+        ${num('full', t('ov.fullAtPct'), r.full ?? 100, ` min="1" max="200"${r.full == null ? ' disabled' : ''}`)}${gap}`)
     : ovTestHTML('rule', t('ov.ownAlert'), r) + row('', `${num('red', t('ov.redFromValue'), r.red, ` step="any"${withBeep}`)}
         ${num('full', t('ov.fullAt'), r.full, ` step="any" placeholder="${esc(t('ov.noFull'))}"`)}${gap}`);
   const sound = row('', `${num('hz', t('ov.pitch'), r.hz, ` min="37" max="32767" step="50"${r.sound ? ' disabled' : ''}`)}${num('ms', t('ov.length'), r.ms, ` min="10" max="2000" step="10"${r.sound ? ' disabled' : ''}`)}
@@ -184,7 +185,7 @@ function ovRuleHTML(r, i, j) {
 
 // Try: the slider of an alarm's value, from where it's quiet to past its break; a limit's in % of it
 function ovTryRange(r) {
-  if (r.limit) return [0, 120, 0.5];
+  if (r.limit) return [0, Math.max(120, (r.full ?? 100) + 10), 0.5];
   const marks = [r.at, r.red, r.full].filter(Number.isFinite), lo = Math.min(...marks), hi = Math.max(...marks);
   const span = Math.max(hi - lo, Math.abs(r.at) * 0.25, 1), round = v => +v.toPrecision(4);
   return [round(lo >= 0 ? Math.max(0, lo - span * 0.6) : lo - span * 0.6), round(hi + span * 0.6), span >= 50 ? 1 : span >= 5 ? 0.1 : 0.01];
@@ -518,12 +519,17 @@ function bindOverlay() {
       if (el.dataset.ol === 'valueColor' || el.dataset.ol === 'unitColor') $(`[data-olclear="${el.dataset.ol}"]`, el.closest('.ov-line')).classList.remove('hidden');
     } else if (el.dataset.or) {  // one of a line's alarms: an empty field is none (red with its beep, no continuous sound)
       const rule = ovRuleOf(el), key = el.dataset.or, v = parseFloat(el.value), box = el.closest('.ov-rule');
-      if (key === 'dyn') rule.full = el.checked ? 100 : null;
+      if (key === 'dyn') {  // its break: the value in its field, 100 % at first
+        const full = $('[data-or="full"]', box), v = parseFloat(full.value);
+        rule.full = el.checked ? (Number.isFinite(v) ? v : 100) : null;
+        full.disabled = !el.checked;
+      }
       else if (key === 'glow' || key === 'glowFlash') { rule[key] = el.checked; $('[data-or="glowSize"]', box).disabled = !rule.glow; ovDraw(); }
       else if (key === 'glowSize') { if (!Number.isFinite(v)) return; rule[key] = v; ovDraw(); }
       else if (key === 'color') { rule.color = el.value; $('[data-orclear]', box).classList.remove('hidden'); ovDraw(); }
       else if (key === 'sound') { rule.sound = el.value; ovRenderLines(); }
       else if (key === 'at' || key === 'hz' || key === 'ms') { if (!Number.isFinite(v)) return; rule[key] = v; }
+      else if (key === 'full' && rule.limit && !Number.isFinite(v)) return;  // a limit's break left empty: kept as it was
       else rule[key] = Number.isFinite(v) ? v : key === 'gap' ? OV_GAP_MS : ['repeat', 'after', 'flashMs'].includes(key) ? 0 : null;
       if (key === 'dyn' || key === 'full') $('[data-or="gap"]', box).disabled = rule.full == null;
     } else if ('olshown' in el.dataset) {

@@ -667,11 +667,15 @@ class Watching(unittest.TestCase):
         for pct, wait in ((90, 0.9), (95, 0.5), (100, 0.1), (120, 0.1)):
             close = alarms.closeness(cfg, (0, 0), {"airframe": pct}, {})
             self.assertAlmostEqual(alarms.pace(cfg, (0, 0), close), wait)
+        early = alarms.clean({"lines": [{"text": "IAS", "rules": [{"limit": "airframe", "at": 90, "full": 96, "ms": 100, "gap": 800}]}]}, WORDS)
+        self.assertEqual(alarms.closeness(early, (0, 0), {"airframe": 96}, {}), 1.0)  # its own break: continuous from 96 %
+        self.assertAlmostEqual(alarms.pace(early, (0, 0), alarms.closeness(early, (0, 0), {"airframe": 93}, {})), 0.5)
         steady = alarms.clean({"lines": [{"text": "IAS", "rules": [{"limit": "airframe", "at": 90, "full": None, "repeat": 450}]}]}, WORDS)
         self.assertEqual(alarms.pace(steady, (0, 0), alarms.closeness(steady, (0, 0), {"airframe": 99}, {})), 0.45)  # its own repeat
         self.watch.set_config(cfg, {})
-        self.fly(**{"IAS, km/h": 1600})  # past the limit: one continuous sound, its beeps as long as two readings
-        self.beep.assert_called_once_with(cfg["lines"][0]["rules"][0]["hz"], cfg["pollMs"] * 2, 100)
+        self.fly(**{"IAS, km/h": 1600})  # past the limit: one continuous sound, held by the bell, not beeps
+        self.beep.assert_not_called()
+        self.assertEqual(self.watch.ringing[5], ("tone", cfg["lines"][0]["rules"][0]["hz"], 100))
 
     def test_several_alarms_on_one_line(self):
         g = {"value": "g", "op": ">", "ms": 80}
@@ -685,8 +689,8 @@ class Watching(unittest.TestCase):
         self.assertEqual(sorted(c.args[0] for c in self.beep.call_args_list), [900, 1500])
 
     def test_gear_torn_off_goes_quiet(self):
-        self.fly(**{"gear, %": 100, "IAS, km/h": 640})  # 103 % of 620: past its breaking speed
-        self.beep.assert_called()
+        self.fly(**{"gear, %": 100, "IAS, km/h": 640})  # 103 % of 620: past its breaking speed, held
+        self.assertEqual(self.watch.ringing[5], ("tone", 1000, 100))
         self.beep.reset_mock()
         self.watch._last_beep -= 5
         self.fly(**{"gear, %": 100, "IAS, km/h": 640})
@@ -772,6 +776,29 @@ class Watching(unittest.TestCase):
             self.assertIsNone(self.watch.chime())
             self.assertEqual(self.beep.call_count, 2)
 
+    def test_the_bell_holds_one_sound_past_the_break(self):
+        self.watch.set_config(airframe(at=90), {})
+        with mock.patch.object(alarms.waveout, "Loop") as loop:
+            self.watch.ring(self.watch.cfg, [(0, 0)], {"airframe": 100}, {})
+            self.watch.hold()
+            self.watch.hold()  # still the same: not started again
+            loop.assert_called_once_with(alarms.held_tone(1400, 100), "")
+            self.assertTrue(self.watch.lit())  # what flashes stays lit with it
+            self.watch.ring(self.watch.cfg, [(0, 0)], {"airframe": 95}, {})  # back under the break: beeps again
+            self.watch.hold()
+            loop.return_value.stop.assert_called_once()
+            self.watch.ring(self.watch.cfg, [(0, 0)], {"airframe": 101}, {})
+            self.watch.hold()
+            self.watch.ringing = (0.0, *self.watch.ringing[1:])  # nothing told again (muted, landed...): it stops
+            self.watch.hold()
+            self.assertEqual(loop.return_value.stop.call_count, 2)
+
+    def test_a_held_tone_loops_without_a_seam(self):  # a whole number of waves: the end meets the start
+        with wave.open(io.BytesIO(alarms.held_tone(1400, 100))) as w:
+            samples = array("h", w.readframes(w.getnframes()))
+        self.assertAlmostEqual(samples[0] - samples[-1], samples[1] - samples[0], delta=200)  # from the end to the start: one wave's step
+        self.assertAlmostEqual(len(samples) / alarms.SOUND_RATE, 0.5, delta=0.01)
+
     def test_flashes_on_the_beat(self):  # lit with each beep, as long as it sounds; without beeps, FLASH_MS
         self.watch.set_config(airframe(at=90, ms=150, gap=700), {})
         clock = [100.0]
@@ -833,7 +860,7 @@ class Watching(unittest.TestCase):
         self.fly(**{"IAS, km/h": 1000, "gear, %": 100})  # gear out past its limit, for real
         self.assertEqual(self.texts()[0], "IAS    1000 / 1543 km/h")  # the flight's own overlay again
         self.assertEqual(self.watch.display[2][1], self.watch.cfg["alert"])
-        self.assertEqual(self.beep.call_args.args[0], 1000)  # the gear's pitch, continuous past its limit
+        self.assertEqual(self.watch.ringing[5], ("tone", 1000, 100))  # the gear's, held: past its limit
 
     def test_trying_in_flight_never_shows_the_flight_s_overlay_in_between(self):  # the window draws every 16 ms
         rule = {"limit": "airframe", "glow": True}
@@ -913,7 +940,7 @@ class Watching(unittest.TestCase):
             for key in ("ov.redFrom", "ov.beepFrom", "ov.dynamic", "ov.gap", "ov.redFromValue", "ov.fullAt", "ov.addAlarm", "ov.removeAlarm", "ov.withBeep",
                         "ov.noFull", "ov.alarm.load", "ov.alarm.aoa", "ov.when.own", "ov.alarmValue", "ov.alarmColor", "ov.flash", "ov.after",
                         "ov.feed.chat", "ov.feed.log", "ov.sheetKey", "ov.profileKey", "ov.v.g_lim", "ov.v.wep", "ov.try", "ov.tryStop", "ov.tryHint", "ov.shownAs", "ov.shown.value",
-                        "ov.shown.percent", "ov.shown.both"):
+                        "ov.shown.percent", "ov.shown.both", "ov.fullAtPct"):
                 self.assertTrue(words.get(key), (code, key))
         page = (alarms.WEB / "index.html").read_text(encoding="utf-8")
         self.assertNotIn('id="ovAlarms"', page)  # the alarms live on the lines

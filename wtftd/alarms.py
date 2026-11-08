@@ -838,6 +838,16 @@ def tone(freq: int, ms: int, volume: int) -> bytes:
 
 
 @lru_cache(maxsize=32)
+def held_tone(freq: int, volume: int) -> bytes:
+    """A tone to loop without a seam (the continuous sound past a break): a whole number of its waves, about half a
+    second, no fade."""
+    waves = max(1, round(freq / 2))
+    count = round(waves * SOUND_RATE / freq)
+    samples = array("h", (int(32767 * volume / 100 * math.sin(2 * math.pi * waves * i / count)) for i in range(count)))
+    return _wav((1, 2, SOUND_RATE, count, "NONE", "not compressed"), samples.tobytes())
+
+
+@lru_cache(maxsize=32)
 def scaled(path: str, modified: float, volume: int) -> bytes:
     """A sound file at this volume. Only 16-bit PCM can be scaled here: the others play as they are."""
     with wave.open(path, "rb") as w:
@@ -1077,7 +1087,8 @@ class Watch:
         self._saved = (None, None)
         self._key, self._lim, self._unbreakable = None, None, False
         self._last_beep = 0.0
-        self.ringing = None  # (until when, seconds between beeps, sounds, volume, seconds a beep lasts): what the bell plays, see ring
+        self.ringing = None  # (until when, seconds between beeps, sounds, volume, seconds a beep lasts, sound held): see ring
+        self._held = (None, None)  # (what the bell holds, its waveout.Loop): the continuous sound past a break
         self._bell = threading.Lock()
         self._wake = threading.Event()  # a trial starting: no waiting out a second's sleep
         self.broken = set()  # gear or flaps torn off: their alarms stay silent until the next spawn
@@ -1463,19 +1474,45 @@ class Watch:
         if not close:
             self.ringing = None
             return
-        sounds, played, waits, lasts = [], set(), [], []  # the same alarm on two lines (IAS and Mach) beeps once
+        sounds, played, waits, lasts, held = [], set(), [], [], None  # the same alarm on two lines (IAS and Mach) beeps once
         for name, c in close:
             sound = sound_of(cfg, name)
             ms = sound_ms(sound, self.sounds)
             waits.append(pace(cfg, name, c, ms))
-            sound = {**sound, "ms": max(sound["ms"], cfg["pollMs"] * 2)} if c == 1 else sound
-            lasts.append(max(ms, sound["ms"]) / 1000)
-            if (sound["sound"], sound["hz"], sound["ms"]) not in played:
+            lasts.append(ms / 1000)
+            if c == 1:  # at its break: one sound held, without a gap, by the bell (the first alarm there)
+                held = held or self.held_sound(sound, cfg["volume"])
+            elif (sound["sound"], sound["hz"], sound["ms"]) not in played:
                 played.add((sound["sound"], sound["hz"], sound["ms"]))
                 sounds.append(sound)
         fresh = max(RING_S, 2 * cfg["pollMs"] / 1000)
-        self.ringing = (time.monotonic() + fresh, min(waits), sounds, cfg["volume"], max(lasts))
+        self.ringing = (time.monotonic() + fresh, min(waits), sounds, cfg["volume"], max(lasts), held)
         self.chime()
+
+    def held_sound(self, alarm: dict, volume: int) -> tuple:
+        """What the bell holds for an alarm at its break: its file looped, else its tone; a key that says when it changes."""
+        path = self.sounds / alarm["sound"] if self.sounds and alarm.get("sound") else None
+        try:
+            return "file", str(path), path.stat().st_mtime, volume
+        except (AttributeError, OSError):
+            return "tone", alarm["hz"], volume
+
+    def hold(self):
+        """Starts, changes or stops the sound held past a break, as what rings says (nothing told again: stopped)."""
+        r, now = self.ringing, time.monotonic()
+        want = r[5] if r and now <= r[0] else None
+        if want == self._held[0]:
+            return
+        if self._held[1]:
+            self._held[1].stop()
+        loop = None
+        if want:
+            try:
+                data = scaled(*want[1:]) if want[0] == "file" else held_tone(*want[1:])
+                loop = waveout.Loop(data, OUTPUT["device"])
+            except (OSError, EOFError, wave.Error):
+                loop = None
+        self._held = (want, loop)
 
     def chime(self) -> float | None:
         """Plays what rings if its time has come. Returns the seconds until it next does, None if nothing rings."""
@@ -1497,14 +1534,17 @@ class Watch:
         alarm only red, or muted); a number: that cycle, ms."""
         r, now = self.ringing, time.monotonic()
         if beat is True and r and now <= r[0]:  # from each beep, half the beat at least: the alarm's look stays the main one
-            return now - self._last_beep < max(r[4], r[1] / 2)
+            return bool(r[5]) or now - self._last_beep < max(r[4], r[1] / 2)  # a held sound: steady
         return int(now * 2000 / (FLASH_MS if beat is True else beat)) % 2 == 0
 
     def bell(self):
         """The beeps between two readings, each on its time."""
         while not self.stopping.is_set():
+            self.hold()
             left = self.chime()
             time.sleep(min(left, 0.05) if left else 0.05)
+        self.ringing = None
+        self.hold()
 
     def drive(self, values: dict) -> float:
         """A tank or a ship: curves, logs and its overlay ("type:tank", "type:ship": an aircraft's lines mean nothing there);
