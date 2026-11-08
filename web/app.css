@@ -1312,8 +1312,10 @@ body.no-sidebar .sidebar, body.no-sidebar #compareTray { display: none; }
 .ov-zoom { padding: 12px; overflow: hidden; white-space: pre; line-height: 1.17; }
 .ov-text { display: grid; grid-auto-flow: column; justify-content: start; position: absolute; cursor: move; white-space: pre; line-height: 1.17; user-select: none; touch-action: none; outline: 1px dashed rgba(255,255,255,.35); outline-offset: 3px; }
 .ov-lines { display: flex; flex-direction: column; gap: 6px; }
-.ov-line { display: grid; grid-template-columns: auto minmax(180px, 1fr) 118px 118px 58px 46px 26px auto; gap: 6px; align-items: end; padding: 6px 8px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
-.ov-line.ov-blocks { grid-template-columns: auto minmax(180px, 1fr) 118px 118px 58px 58px 46px 26px auto; }
+.ov-line { display: grid; grid-template-columns: auto minmax(180px, 1fr) 118px 58px 46px 26px auto; gap: 6px; align-items: end; padding: 6px 8px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
+.ov-line.ov-blocks { grid-template-columns: auto minmax(180px, 1fr) 118px 58px 58px 46px 26px auto; }
+.ov-showas { grid-column: 2 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; font-size: 12px; color: var(--muted); }
+.ov-showas label { display: flex; align-items: center; gap: 4px; color: var(--text-2); cursor: pointer; }
 .ov-line .icon-btn { width: 26px; height: 26px; }
 .ov-move { display: flex; flex-direction: column; }
 .ov-move .icon-btn { height: 16px; font-size: 9px; border: 0; }
@@ -1353,10 +1355,22 @@ body.no-sidebar .sidebar, body.no-sidebar #compareTray { display: none; }
 .ov-panel #ovAlarms { margin-bottom: 2px; }
 .ov-alarm-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 4px; }
 .ov-line-alarms { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 8px; font-size: 12px; padding-top: 6px; border-top: 1px dashed var(--line); }
-.ov-rule { display: flex; flex-direction: column; gap: 6px; }
-.ov-rule + .ov-rule { padding-top: 8px; border-top: 1px solid var(--line); }
+.ov-rule { display: flex; flex-direction: column; gap: 8px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); }
+.ov-rule-head { display: flex; align-items: center; gap: 8px; min-height: 30px; }
+.ov-rule-head b { white-space: nowrap; color: var(--text); }
+.ov-dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+.ov-rule-sum { flex: 1; min-width: 0; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ov-rule-btns { display: flex; align-items: center; gap: 6px; flex: none; }
+.ov-rule-btns .icon-btn { width: 26px; height: 26px; }
+.ov-rule-body { display: flex; flex-direction: column; gap: 10px; padding-left: 18px; }
+.ov-sec h4 { margin: 0 0 4px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--text-2); }
+.ov-sec .ov-test { display: block; margin-bottom: 6px; }  /* in an alarm: its label above, everything on one left edge */
+.ov-sec .ov-test-name { display: block; line-height: normal; font-size: 12px; margin-bottom: 2px; }
+.ov-alarms-title { font-size: 12px; font-weight: 700; color: var(--text-2); }
 .ov-dyn-row { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: end; margin-bottom: 4px; }
 .ov-dyn-row .ov-mini { width: 110px; }
+.ov-dyn-row .ov-mini > span:first-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }  /* one line: the fields stay in line */
+.ov-dyn-row .ov-sound { display: flex; gap: 6px; align-items: end; }  /* the menu and its button side by side */
 .ov-dyn-row .switch { min-height: 34px; box-sizing: border-box; }
 .ov-add-alarm { align-self: flex-start; width: 220px; }
 .ov-tried { outline: 1px solid var(--accent); outline-offset: 4px; border-radius: 6px; }
@@ -1367,7 +1381,7 @@ body.no-sidebar .sidebar, body.no-sidebar #compareTray { display: none; }
 .ov-parts label { display: flex; align-items: center; gap: 4px; color: var(--text-2); font-size: 12px; cursor: pointer; }
 .ov-dyn-row .ov-flash { width: auto; }
 @media (max-width: 1250px) {
-  .ov-line, .ov-line.ov-blocks { grid-template-columns: auto minmax(0, 1fr) 118px 118px; }
+  .ov-line, .ov-line.ov-blocks { grid-template-columns: auto minmax(0, 1fr) 118px 58px; }
 }
 
 /* ------------------------------------------------------------------ Flight data */

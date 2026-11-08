@@ -606,7 +606,7 @@ class Glow(unittest.TestCase):
         page = (alarms.WEB / "index.html").read_text(encoding="utf-8")
         script = (alarms.WEB / "overlay.js").read_text(encoding="utf-8")
         self.assertNotIn('data-ov="glow', page)  # no longer the overlay's
-        self.assertIn("sw('glow', 'ov.glow')", script)
+        self.assertIn("sw('glow', 'ov.glow', r.glow)", script)
         self.assertIn("first.color || c.alert", script)  # the preview
         for code in ("en", "fr", "de", "es", "it", "pt", "pl", "cs", "ru", "ja", "zh"):
             words = json.loads((alarms.WEB / "locales" / f"{code}.json").read_text(encoding="utf-8"))
@@ -953,12 +953,14 @@ class Watching(unittest.TestCase):
             words = json.loads((alarms.WEB / "locales" / f"{code}.json").read_text(encoding="utf-8"))
             for key in ("ov.redFrom", "ov.beepFrom", "ov.dynamic", "ov.gap", "ov.redFromValue", "ov.fullAt", "ov.addAlarm", "ov.removeAlarm", "ov.withBeep",
                         "ov.noFull", "ov.alarm.load", "ov.alarm.aoa", "ov.when.own", "ov.alarmValue", "ov.alarmColor", "ov.flash", "ov.after",
-                        "ov.feed.chat", "ov.feed.log", "ov.sheetKey", "ov.profileKey", "ov.v.g_lim", "ov.v.wep", "ov.try", "ov.tryStop", "ov.tryHint", "ov.shownAs", "ov.shown.value",
-                        "ov.shown.percent", "ov.shown.both", "ov.fullAtPct"):
+                        "ov.feed.chat", "ov.feed.log", "ov.sheetKey", "ov.profileKey", "ov.v.g_lim", "ov.v.wep", "ov.try", "ov.tryStop", "ov.tryHint", "ov.showAs", "ov.shown.value",
+                        "ov.shown.percent", "ov.shown.gauge", "ov.shown.valuePct", "ov.shown.valueGauge", "ov.fullAtPct"):
                 self.assertTrue(words.get(key), (code, key))
         page = (alarms.WEB / "index.html").read_text(encoding="utf-8")
         self.assertNotIn('id="ovAlarms"', page)  # the alarms live on the lines
         self.assertNotIn('id="ovStyle"', page)  # and so does how a line shows its limit
+        for bit in ("data-ortoggle", "ov.sec.trigger", "ov.sec.sound", "ov.sec.look", "ovRuleSummary", "'valueGauge'"):  # folded alarms, gauges by buttons
+            self.assertIn(bit, script)
         self.assertIn('data-ovkey="sheetKey"', page)
 
     def test_a_lines_own_alarm_red_first_and_continuous_at_its_value(self):

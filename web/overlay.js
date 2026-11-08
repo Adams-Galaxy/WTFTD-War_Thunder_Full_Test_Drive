@@ -4,23 +4,26 @@
 'use strict';
 
 const OV = { cfg: null, screen: [3840, 2160], lines: [], input: null, timer: 0, profile: '', keys: new Map(), sounds: [], hud: {}, hudPlace: 'cockpit',
-             trying: null, trialGlow: null };  // trying: the alarm tried, {i, j, value}
+             trying: null, trialGlow: null, open: new Set() };  // trying: the alarm tried, {i, j, value}; open: the alarms unfolded, 'line:alarm'
 const OV_MAX_BLOCKS = 3, OV_MAX_TESTS = 4, OV_MAX_RULES = 6, OV_GAP_MS = 700, OV_REPEAT_MS = 300;
 const OV_SOUND_RATE = 22050, OV_SOUND_S = 15;  // what a sound is kept as: enough for an alarm, and it fits a request
 const OV_TYPES = ['fighter', 'assault', 'bomber', 'helicopter', 'jet', 'prop', 'tank', 'ship'];
 const OV_WHEN = ['always', 'gear', 'flaps', 'airbrake', 'alarm', 'own', 'log'];
 const OV_LIMITS = { airframe: [93, 1400], gear: [90, 1000], flaps: [90, 700], load: [90, 1200], aoa: [90, 500] };  // an alarm on the aircraft's limit: %, Hz
 const OV_PARTS = ['name', 'value', 'unit'];  // what of a line can flash with its alarm
-// a line's limit shown as its value against the limit, % of it, or both: the part of its text after its name
+// a line's value that has a limit or a reference: [its value against it, its %, what follows], what tells it's the line's
+// (the first one found, in this order: the gear's and the flaps' speed is IAS too)
 const OV_SHOWN = {
-  airframe: ['{ias} / {vne} km/h {swept}', '{airframe_pct} % {swept}', '{ias} / {vne} km/h  {airframe_pct} % {swept}'],
-  mach: ['{mach} / {mne}', '{airframe_pct} %', '{mach} / {mne}  {airframe_pct} %'],
-  gear: ['{ias} / {gear_max} km/h', '{gear_pct} %', '{ias} / {gear_max} km/h  {gear_pct} %'],
-  flaps: ['{ias} / {flaps_max} km/h', '{flaps_pct} %', '{ias} / {flaps_max} km/h  {flaps_pct} %'],
-  load: ['{g} / {g_lim}', '{load_pct} %', '{g} / {g_lim}  {load_pct} %'],
-  aoa: ['{aoa} / {aoa_crit}°', '{aoa_pct} %', '{aoa} / {aoa_crit}°  {aoa_pct} %'],
+  turn: ['{turn} / {turn_ref} s', 'turn_pct', '', ['{turn}', '{turn_ref}', '{turn_pct']],
+  fuel: ['{fuel} / {fuel_max} kg', 'fuel_pct', '', ['{fuel}', '{fuel_max}', '{fuel_pct']],
+  gear: ['{ias} / {gear_max} km/h', 'gear_pct', '', ['{gear_max}', '{gear_pct']],
+  flaps: ['{ias} / {flaps_max} km/h', 'flaps_pct', '', ['{flaps_max}', '{flaps_pct']],
+  load: ['{g} / {g_lim}', 'load_pct', '', ['{g}', '{g_lim}', '{load_pct']],
+  aoa: ['{aoa} / {aoa_crit}°', 'aoa_pct', '', ['{aoa}', '{aoa_crit}', '{aoa_pct']],
+  mach: ['{mach} / {mne}', 'airframe_pct', '', ['{mach}', '{mne}']],
+  airframe: ['{ias} / {vne} km/h', 'airframe_pct', ' {swept}', ['{ias}', '{vne}', '{airframe_pct']],
 };
-const OV_SHOWN_AS = ['value', 'percent', 'both'];
+const OV_SHOWN_AS = ['value', 'percent', 'gauge', 'valuePct', 'valueGauge'];  // how: each one's text, see ovShownText
 const OV_FONTS = ['Consolas', 'Cascadia Mono', 'Courier New', 'Lucida Console', 'Segoe UI', 'Bahnschrift', 'Arial', 'Tahoma', 'Verdana', 'Impact'];
 const OV_VALUES = {
   vehicle: ['vehicle'],
@@ -154,33 +157,49 @@ function ovTestHTML(part, label, test) {
 
 // one of a line's alarms: on one of the aircraft's limits (in % of it), or on any value. Its thresholds (red, beep, the
 // value where the beeps become continuous), its sound, and the line in it: colour, the parts that flash, repeat, delay
+// one of a line's alarms: folded, a line that says what it does and its buttons; unfolded, three groups, each field the
+// same width: when it goes off, how it sounds, how the line looks in it
 function ovRuleHTML(r, i, j) {
-  const tried = OV.trying?.i === i && OV.trying?.j === j;
-  const num = (key, label, value, extra = '') => ovField(label, `<input type="number" data-or="${key}" value="${value ?? ''}"${extra}>`);
-  const row = (label, html) => `<div class="ov-test"><span class="ov-test-name">${esc(label)}</span><div class="ov-dyn-row">${html}</div></div>`;
-  const gap = num('gap', t('ov.gap'), r.gap, ` min="0" max="5000" step="50"${r.full == null ? ' disabled' : ''}`);
-  const withBeep = ` placeholder="${esc(t('ov.withBeep'))}"`;
-  const levels = r.limit
-    ? row(t('ov.alarm.' + r.limit), `${num('red', t('ov.redFrom'), r.red, ` min="1" max="200"${withBeep}`)}${num('at', t('ov.beepFrom'), r.at, ' min="1" max="200"')}
-        <label class="switch"><input type="checkbox" data-or="dyn"${r.full != null ? ' checked' : ''}><span class="sw"></span><span>${esc(t('ov.dynamic'))}</span></label>
-        ${num('full', t('ov.fullAtPct'), r.full ?? 100, ` min="1" max="200"${r.full == null ? ' disabled' : ''}`)}${gap}`)
-    : ovTestHTML('rule', t('ov.ownAlert'), r) + row('', `${num('red', t('ov.redFromValue'), r.red, ` step="any"${withBeep}`)}
-        ${num('full', t('ov.fullAt'), r.full, ` step="any" placeholder="${esc(t('ov.noFull'))}"`)}${gap}`);
-  const sound = row('', `${num('hz', t('ov.pitch'), r.hz, ` min="37" max="32767" step="50"${r.sound ? ' disabled' : ''}`)}${num('ms', t('ov.length'), r.ms, ` min="10" max="2000" step="10"${r.sound ? ' disabled' : ''}`)}
-      ${ovSoundHTML('data-or="sound"', r.sound, `line:${i}:${j}`)}<button class="btn btn-sm" data-ovruletest>${esc(t('ov.test'))}</button>
-      <button class="btn btn-sm${tried ? ' btn-primary' : ''}" data-ortrybtn>${esc(t(tried ? 'ov.tryStop' : 'ov.try'))}</button>`);
+  const tried = OV.trying?.i === i && OV.trying?.j === j, open = tried || OV.open.has(`${i}:${j}`);
+  const name = r.limit ? t('ov.alarm.' + r.limit) : t('ov.alarmValue');
+  const head = `<div class="ov-rule-head"><span class="ov-dot" style="background:${esc(r.color || OV.cfg.alert)}"></span>
+      <b>${esc(name)}</b><span class="ov-rule-sum">${esc(ovRuleSummary(r))}</span>
+      <span class="ov-rule-btns"><button class="btn btn-sm" data-ovruletest>${esc(t('ov.test'))}</button>
+        <button class="btn btn-sm${tried ? ' btn-primary' : ''}" data-ortrybtn>${esc(t(tried ? 'ov.tryStop' : 'ov.try'))}</button>
+        <button class="btn btn-sm btn-ghost" data-ortoggle aria-expanded="${open}">${esc(t(open ? 'action.close' : 'ov.edit'))}</button>
+        <button class="icon-btn btn-danger" data-ordel title="${esc(t('ov.removeAlarm'))}">${icon('trash')}</button></span></div>`;
   const range = ovTryRange(r);
-  const trial = tried ? `<div class="ov-test"><span></span><div class="ov-try"><input type="range" data-ortry min="${range[0]}" max="${range[1]}" step="${range[2]}" value="${OV.trying.value}">
-      <output>${esc(ovTryText(r, OV.trying.value))}</output><small class="muted">${esc(t('ov.tryHint'))}</small></div></div>` : '';
-  const look = row('', `<label class="ov-mini ov-swatch"><span>${esc(t('ov.alarmColor'))}</span><span class="ov-color"><input type="color" data-or="color" value="${esc(r.color || OV.cfg.alert)}">
+  const trial = tried ? `<div class="ov-try"><input type="range" data-ortry min="${range[0]}" max="${range[1]}" step="${range[2]}" value="${OV.trying.value}">
+      <output>${esc(ovTryText(r, OV.trying.value))}</output><small class="muted">${esc(t('ov.tryHint'))}</small></div>` : '';
+  if (!open) return `<div class="ov-rule${tried ? ' ov-tried' : ''}" data-j="${j}">${head}${trial}</div>`;
+  const num = (key, label, value, extra = '') => ovField(label, `<input type="number" data-or="${key}" value="${value ?? ''}"${extra}>`);
+  const sw = (key, label, on) => `<label class="switch"><input type="checkbox" data-or="${key}"${on ? ' checked' : ''}><span class="sw"></span><span>${esc(t(label))}</span></label>`;
+  const sec = (title, html) => `<div class="ov-sec"><h4>${esc(t(title))}</h4><div class="ov-dyn-row">${html}</div></div>`;
+  const gap = num('gap', t('ov.gap'), r.gap, ` min="0" max="5000" step="50"${r.full == null ? ' disabled' : ''}`);
+  const withBeep = ` placeholder="${esc(t('ov.withBeep'))}"`, after = num('after', t('ov.after'), r.after || '', ' min="0" max="10000" step="100" placeholder="0"');
+  const trigger = r.limit
+    ? sec('ov.sec.trigger', `${num('red', t('ov.redFrom'), r.red, ` min="1" max="200"${withBeep}`)}${num('at', t('ov.beepFrom'), r.at, ' min="1" max="200"')}${after}
+        ${sw('dyn', 'ov.dynamic', r.full != null)}${num('full', t('ov.fullAtPct'), r.full ?? 100, ` min="1" max="200"${r.full == null ? ' disabled' : ''}`)}${gap}`)
+    : `<div class="ov-sec"><h4>${esc(t('ov.sec.trigger'))}</h4>${ovTestHTML('rule', t('ov.ownAlert'), r)}<div class="ov-dyn-row">
+        ${num('red', t('ov.redFromValue'), r.red, ` step="any"${withBeep}`)}${num('full', t('ov.fullAt'), r.full, ` step="any" placeholder="${esc(t('ov.noFull'))}"`)}${gap}${after}</div></div>`;
+  const sound = sec('ov.sec.sound', `${ovSoundHTML('data-or="sound"', r.sound, `line:${i}:${j}`)}
+      ${num('hz', t('ov.pitch'), r.hz, ` min="37" max="32767" step="50"${r.sound ? ' disabled' : ''}`)}${num('ms', t('ov.length'), r.ms, ` min="10" max="2000" step="10"${r.sound ? ' disabled' : ''}`)}
+      ${num('repeat', t('ov.repeat'), r.repeat || '', ` min="0" max="10000" step="50" placeholder="${OV_REPEAT_MS}"`)}`);
+  const look = sec('ov.sec.look', `<label class="ov-mini ov-swatch"><span>${esc(t('ov.alarmColor'))}</span><span class="ov-color"><input type="color" data-or="color" value="${esc(r.color || OV.cfg.alert)}">
         <button class="icon-btn${r.color ? '' : ' hidden'}" data-orclear title="${esc(t('ov.sameAsAlert'))}">${icon('x', 'ic-sm')}</button></span></label>
       <div class="ov-mini ov-flash"><span>${esc(t('ov.flash'))}</span><div class="ov-parts">${OV_PARTS.map(x => `<label><input type="checkbox" data-orblink="${x}"${(r.blink || []).includes(x) ? ' checked' : ''}>${esc(t('ov.part.' + x))}</label>`).join('')}</div></div>
       ${num('flashMs', t('ov.flashMs'), r.flashMs || '', ` min="0" max="4000" step="50" placeholder="${esc(t('ov.withBeeps'))}"`)}
-      ${num('repeat', t('ov.repeat'), r.repeat || '', ` min="0" max="10000" step="50" placeholder="${OV_REPEAT_MS}"`)}${num('after', t('ov.after'), r.after || '', ' min="0" max="10000" step="100" placeholder="0"')}`);
-  const sw = (key, label) => `<label class="switch"><input type="checkbox" data-or="${key}"${r[key] ? ' checked' : ''}><span class="sw"></span><span>${esc(t(label))}</span></label>`;
-  const glow = row('', `${sw('glow', 'ov.glow')}${num('glowSize', t('ov.glowSize'), r.glowSize, ` min="3" max="50"${r.glow ? '' : ' disabled'}`)}${sw('glowFlash', 'ov.glowFlash')}
-      <button class="btn btn-sm btn-ghost" data-ordel>${icon('trash', 'ic-sm')}<span>${esc(t('ov.removeAlarm'))}</span></button>`);
-  return `<div class="ov-rule${tried ? ' ov-tried' : ''}" data-j="${j}">${levels}${sound}${trial}${look}${glow}</div>`;
+      ${sw('glow', 'ov.glow', r.glow)}${num('glowSize', t('ov.glowSize'), r.glowSize, ` min="3" max="50"${r.glow ? '' : ' disabled'}`)}${sw('glowFlash', 'ov.glowFlash', r.glowFlash)}`);
+  return `<div class="ov-rule open${tried ? ' ov-tried' : ''}" data-j="${j}">${head}${trial}<div class="ov-rule-body">${trigger}${sound}${look}</div></div>`;
+}
+// what an alarm does, in a few words: its thresholds, its break, its own sound, its glow
+function ovRuleSummary(r) {
+  const pct = r.limit ? ' %' : '', cond = r.limit ? '' : `${t('ov.v.' + r.value)} ${r.op} ${r.at}${r.more?.length ? ` +${r.more.length}` : ''}`;
+  const bits = r.limit ? [`${t('ov.sum.red')} ${r.red ?? r.at}${pct}`, `${t('ov.sum.beep')} ${r.at}${pct}`] : [cond, r.red != null ? `${t('ov.sum.red')} ${r.red}` : ''];
+  if (r.full != null) bits.push(`${t('ov.sum.full')} ${r.full}${pct}`);
+  if (r.sound) bits.push(`♪ ${r.sound.replace(/\.wav$/i, '')}`);
+  if (r.glow) bits.push(t('ov.glow').toLowerCase());
+  return bits.filter(Boolean).join(' · ');
 }
 
 // Try: the slider of an alarm's value, from where it's quiet to past its break; a limit's in % of it
@@ -217,21 +236,35 @@ function ovTryStop() {
   ovTrySend();
 }
 
-// how a line shows the limit of its alarm r: the Mach line is the airframe's by its Mach number
-const ovShownKind = (l, r) => (r.limit === 'airframe' && l.text.includes('{mach}') ? 'mach' : r.limit);
-function ovShownAs(l, r) {
-  const value = OV_SHOWN[ovShownKind(l, r)][0].match(/\{\w+\}/)[0], pct = l.text.includes(`{${r.limit}_pct}`);
-  return pct && l.text.includes(value) ? 'both' : pct ? 'percent' : 'value';
+// the value of a line that has a limit or a reference: by what its text shows, else by its alarm on a limit (a line
+// written by hand, its name only); null for the others (altitude, heading...)
+function ovShownKind(l) {
+  const shown = Object.keys(OV_SHOWN).find(k => OV_SHOWN[k][3].some(x => l.text.includes(x)));
+  return shown || (l.rules || []).find(x => x.limit && OV_SHOWN[x.limit])?.limit || null;
 }
-// the line's choice, by its first alarm on a limit; a line without one has an empty cell, its row lined up with the others
-function ovShownHTML(l) {
-  const r = (l.rules || []).find(x => x.limit);
-  return r ? ovField(t('ov.shownAs'), `<select data-olshown>${OV_SHOWN_AS.map(x => ovOpt(x, t('ov.shown.' + x), ovShownAs(l, r))).join('')}</select>`) : '<span></span>';
+// what follows the line's name, shown so
+function ovShownText(kind, how) {
+  const [value, pct, tail] = OV_SHOWN[kind];
+  return { value, percent: `{${pct}} %`, gauge: `{${pct}:bar}`, valuePct: `${value}  {${pct}} %`, valueGauge: `${value}  {${pct}:bar}` }[how] + tail;
+}
+function ovShownAs(l, kind) {
+  const at = l.text.indexOf('{'), rest = at < 0 ? '' : l.text.slice(at).trim();
+  const same = OV_SHOWN_AS.find(how => ovShownText(kind, how).trim() === rest);  // as the buttons wrote it
+  if (same) return same;
+  const pct = OV_SHOWN[kind][1], bar = l.text.includes(`{${pct}:bar}`), num = l.text.includes(`{${pct}}`), value = l.text.includes(OV_SHOWN[kind][0].match(/\{\w+\}/)[0]);
+  return bar ? (value ? 'valueGauge' : 'gauge') : num ? (value ? 'valuePct' : 'percent') : 'value';  // written by hand
+}
+// the line's buttons, under its text: its value, its %, a gauge, or the value with one of them
+function ovShownHTML(l, i) {
+  const kind = ovShownKind(l);
+  if (!kind) return '';
+  const now = ovShownAs(l, kind);
+  return `<div class="ov-showas"><span>${esc(t('ov.showAs'))}</span>${OV_SHOWN_AS.map(how => `<label><input type="radio" name="ovshown-${i}" data-olshown value="${how}"${how === now ? ' checked' : ''}>${esc(t('ov.shown.' + how))}</label>`).join('')}</div>`;
 }
 // rewrites what follows the line's name (the text before its first value)
-function ovSetShown(l, r, how) {
-  const at = l.text.indexOf('{'), name = at < 0 ? `${l.text.trimEnd()} ` : l.text.slice(0, at);
-  l.text = name + OV_SHOWN[ovShownKind(l, r)][OV_SHOWN_AS.indexOf(how)];
+function ovSetShown(l, how) {
+  const kind = ovShownKind(l), at = l.text.indexOf('{'), name = at < 0 ? `${l.text.trimEnd()} ` : l.text.slice(0, at);
+  if (kind) l.text = name + ovShownText(kind, how);
 }
 
 // a line's alarms, in sight under it, and a menu to add one
@@ -239,7 +272,7 @@ function ovLineAlarmsHTML(l, i) {
   const rules = l.rules || [];
   const kinds = [...Object.keys(OV_LIMITS).map(a => ovOpt(a, t('ov.alarm.' + a), '')), ovOpt('value', t('ov.alarmValue'), '')].join('');
   const add = rules.length < OV_MAX_RULES ? `<label class="ov-mini ov-add-alarm"><span>${esc(t('ov.addAlarm'))}</span><select data-oradd><option value="">…</option>${kinds}</select></label>` : '';
-  return `<div class="ov-line-alarms">${rules.map((r, j) => ovRuleHTML(r, i, j)).join('')}${add}</div>`;
+  return `<div class="ov-line-alarms">${rules.length ? `<span class="ov-alarms-title">${esc(t('ov.lineAlarms'))}</span>` : ''}${rules.map((r, j) => ovRuleHTML(r, i, j)).join('')}${add}</div>`;
 }
 // where a condition lives: [the object holding it, its key]; a line's 'if', or one of its alarms
 function ovOwner(el, part) {
@@ -320,12 +353,11 @@ function ovRenderLines() {
       <div class="ov-move"><button class="icon-btn" data-ovmove="-1"${i ? '' : ' disabled'} title="${esc(t('ov.up'))}">▲</button><button class="icon-btn" data-ovmove="1"${i < OV.cfg.lines.length - 1 ? '' : ' disabled'} title="${esc(t('ov.down'))}">▼</button></div>
       <input type="text" class="ov-tpl" data-ol="text" value="${esc(l.text)}" maxlength="120" spellcheck="false">
       <label class="ov-mini"><span>${esc(t('ov.when'))}</span><select data-ol="when">${OV_WHEN.map(w => opt(w, t('ov.when.' + w), l.when)).join('')}</select></label>
-      ${ovShownHTML(l)}
       ${blocks ? ovField(t('ov.block'), `<select data-ol="block">${Array.from({ length: blocks + 1 }, (_, n) => opt(n, n + 1, l.block || 0)).join('')}</select>`) : ''}
       <label class="ov-mini ov-num"><span>${esc(t('ov.lineSize'))}</span><input type="number" data-ol="size" min="0" max="400" value="${l.size || ''}" placeholder="${esc(OV.cfg.size)}"></label>
       <label class="ov-mini ov-swatch"><span>${esc(t('ov.lineColor'))}</span><input type="color" data-ol="color" value="${esc(l.color || OV.cfg.color)}"></label>
       <button class="icon-btn ov-clear${l.color ? '' : ' hidden'}" data-ovnocolor title="${esc(t('ov.noColor'))}">${icon('x', 'ic-sm')}</button>
-      <button class="icon-btn btn-danger" data-ovdel title="${esc(t('action.delete'))}">${icon('trash')}</button>${ovLineAlarmsHTML(l, i)}${ovMoreHTML(l, i)}</div>`).join('');
+      <button class="icon-btn btn-danger" data-ovdel title="${esc(t('action.delete'))}">${icon('trash')}</button>${ovShownHTML(l, i)}${ovLineAlarmsHTML(l, i)}${ovMoreHTML(l, i)}</div>`).join('');
 }
 
 // the picture behind the text: the player's own screenshot, shrunk to what the page shows, kept in this browser profile
@@ -513,8 +545,8 @@ function bindOverlay() {
     } else if (el.dataset.ol) {
       const line = OV.cfg.lines[+el.closest('.ov-line').dataset.i];
       line[el.dataset.ol] = el.dataset.ol === 'size' || el.dataset.ol === 'block' ? +value || 0 : value;
-      const shown = $('[data-olshown]', el.closest('.ov-line')), limit = (line.rules || []).find(x => x.limit);
-      if (shown && limit) shown.value = ovShownAs(line, limit);  // its text written by hand
+      const kind = el.dataset.ol === 'text' && ovShownKind(line), now = kind && ovShownAs(line, kind);  // its text written by hand
+      if (now) $$('[data-olshown]', el.closest('.ov-line')).forEach(x => { x.checked = x.value === now; });
       if (el.dataset.ol === 'color') $('.ov-clear', el.closest('.ov-line')).classList.remove('hidden');
       if (el.dataset.ol === 'valueColor' || el.dataset.ol === 'unitColor') $(`[data-olclear="${el.dataset.ol}"]`, el.closest('.ov-line')).classList.remove('hidden');
     } else if (el.dataset.or) {  // one of a line's alarms: an empty field is none (red with its beep, no continuous sound)
@@ -533,8 +565,7 @@ function bindOverlay() {
       else rule[key] = Number.isFinite(v) ? v : key === 'gap' ? OV_GAP_MS : ['repeat', 'after', 'flashMs'].includes(key) ? 0 : null;
       if (key === 'dyn' || key === 'full') $('[data-or="gap"]', box).disabled = rule.full == null;
     } else if ('olshown' in el.dataset) {
-      const line = OV.cfg.lines[+el.closest('.ov-line').dataset.i];
-      ovSetShown(line, line.rules.find(x => x.limit), el.value);
+      ovSetShown(OV.cfg.lines[+el.closest('.ov-line').dataset.i], el.value);
       ovRenderLines();
     } else if ('ortry' in el.dataset) {
       const r = ovRuleOf(el);
@@ -547,6 +578,7 @@ function bindOverlay() {
       if (!el.value) return;
       const line = OV.cfg.lines[+el.closest('.ov-line').dataset.i];
       (line.rules ||= []).push(ovNewRule(line, el.value));
+      OV.open.add(`${+el.closest('.ov-line').dataset.i}:${line.rules.length - 1}`);
       ovRenderLines();
     } else if (el.dataset.oc) {
       const [part, key] = el.dataset.oc.split('.'), [box, at] = ovOwner(el, part), n = +(el.closest('.ov-cond')?.dataset.n || 0);
@@ -588,7 +620,12 @@ function bindOverlay() {
       await ovFlush();  // tried as set, not as last saved
       return ovTrySend();
     }
-    if (b.dataset.ovmove || 'ovdel' in b.dataset || 'ordel' in b.dataset) ovTryStop();
+    if ('ortoggle' in b.dataset) {
+      const key = `${i}:${b.closest('.ov-rule').dataset.j}`;
+      OV.open.has(key) ? OV.open.delete(key) : OV.open.add(key);
+      return ovRenderLines();
+    }
+    if (b.dataset.ovmove || 'ovdel' in b.dataset || 'ordel' in b.dataset) { ovTryStop(); OV.open.clear(); }
     if ('ovruletest' in b.dataset) { await ovFlush(); return api('overlay-test', { line: i, rule: +b.closest('.ov-rule').dataset.j, profile: OV.profile }).catch(toastErr); }
     if (b.dataset.ovpick) { OV.pick = b.dataset.ovpick; return $('#ovSoundFile').click(); }
     if ('obline' in b.dataset) return ovAddLine(+b.closest('.ov-block').dataset.i);

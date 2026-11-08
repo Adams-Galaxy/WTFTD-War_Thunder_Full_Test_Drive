@@ -10,8 +10,12 @@ Versions follow `major.minor.patch`; "beta" until 1.0.
   (980 of 1,234 flight models). New values for lines, alarms and curves: **reference turn time** (the WEP one while a
   throttle is past 100 %) and **turn, % of reference** (the reference over this turn's time). The game data is rebuilt
   once.
-- **Gauges in a line**: `{name:bar}` draws a % as a bar of ten blocks, full from 100 %: `{turn_pct:bar}`,
-  `{load_pct:bar}`, `{fuel_pct:bar}`...
+- **Gauges in a line, by buttons**: a line showing a value with a limit or a reference (speed, Mach, gear, flaps, G,
+  angle of attack, turn, fuel) has **Show: Value, %, Gauge, Value and %, Value and gauge** under its text, which writes
+  the line for you; a gauge is ten blocks, full from 100 %. Written by hand: `{name:bar}`. It replaces *Limit shown as*.
+- **Tidier line and alarm settings**: each alarm folds into one line that says what it does (*red 85 % · beep 93 % ·
+  continuous 100 %*) with *Test*, *Try*, *Edit* and its bin; *Edit* opens it in three groups, **When it goes off**,
+  **Sound** and **Look**, short labels and every field the same width, each switch before what it turns on.
 
 ## 0.27.0 - 2026-11-08
 
