@@ -4,7 +4,7 @@ What changed in each version of WTFTD. Downloads: [Releases](https://github.com/
 (only the latest version is kept there; from 0.19.0 on, each version's code stays available through its git tag).
 Versions follow `major.minor.patch`; "beta" until 1.0.
 
-## Not released yet
+## 0.27.0 - 2026-11-08
 
 - **Overlay: every alarm lives on its line.** Under each line of *My overlay → Lines*, its alarms (up to six), added from
   **Add an alarm**: one of the aircraft's limits (airframe, gear, flaps, and now **G load** and **angle of attack**) in %
@@ -17,8 +17,9 @@ Versions follow `major.minor.patch`; "beta" until 1.0.
   instead of jumping when it comes back. Its **Repeat every**, **Only after** (it must last that long) and
   its **glow around the screen** (in its colour, its depth, flashing or not). The *Alert colour with* menu, the Alarms
   tab's settings, the overlay's own glow, repeat and flash cycle are gone: that tab is now **Sounds** (volume, output);
-  an alarm without a repeat of its own beeps every 300 ms. Saved overlays move over once: each line gets the alarm it followed, as it was set, every alarm the
-  glow if it was on, and G load and angle of attack get lines shown **During its alarm** (a new *Shows* choice).
+  an alarm without a repeat of its own beeps every 300 ms. Saved overlays move over once: each line gets the alarm it
+  followed, as it was set, every alarm the glow if it was on, and G load and angle of attack get lines shown **During
+  its alarm** (a new *Shows* choice).
 - **Limit shown as, per line**: a line following one of the aircraft's limits shows it as its value against the limit
   (*640 / 700 km/h*), in % of it (*91 %*) or both, chosen in its own row next to *Shows*. The choice above the lines,
   for all of them at once, is gone.
@@ -27,8 +28,7 @@ Versions follow `major.minor.patch`; "beta" until 1.0.
   line's speed, Mach, G, AoA or fuel follow it, red, flashing, its glow) and beeps as in flight, closing in, after its
   delay; only that alarm reacts. In flight too: the value moves in your flight, on your aircraft's limits, and an alarm
   of the flight that comes on wins over the trial. An alarm's own sound file is paced by its length, so a long one no
-  longer starts over and over. **Stop**
-  ends it, and so does leaving the page.
+  longer starts over and over. **Stop** ends it, and so does leaving the page.
 - **G load and angle of attack limits** from the flight models: the G that breaks the wings at the mass flown (without
   weapons: the game doesn't tell their mass, so loaded the limit reads high), the critical angle of attack between flaps
   up and full flaps. New values for lines and curves: G limit, negative G limit, G load and AoA in % of their limit,
