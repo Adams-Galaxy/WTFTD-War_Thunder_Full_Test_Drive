@@ -1359,6 +1359,10 @@ body.no-sidebar .sidebar, body.no-sidebar #compareTray { display: none; }
 .ov-dyn-row .ov-mini { width: 110px; }
 .ov-dyn-row .switch { min-height: 34px; box-sizing: border-box; }
 .ov-add-alarm { align-self: flex-start; width: 220px; }
+.ov-tried { outline: 1px solid var(--accent); outline-offset: 4px; border-radius: 6px; }
+.ov-try { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+.ov-try input[type=range] { flex: 1 1 260px; max-width: 460px; }
+.ov-try output { min-width: 110px; font-variant-numeric: tabular-nums; color: var(--text); }
 .ov-parts { display: flex; gap: 10px; height: 34px; align-items: center; }
 .ov-parts label { display: flex; align-items: center; gap: 4px; color: var(--text-2); font-size: 12px; cursor: pointer; }
 .ov-dyn-row .ov-flash { width: auto; }

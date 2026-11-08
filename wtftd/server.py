@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import copy
 import json
+import math
 import mimetypes
 import os
 import re
@@ -1088,6 +1089,12 @@ class Handler(BaseHTTPRequestHandler):
             if a and alarms.available():
                 alarms.play(a, cfg["volume"], SOUNDS)
             return self.send_json({"ok": bool(a)})
+        if route == "overlay-try":  # My overlay's Try: an alarm at a value set by hand, seen on the screen and heard
+            key, place, value = str(body.get("profile") or ""), (body.get("line"), body.get("rule", 0)), body.get("value")
+            ok = (alarms.available() and body.get("on") is not False and all(type(x) is int for x in place)
+                  and isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value))
+            lines = WATCH.set_trial(key, place, float(value)) if ok else WATCH.set_trial(None)
+            return self.send_json({"lines": lines or WATCH.sample(WATCH.profiles.get(key, WATCH.base)), "glow": WATCH.glow, "on": bool(WATCH.trial)})
         if route == "overlay-joy":  # a key field of My overlay waits for a joystick button
             return self.send_json({"key": alarms.joy_wait() if alarms.available() else None})
         if route == "sound-import":  # a .wav the player picked, for the alarms

@@ -3,7 +3,8 @@
    lines back filled with sample values, so the preview here is what the window draws. */
 'use strict';
 
-const OV = { cfg: null, screen: [3840, 2160], lines: [], input: null, timer: 0, profile: '', keys: new Map(), sounds: [], hud: {}, hudPlace: 'cockpit' };
+const OV = { cfg: null, screen: [3840, 2160], lines: [], input: null, timer: 0, profile: '', keys: new Map(), sounds: [], hud: {}, hudPlace: 'cockpit',
+             trying: null, trialGlow: null };  // trying: the alarm tried, {i, j, value}
 const OV_MAX_BLOCKS = 3, OV_MAX_TESTS = 4, OV_MAX_RULES = 6, OV_GAP_MS = 700;
 const OV_SOUND_RATE = 22050, OV_SOUND_S = 15;  // what a sound is kept as: enough for an alarm, and it fits a request
 const OV_TYPES = ['fighter', 'assault', 'bomber', 'helicopter', 'jet', 'prop', 'tank', 'ship'];
@@ -22,6 +23,7 @@ const OV_VALUES = {
 
 function ovShow(st) {
   OV.lines = st.lines;
+  if (OV.trying) ovTrySend();  // a change while trying: tried again with it
   OV.screen = st.screen;
   OV.hud = st.hud || {};
   OV.map = st.map || [];
@@ -88,8 +90,9 @@ function ovBlockEl(i) {
 function ovDraw() {
   const box = $('#ovScreen'), c = OV.cfg;
   box.style.aspectRatio = `${OV.screen[0]} / ${OV.screen[1]}`;
-  const glow = c.lines.flatMap(l => l.rules || []).find(r => r.glow);  // the first alarm with a halo, as the window shows it
-  box.style.boxShadow = glow ? `inset 0 0 ${box.clientHeight * glow.glowSize / 100}px ${glow.color || c.alert}` : '';
+  const first = c.lines.flatMap(l => l.rules || []).find(r => r.glow);  // the first alarm with a halo, as the window shows it
+  const glow = OV.trying ? OV.trialGlow : first && [first.color || c.alert, first.glowSize];  // or the tried alarm's, while it's on
+  box.style.boxShadow = glow ? `inset 0 0 ${box.clientHeight * glow[1] / 100}px ${glow[0]}` : '';
   box.style.setProperty('--ov-flash', `${c.flashMs}ms`);
   const k = box.clientWidth / OV.screen[0];
   const look = { fontFamily: `"${c.font}", monospace`, fontWeight: c.bold ? 700 : 400, fontStyle: c.italic ? 'italic' : 'normal' };
@@ -142,6 +145,7 @@ function ovTestHTML(part, label, test) {
 // one of a line's alarms: on one of the aircraft's limits (in % of it), or on any value. Its thresholds (red, beep, the
 // value where the beeps become continuous), its sound, and the line in it: colour, the parts that flash, repeat, delay
 function ovRuleHTML(r, i, j) {
+  const tried = OV.trying?.i === i && OV.trying?.j === j;
   const num = (key, label, value, extra = '') => ovField(label, `<input type="number" data-or="${key}" value="${value ?? ''}"${extra}>`);
   const row = (label, html) => `<div class="ov-test"><span class="ov-test-name">${esc(label)}</span><div class="ov-dyn-row">${html}</div></div>`;
   const gap = num('gap', t('ov.gap'), r.gap, ` min="0" max="5000" step="50"${r.full == null ? ' disabled' : ''}`);
@@ -152,7 +156,11 @@ function ovRuleHTML(r, i, j) {
     : ovTestHTML('rule', t('ov.ownAlert'), r) + row('', `${num('red', t('ov.redFromValue'), r.red, ` step="any"${withBeep}`)}
         ${num('full', t('ov.fullAt'), r.full, ` step="any" placeholder="${esc(t('ov.noFull'))}"`)}${gap}`);
   const sound = row('', `${num('hz', t('ov.pitch'), r.hz, ` min="37" max="32767" step="50"${r.sound ? ' disabled' : ''}`)}${num('ms', t('ov.length'), r.ms, ` min="10" max="2000" step="10"${r.sound ? ' disabled' : ''}`)}
-      ${ovSoundHTML('data-or="sound"', r.sound, `line:${i}:${j}`)}<button class="btn btn-sm" data-ovruletest>${esc(t('ov.test'))}</button>`);
+      ${ovSoundHTML('data-or="sound"', r.sound, `line:${i}:${j}`)}<button class="btn btn-sm" data-ovruletest>${esc(t('ov.test'))}</button>
+      <button class="btn btn-sm${tried ? ' btn-primary' : ''}" data-ortrybtn>${esc(t(tried ? 'ov.tryStop' : 'ov.try'))}</button>`);
+  const range = ovTryRange(r);
+  const trial = tried ? `<div class="ov-test"><span></span><div class="ov-try"><input type="range" data-ortry min="${range[0]}" max="${range[1]}" step="${range[2]}" value="${OV.trying.value}">
+      <output>${esc(ovTryText(r, OV.trying.value))}</output><small class="muted">${esc(t('ov.tryHint'))}</small></div></div>` : '';
   const look = row('', `<label class="ov-mini ov-swatch"><span>${esc(t('ov.alarmColor'))}</span><span class="ov-color"><input type="color" data-or="color" value="${esc(r.color || OV.cfg.alert)}">
         <button class="icon-btn${r.color ? '' : ' hidden'}" data-orclear title="${esc(t('ov.sameAsAlert'))}">${icon('x', 'ic-sm')}</button></span></label>
       <div class="ov-mini ov-flash"><span>${esc(t('ov.flash'))}</span><div class="ov-parts">${OV_PARTS.map(x => `<label><input type="checkbox" data-orblink="${x}"${(r.blink || []).includes(x) ? ' checked' : ''}>${esc(t('ov.part.' + x))}</label>`).join('')}</div></div>
@@ -160,7 +168,41 @@ function ovRuleHTML(r, i, j) {
   const sw = (key, label) => `<label class="switch"><input type="checkbox" data-or="${key}"${r[key] ? ' checked' : ''}><span class="sw"></span><span>${esc(t(label))}</span></label>`;
   const glow = row('', `${sw('glow', 'ov.glow')}${num('glowSize', t('ov.glowSize'), r.glowSize, ` min="3" max="50"${r.glow ? '' : ' disabled'}`)}${sw('glowFlash', 'ov.glowFlash')}
       <button class="btn btn-sm btn-ghost" data-ordel>${icon('trash', 'ic-sm')}<span>${esc(t('ov.removeAlarm'))}</span></button>`);
-  return `<div class="ov-rule" data-j="${j}">${levels}${sound}${look}${glow}</div>`;
+  return `<div class="ov-rule${tried ? ' ov-tried' : ''}" data-j="${j}">${levels}${sound}${trial}${look}${glow}</div>`;
+}
+
+// Try: the slider of an alarm's value, from where it's quiet to past its break; a limit's in % of it
+function ovTryRange(r) {
+  if (r.limit) return [0, 120, 0.5];
+  const marks = [r.at, r.red, r.full].filter(Number.isFinite), lo = Math.min(...marks), hi = Math.max(...marks);
+  const span = Math.max(hi - lo, Math.abs(r.at) * 0.25, 1), round = v => +v.toPrecision(4);
+  return [round(lo >= 0 ? Math.max(0, lo - span * 0.6) : lo - span * 0.6), round(hi + span * 0.6), span >= 50 ? 1 : span >= 5 ? 0.1 : 0.01];
+}
+// where a trial starts: just short of the alarm
+function ovTryStart(r) {
+  const [min, max] = ovTryRange(r), first = r.op === '<' ? Math.max(r.at, r.red ?? r.at) : Math.min(r.at, r.red ?? r.at);
+  return Math.min(max, Math.max(min, r.op === '<' ? first + (max - min) * 0.1 : first - (max - min) * 0.1));
+}
+const ovTryText = (r, v) => r.limit ? `${(+v).toFixed(1)} %` : `${t('ov.v.' + r.value)} ${+(+v).toPrecision(6)}`;
+// the trial to the server, the newest value only: it draws the overlay on the screen and beeps
+async function ovTrySend() {
+  if (OV.trySending) { OV.tryAgain = true; return; }
+  OV.trySending = true;
+  try {
+    const tr = OV.trying, res = await api('overlay-try', tr ? { profile: OV.profile, line: tr.i, rule: tr.j, value: tr.value } : { profile: OV.profile, on: false });
+    OV.lines = res.lines;
+    OV.trialGlow = res.glow;
+    if (OV.trying && !res.on) { OV.trying = null; ovRenderLines(); }  // refused (not Windows) or gone
+    ovDraw();
+  } catch (e) { toastErr(e); }
+  OV.trySending = false;
+  if (OV.tryAgain) { OV.tryAgain = false; ovTrySend(); }
+}
+setInterval(() => { if (OV.trying) ovTrySend(); }, 20000);  // still there: the server stops a trial left a minute alone
+function ovTryStop() {
+  if (!OV.trying) return;
+  OV.trying = null;
+  ovTrySend();
 }
 
 // a line's alarms, in sight under it, and a menu to add one
@@ -338,6 +380,7 @@ async function openOverlayView() {
 
 // leaving the tab takes the sample off the screen
 function leaveOverlayView() {
+  ovTryStop();
   if ($('#ovOnScreen').checked) {
     $('#ovOnScreen').checked = false;
     api('overlay-preview', { on: false }).catch(() => {});
@@ -477,6 +520,11 @@ function bindOverlay() {
       else if (key === 'at' || key === 'hz' || key === 'ms') { if (!Number.isFinite(v)) return; rule[key] = v; }
       else rule[key] = Number.isFinite(v) ? v : key === 'gap' ? OV_GAP_MS : key === 'repeat' || key === 'after' ? 0 : null;
       if (key === 'dyn' || key === 'full') $('[data-or="gap"]', box).disabled = rule.full == null;
+    } else if ('ortry' in el.dataset) {
+      const r = ovRuleOf(el);
+      OV.trying.value = parseFloat(el.value);
+      $('output', el.parentNode).textContent = ovTryText(r, OV.trying.value);
+      return ovTrySend();
     } else if (el.dataset.orblink) {
       ovRuleOf(el).blink = OV_PARTS.filter(x => $(`[data-orblink="${x}"]`, el.closest('.ov-rule')).checked);
     } else if ('oradd' in el.dataset) {
@@ -517,6 +565,14 @@ function bindOverlay() {
     if (!b) return;
     const row = b.closest('.ov-line'), i = row ? +row.dataset.i : -1, lines = OV.cfg.lines;
     if (b.dataset.ovv) return ovInsert(b.dataset.ovv);
+    if ('ortrybtn' in b.dataset) {
+      const j = +b.closest('.ov-rule').dataset.j, again = OV.trying?.i === i && OV.trying?.j === j;
+      OV.trying = again ? null : { i, j, value: ovTryStart(lines[i].rules[j]) };
+      ovRenderLines();
+      await ovFlush();  // tried as set, not as last saved
+      return ovTrySend();
+    }
+    if (b.dataset.ovmove || 'ovdel' in b.dataset || 'ordel' in b.dataset) ovTryStop();
     if ('ovruletest' in b.dataset) { await ovFlush(); return api('overlay-test', { line: i, rule: +b.closest('.ov-rule').dataset.j, profile: OV.profile }).catch(toastErr); }
     if (b.dataset.ovpick) { OV.pick = b.dataset.ovpick; return $('#ovSoundFile').click(); }
     if ('obline' in b.dataset) return ovAddLine(+b.closest('.ov-block').dataset.i);

@@ -582,7 +582,7 @@ class Glow(unittest.TestCase):
         script = (alarms.WEB / "overlay.js").read_text(encoding="utf-8")
         self.assertNotIn('data-ov="glow', page)  # no longer the overlay's
         self.assertIn("sw('glow', 'ov.glow')", script)
-        self.assertIn("glow.color || c.alert", script)  # the preview
+        self.assertIn("first.color || c.alert", script)  # the preview
         for code in ("en", "fr", "de", "es", "it", "pt", "pl", "cs", "ru", "ja", "zh"):
             words = json.loads((alarms.WEB / "locales" / f"{code}.json").read_text(encoding="utf-8"))
             self.assertTrue(words["ov.glow"] and words["ov.glowSize"] and words["ov.glowFlash"], code)
@@ -747,6 +747,40 @@ class Watching(unittest.TestCase):
         self.watch.tick()  # the next spawn picks its own again
         self.assertIsNone(self.watch.forced)
 
+    def test_try_an_alarm(self):  # My overlay's Try: the IAS line's airframe alarm at a value set by hand
+        cfg = self.watch.base
+        with mock.patch.object(self.watch, "start_overlay"):
+            rows = self.watch.set_trial("", (0, 0), 95)
+        self.assertEqual([r[1] for r in rows][:3], [cfg["alert"], cfg["color"], cfg["color"]])  # only it: not Mach, not the sample's gear
+        self.beep.assert_called_once()
+        self.beep.reset_mock()
+        self.watch._last_beep -= 5
+        rows = self.watch.set_trial("", (0, 0), 50)
+        self.assertEqual(rows[0][1], cfg["color"])
+        self.beep.assert_not_called()
+        self.watch.trial["t"] -= alarms.TRY_S + 1  # the page that started it is gone
+        self.assertEqual(self.watch.trial_frame(), [])
+        self.assertIsNone(self.watch.trial)
+
+    def test_try_a_value_alarm_and_its_glow(self):
+        rule = {"value": "fuel_pct", "op": "<", "at": 15, "red": 25, "glow": True, "color": "#FFA500"}
+        self.watch.set_config(alarms.clean({"lines": [{"text": "FUEL {fuel_pct}", "rules": [rule]}]}, WORDS), {})
+        with mock.patch.object(self.watch, "start_overlay"):
+            rows = self.watch.set_trial("", (0, 0), 20)  # red, quiet
+        self.assertEqual(rows[0][1], "#FFA500")
+        self.assertEqual(self.watch.glow, ("#FFA500", alarms.GLOW_SIZE, False))
+        self.beep.assert_not_called()
+
+    def test_the_try_route(self):
+        handler = mock.Mock()
+        with mock.patch.object(server, "WATCH", self.watch), mock.patch.object(alarms, "available", return_value=True),                 mock.patch.object(self.watch, "start_overlay"):
+            server.Handler.post_api(handler, "overlay-try", {"profile": "", "line": 0, "rule": 0, "value": 95})
+            self.assertTrue(handler.send_json.call_args.args[0]["on"])
+            for body in ({"line": 0, "rule": 0, "value": "95"}, {"line": 0, "rule": 0, "value": float("nan")}, {"line": 0, "value": True}, {"on": False}):
+                server.Handler.post_api(handler, "overlay-try", body)
+                self.assertFalse(handler.send_json.call_args.args[0]["on"], body)
+                self.assertTrue(handler.send_json.call_args.args[0]["lines"])  # the sample again
+
     def test_the_test_button_plays_that_alarm(self):  # the page's "Test", on each of a line's alarms
         g = {"value": "g", "op": ">"}
         cfg, handler = alarms.clean({"lines": [{"text": "G {g}", "rules": [{**g, "at": 6, "hz": 500}, {**g, "at": 8, "hz": 900}]}]}, WORDS), mock.Mock()
@@ -764,14 +798,14 @@ class Watching(unittest.TestCase):
     def test_the_page_offers_several_alarms_per_line(self):
         script = (alarms.WEB / "overlay.js").read_text(encoding="utf-8")
         for bit in ("data-oradd", "data-ordel", "data-orclear", "data-orblink", "data-or=\"${key}\"", "'red'", "'dyn'", "'after'", "'repeat'",
-                    "rule: +b.closest('.ov-rule').dataset.j", "'own'", "load: [90, 1200]", "aoa: [90, 500]", "'wep'",
+                    "rule: +b.closest('.ov-rule').dataset.j", "'own'", "load: [90, 1200]", "aoa: [90, 500]", "'wep'", "api('overlay-try'", "data-ortry ",
                     f"OV_MAX_RULES = {alarms.MAX_RULES}", f"OV_GAP_MS = {alarms.GAP_MS}"):  # the page and the engine agree
             self.assertIn(bit, script)
         for code in ("en", "fr", "de", "es", "it", "pt", "pl", "cs", "ru", "ja", "zh"):
             words = json.loads((alarms.WEB / "locales" / f"{code}.json").read_text(encoding="utf-8"))
             for key in ("ov.redFrom", "ov.beepFrom", "ov.dynamic", "ov.gap", "ov.redFromValue", "ov.fullAt", "ov.addAlarm", "ov.removeAlarm", "ov.withBeep",
                         "ov.noFull", "ov.alarm.load", "ov.alarm.aoa", "ov.when.own", "ov.alarmValue", "ov.alarmColor", "ov.flash", "ov.after",
-                        "ov.feed.chat", "ov.feed.log", "ov.sheetKey", "ov.profileKey", "ov.v.g_lim", "ov.v.wep"):
+                        "ov.feed.chat", "ov.feed.log", "ov.sheetKey", "ov.profileKey", "ov.v.g_lim", "ov.v.wep", "ov.try", "ov.tryStop", "ov.tryHint"):
                 self.assertTrue(words.get(key), (code, key))
         page = (alarms.WEB / "index.html").read_text(encoding="utf-8")
         self.assertNotIn('id="ovAlarms"', page)  # the alarms live on the lines

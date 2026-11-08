@@ -53,6 +53,7 @@ MAP_FRAME_MS = 33  # and the window draws it about 30 times a second
 PICTURE_S = 2.0  # a map's picture not had yet (the game not ready, a battle joined with the app opening): asked again
 TRAIL_MAX = 600  # its trail's last places
 IDLE_S = 1.0  # not flying: nothing to read fast
+TRY_S = 60  # My overlay's Try, left alone this long, stops: the page that started it may be gone
 HANGAR_IAS = 1  # km/h: the aircraft on show in the hangar reads 0 or 1
 REPEAT_MS = 300
 BEEP_MS = 150
@@ -997,6 +998,7 @@ class Watch:
         self._feed = {"t": -FEED_S, "chat": 0, "event": 0, "damage": 0}
         self.sheet = False  # the sheet key is held
         self.forced = None  # the overlay the profile key picked, until the next spawn
+        self.trial = None  # My overlay's Try: {"key": its overlay, "place": (line, alarm), "value", "t", "since"}
 
     def start_overlay(self):
         if not self.overlay:
@@ -1033,13 +1035,57 @@ class Watch:
         self.forced = names[(names.index(self.profile) + 1) % len(names)] if self.profile in names else ""
         self.pick()
 
-    def held(self, cfg: dict, places: list, kind: str) -> list:
-        """The alarms on that have lasted their "after" (ms); kind: "beep" or "red", each counted on its own."""
-        now, since = time.monotonic(), {}
-        for place in places:
-            since[place, kind] = self._since.get((place, kind), now)
-        self._since = {**{k: t for k, t in self._since.items() if k[1] != kind}, **since}
+    def held(self, cfg: dict, places: list, kind: str, memo: dict | None = None) -> list:
+        """The alarms on that have lasted their "after" (ms); kind: "beep" or "red", each counted on its own. memo: when
+        each came on (self._since in flight, the trial's own while trying)."""
+        memo = self._since if memo is None else memo
+        now = time.monotonic()
+        since = {(x, kind): memo.get((x, kind), now) for x in places}
+        for k in [k for k in memo if k[1] == kind and k not in since]:
+            del memo[k]
+        memo.update(since)
         return [x for x in places if now - since[x, kind] >= sound_of(cfg, x).get("after", 0) / 1000]
+
+    def set_trial(self, key: str | None, place: tuple | None = None, value: float = 0.0) -> list:
+        """My overlay's Try: one alarm's value set by hand, the overlay shown on the screen and heard as in flight. key: the
+        overlay (profile) tried, None stops. Returns what the overlay shows."""
+        same = self.trial and (self.trial["key"], self.trial["place"]) == (key, place)
+        self.trial = {"key": key, "place": place, "value": value, "t": time.monotonic(), "since": self.trial["since"] if same else {}} \
+            if key is not None and place else None
+        if self.trial:
+            self.start_overlay()
+        else:
+            self.glow = None
+        return self.trial_frame()
+
+    def shown_cfg(self) -> dict:
+        """The overlay the window draws: the one shown by My overlay, the one tried, or the aircraft's."""
+        return self.preview or (self.profiles.get(self.trial["key"], self.base) if self.trial else self.cfg)
+
+    def trial_frame(self) -> list:
+        """The trial's overlay: the sample values with the tried alarm's own at the value set; only that alarm turns its
+        line red, beeps (closing in as in flight, after its delay) and lights its glow."""
+        t = self.trial
+        cfg = self.profiles.get(t["key"], self.base) if t else None
+        i, j = t["place"] if t else (-1, -1)
+        if not t or time.monotonic() - t["t"] > TRY_S or not (0 <= i < len(cfg["lines"]) and 0 <= j < len(cfg["lines"][i]["rules"])):
+            self.trial, self.glow = None, None
+            return []
+        rule = cfg["lines"][i]["rules"][j]
+        values = {**SAMPLE_STATE, **SAMPLE_STATS, "vehicle": self.vehicle(SAMPLE_VEHICLE), "wep": "4:32", "wep_s": 272,
+                  **computed(SAMPLE_LIM, SAMPLE_STATE, self.words, {"burn": 95, "accel": 1.2}, cfg["pctAlways"])}
+        pct = percents(SAMPLE_LIM, SAMPLE_STATE)
+        if rule["limit"]:
+            pct[rule["limit"]] = values[f"{rule['limit']}_pct"] = t["value"]
+        else:
+            values[FIELDS.get(rule["value"], (rule["value"],))[0]] = t["value"]
+        mine = lambda places: [x for x in places if x == (i, j)]
+        on = self.held(cfg, mine(own_alerts(cfg, values, pct)), "beep", t["since"])
+        red = self.held(cfg, mine(own_alerts(cfg, values, pct, red=True)), "red", t["since"])
+        self.warn, self.glow = bool(red or on), glow_of(cfg, red or on)
+        if not self.muted:
+            self.ring(cfg, on, pct, values)
+        return lines_for(cfg, values, red, SAMPLE_FEEDS)
 
     def read_feeds(self, cfg: dict):
         """The chat and the battle log, for the blocks that show them, once a second: only what's new."""
@@ -1243,7 +1289,8 @@ class Watch:
         if vehicle:
             return self.drive(vehicle)
         if state is None:
-            self.display = self.sample(self.preview) if self.preview else []
+            self.glow = None
+            self.display = self.trial_frame() if self.trial else self.sample(self.preview) if self.preview else []
             self.hud = self.sample_hud(self.preview, self.preview_key, self.hud_place) if self.preview else []
             self.hud_live, self.attitude, self.glide = None, hud.Attitude(), hud.Glide()
             self.map_live, self.map = None, self.blank_map()
@@ -1254,7 +1301,7 @@ class Watch:
             self.current, self.forced = None, None
             self.pick()
             self.crash, self._before, self._log_id = False, None, None  # a game started again numbers its log from 1
-            return IDLE_S
+            return self.shown_cfg()["pollMs"] / 1000 if self.trial else IDLE_S
         self.crash = crashed(self._before, state) or (self.crash and not any(_engines(state)[0]))
         self._before = state
         self.read_log()
@@ -1548,7 +1595,7 @@ def run_overlay(watch: Watch):
             if watch.stopping.is_set():
                 root.destroy()
                 return
-            cfg, lines, shapes = watch.preview or watch.cfg, watch.display, watch.hud_frame()
+            cfg, lines, shapes = watch.shown_cfg(), watch.display, watch.hud_frame()
             frame = watch.map_frame()
             lit = int(time.monotonic() * 2000 / cfg["flashMs"]) % 2 == 0
             state = cfg, shapes, lit if any(s[-1] for s in shapes) else None
@@ -1576,17 +1623,17 @@ def run_overlay(watch: Watch):
             if pressed(cfg["hudKey"]):
                 watch.hud_place = "outside" if watch.hud_place == "cockpit" else "cockpit"
             held = cfg["holdKey"] and all(down(k) for k in cfg["holdKey"])
-            on_game = cfg["show"] and not watch.hidden and not held and game_focused()
+            on_game = (cfg["show"] and not watch.hidden and not held and game_focused()) or watch.trial
             # ShowWindow rather than Tk: Tk would take the focus
             user32.ShowWindow(hwnd, SW_SHOWNOACTIVATE if shapes and (watch.preview or on_game) else SW_HIDE)
             user32.ShowWindow(text_hwnd, SW_SHOWNOACTIVATE if shown_text[0] and (watch.preview or on_game) else SW_HIDE)
             user32.ShowWindow(map_hwnd, SW_SHOWNOACTIVATE if frame and painter and painter[0] and (watch.preview or on_game) else SW_HIDE)
-            spec = first_glow(cfg) if watch.preview else watch.glow
+            spec = watch.glow if watch.trial or not watch.preview else first_glow(cfg)
             want = spec or first_glow(cfg)  # ahead of the first alarm: painting takes a moment on a big screen
             if want and want[:2] != painted:
                 painted = want[:2]
                 paint_glow(glow_hwnd, screen(), glow_pixels(screen(), *painted))
-            shown_glow = spec and spec[:2] == painted and (watch.preview or (not watch.hidden and game_focused()))
+            shown_glow = spec and spec[:2] == painted and (watch.preview or watch.trial or (not watch.hidden and game_focused()))
             user32.ShowWindow(glow_hwnd, SW_SHOWNOACTIVATE if shown_glow and (lit or not spec[2]) else SW_HIDE)
             root.after(HUD_FRAME_MS if shapes else MAP_FRAME_MS if frame else int(POLL_S * 1000), refresh)
 
