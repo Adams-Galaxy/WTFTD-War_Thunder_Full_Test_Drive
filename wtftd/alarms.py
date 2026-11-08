@@ -48,6 +48,8 @@ TRAIL_MAX = 600  # its trail's last places
 IDLE_S = 1.0  # not flying: nothing to read fast
 REPEAT_MS = 300
 BEEP_MS = 150
+GAP_MS = 700  # a dynamic alarm: the silence between its beeps at its threshold, none left at its break
+MAX_RULES = 4  # a line's own alarms
 SAMPLE_S = 1.0  # curves and logs: a reading a second
 BENCH_S = 0.2  # a test bench run: a 360° timed on a heading that moves between two readings
 TRACE_MAX = 3600  # an hour of curves
@@ -204,7 +206,7 @@ def defaults(words: dict) -> dict:
             **HUD_DEFAULTS, "mapMode": "off", "mapZoom": 1, "mapTrail": True, "mapOpacity": 85, "mapShape": "square", "mapUp": "north", "mapAllies": False, "mapAlliesGround": False, "mapDim": 30,
             **{f"mapMark{k}": 100 for k in minimap.MARKS},  # the minimap: off until the player turns it on
             "mapSize": round(560 * scale), "mapX": round(40 * scale), "mapY": round(1100 * scale),
-            "logKey": [], "logKeyName": "", "hideCrash": False, "hideUnknown": False, "glow": False, "repeat": REPEAT_MS, "alarms": {n: {"on": True, "at": at, "hz": hz, "ms": BEEP_MS, "sound": ""} for n, (at, hz) in ALARMS.items()},
+            "logKey": [], "logKeyName": "", "hideCrash": False, "hideUnknown": False, "glow": False, "repeat": REPEAT_MS, "alarms": {n: {"on": True, "red": at, "at": at, "hz": hz, "ms": BEEP_MS, "sound": "", "dyn": True, "gap": GAP_MS} for n, (at, hz) in ALARMS.items()},
             "lines": [line("IAS", "{ias} / {vne} km/h {swept}", alarm="airframe"), line("MACH", "{mach} / {mne}", alarm="airframe"),
                       line(words["gear"], "{ias} / {gear_max} km/h", "gear", "gear"),
                       line(words["flaps"], "{ias} / {flaps_max} km/h", "flaps", "flaps"),
@@ -245,19 +247,29 @@ def _test(test) -> dict | None:
                       "more": [x for x in map(_one, more) if x][:MAX_TESTS - 1]}
 
 
+def _value_at(v):
+    """A threshold that may be left out: a finite number, else None."""
+    return v if isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v) else None
+
+
 def _rule(rule) -> dict | None:
-    """A line's own alert: its condition and its sound."""
+    """One of a line's own alarms: its condition (its first value against "at": the beep), the value from which the line
+    goes red ("red", else with the beep) and the one where the beeps join into one sound ("full", else they keep the
+    overlay's repeat), and its sound."""
     test = _test(rule)
     return test and {**test, "hz": _num(rule.get("hz"), 1000, 37, 32767), "ms": _num(rule.get("ms"), BEEP_MS, 10, 2000),
-                     "sound": _sound(rule.get("sound"))}
+                     "sound": _sound(rule.get("sound")), "red": _value_at(rule.get("red")), "full": _value_at(rule.get("full")),
+                     "gap": _num(rule.get("gap"), GAP_MS, 0, 5000)}
 
 
 def _line(line: dict) -> dict:
+    rules = line.get("rules") if isinstance(line.get("rules"), list) else [line.get("rule")]  # a line had one ("rule") before
     return {"text": str(line.get("text", ""))[:MAX_TEXT], "when": line.get("when") if line.get("when") in WHEN else "always",
             "alarm": line.get("alarm") if line.get("alarm") in ALARMS else "", "color": _color(line.get("color"), ""),
             "valueColor": _color(line.get("valueColor"), ""), "unitColor": _color(line.get("unitColor"), ""),
             "size": _num(line.get("size"), 0, 0, 400), "blink": _flag(line.get("blink"), False), "hideNA": _flag(line.get("hideNA"), False),
-            "block": _num(line.get("block"), 0, 0, MAX_BLOCKS), "if": _test(line.get("if")), "rule": _rule(line.get("rule"))}
+            "block": _num(line.get("block"), 0, 0, MAX_BLOCKS), "if": _test(line.get("if")),
+            "rules": [x for x in map(_rule, rules) if x][:MAX_RULES]}
 
 
 def _look(block: dict) -> dict:
@@ -304,9 +316,10 @@ def clean(cfg, words: dict) -> dict:
            **_keys(cfg, "holdKey", "holdKeyName"), **_hud(cfg), **_map(cfg, base)}
     for name, std in base["alarms"].items():
         a = alarms.get(name) if isinstance(alarms.get(name), dict) else {}
-        out["alarms"][name] = {"on": _flag(a.get("on"), std["on"]), "at": _num(a.get("at"), std["at"], 1, 200),
+        at = _num(a.get("at"), std["at"], 1, 200)
+        out["alarms"][name] = {"on": _flag(a.get("on"), std["on"]), "red": _num(a.get("red"), at, 1, 200), "at": at,
                                "hz": _num(a.get("hz"), std["hz"], 37, 32767), "ms": _num(a.get("ms"), std["ms"], 10, 2000),
-                               "sound": _sound(a.get("sound"))}
+                               "sound": _sound(a.get("sound")), "dyn": _flag(a.get("dyn"), std["dyn"]), "gap": _num(a.get("gap"), std["gap"], 0, 5000)}
     lines, blocks = cfg.get("lines"), cfg.get("blocks")
     out["blocks"] = [_block(x) for x in blocks if isinstance(x, dict)][:MAX_BLOCKS] if isinstance(blocks, list) else []
     out["lines"] = [_line(x) for x in lines if isinstance(x, dict)][:MAX_LINES] if isinstance(lines, list) else base["lines"]
@@ -337,8 +350,9 @@ def percents(lim: dict, state: dict, always: bool = False) -> dict:
     return out
 
 
-def active(values: dict, alarms: dict) -> list:
-    return [name for name, value in values.items() if alarms[name]["on"] and value >= alarms[name]["at"]]
+def active(values: dict, alarms: dict, key: str = "at") -> list:
+    """The aircraft's alarms on, beeping from their "at" (% of the limit); with key "red", the ones whose lines go red."""
+    return [name for name, value in values.items() if alarms[name]["on"] and value >= alarms[name][key]]
 
 
 class Trend:
@@ -411,9 +425,36 @@ def met(test: dict, values: dict) -> bool:
     return any(results) if test.get("join") == "or" else all(results)
 
 
-def own_alerts(cfg: dict, values: dict) -> list:
-    """The lines whose own alert is on, by their place in the list."""
-    return [i for i, line in enumerate(cfg["lines"]) if line.get("rule") and met(line["rule"], values)]
+def own_alerts(cfg: dict, values: dict, red: bool = False) -> list:
+    """The lines' own alarms on, as (line, alarm) places: beeping, or with red, turning their line red (from their "red"
+    value when they have one: it stands for the first condition's)."""
+    return [(i, j) for i, line in enumerate(cfg["lines"]) for j, rule in enumerate(line.get("rules") or [])
+            if met({**rule, "at": rule["red"]} if red and rule.get("red") is not None else rule, values)]
+
+
+def sound_of(cfg: dict, name) -> dict:
+    """What an alarm on sounds like: an aircraft's alarm by its name, a line's own by its (line, alarm) place."""
+    return cfg["lines"][name[0]]["rules"][name[1]] if isinstance(name, tuple) else cfg["alarms"][name]
+
+
+def closeness(cfg: dict, name, pct: dict, values: dict) -> float | None:
+    """Where an alarm on stands from its threshold (0) to its break (1): the aircraft's at 100 % of the limit, a line's own
+    at its "full" value. None for one that beeps at the overlay's repeat."""
+    a = sound_of(cfg, name)
+    if isinstance(name, tuple):
+        v = values.get(FIELDS.get(a["value"], (a["value"],))[0])
+        if a.get("full") is None or a["full"] == a["at"] or not isinstance(v, (int, float)) or isinstance(v, bool):
+            return None
+        return min(1.0, max(0.0, (v - a["at"]) / (a["full"] - a["at"])))
+    if not a["dyn"]:
+        return None
+    return 1.0 if a["at"] >= 100 else min(1.0, max(0.0, (pct.get(name, 0) - a["at"]) / (100 - a["at"])))
+
+
+def pace(cfg: dict, name, close: float | None) -> float:
+    """Seconds from one beep to the next: the gap shrinks as the alarm nears its break, the beeps touch at it."""
+    a = sound_of(cfg, name)
+    return cfg["repeat"] / 1000 if close is None else (a["ms"] + a["gap"] * (1 - close)) / 1000
 
 
 def _value(m: re.Match, values: dict) -> str:
@@ -452,14 +493,15 @@ def shown(line: dict, values: dict, on: list) -> bool:
 
 
 def lines_for(cfg: dict, values: dict, on: list) -> list:
-    """[(text, colour, size, blinks, block, parts), ...] of the overlay; parts: [(text, colour), ...]. on: alarms by name, a
-    line's own alert by its place: the whole line goes to the alert colour with the alarm it follows or its own."""
+    """[(text, colour, size, blinks, block, parts), ...] of the overlay; parts: [(text, colour), ...]. on: the alarms whose
+    lines go red, the aircraft's by name, a line's own by its (line, alarm) place: the whole line goes to the alert colour
+    with the alarm it follows or one of its own."""
     out = []
     for i, line in enumerate(cfg["lines"]):
         text = fill(line["text"], values)
         if not shown(line, values, on) or (line.get("hideNA") and NO_VALUE in text):
             continue
-        alert, block = line["alarm"] in on or i in on, line.get("block", 0)
+        alert, block = line["alarm"] in on or any(x[0] == i for x in on if isinstance(x, tuple)), line.get("block", 0)
         color = cfg["alert"] if alert else line["color"] or cfg["color"]
         tints = {"name": color, "value": color if alert else line.get("valueColor") or cfg["valueColor"] or color,
                  "unit": color if alert else line.get("unitColor") or cfg["unitColor"] or color}
@@ -788,7 +830,7 @@ class Watch:
 
     def sample(self, cfg: dict) -> list:
         values = {**SAMPLE_STATE, **SAMPLE_STATS, "vehicle": self.vehicle(SAMPLE_VEHICLE), **computed(SAMPLE_LIM, SAMPLE_STATE, self.words, {"burn": 95, "accel": 1.2}, cfg["pctAlways"])}
-        return lines_for(cfg, values, active(percents(SAMPLE_LIM, SAMPLE_STATE), cfg["alarms"]) + own_alerts(cfg, values))
+        return lines_for(cfg, values, active(percents(SAMPLE_LIM, SAMPLE_STATE), cfg["alarms"], "red") + own_alerts(cfg, values, red=True))
 
     def sample_hud(self, cfg: dict, key: str = "", place: str = "cockpit", screen_size: tuple | None = None) -> list:
         """The HUD with the sample values; key: the overlay's aircraft id, if it has one, for its nation's style."""
@@ -992,14 +1034,15 @@ class Watch:
             self.hud_live = self.map_live = None
             self.warn = False
             return min(cfg["pollMs"] / 1000, HUD_POLL_S) if fast else cfg["pollMs"] / 1000
-        on = active(percents(lim, state), cfg["alarms"]) if lim and not self._unbreakable and not wreck else []
-        on += [] if wreck else own_alerts(cfg, values)
-        self.warn, self.on = bool(on), on
+        pct = percents(lim, state) if lim and not self._unbreakable and not wreck else {}
+        on = active(pct, cfg["alarms"]) + ([] if wreck else own_alerts(cfg, values))  # beeping
+        red = active(pct, cfg["alarms"], "red") + ([] if wreck else own_alerts(cfg, values, red=True))  # their lines red
+        self.warn, self.on = bool(red or on), on
         note = self.words["unknown"] if not lim else self.words["unbreakable"] if self._unbreakable else None
         tint = cfg["alert"] if not lim else cfg["color"]
         status = [(note, tint, cfg["size"], False, 0, [(note, tint)])] if note else []
         hidden = (wreck and cfg["hideCrash"]) or (not lim and cfg["hideUnknown"])
-        self.display = [] if hidden else status + lines_for(cfg, values, on)
+        self.display = [] if hidden else status + lines_for(cfg, values, red)
         jet = bool(lim.get("jet")) if lim else None
         shown = not (hidden or wreck) and hud.wanted(cfg["hudMode"], self.kind(self.current), jet)
         self.hud, self.hud_live = [], (cfg, self.nation(self.current)) if shown else None
@@ -1008,11 +1051,20 @@ class Watch:
             self.read_map()
         rpm = _engines(state)[0]
         silent = self.muted or (cfg["soundFocus"] and not game_focused()) or (cfg["soundEngine"] and rpm and not any(rpm))
-        if on and not silent and time.monotonic() - self._last_beep >= cfg["repeat"] / 1000:
-            self._last_beep = time.monotonic()
-            for name in on:
-                play(cfg["lines"][name]["rule"] if isinstance(name, int) else cfg["alarms"][name], cfg["volume"], self.sounds)
+        if not silent:
+            self.ring(cfg, on, pct, values)
         return min(cfg["pollMs"] / 1000, HUD_POLL_S) if self.hud_live or fast else cfg["pollMs"] / 1000
+
+    def ring(self, cfg: dict, on: list, pct: dict, values: dict):
+        """The alarms on beep together, as often as the one nearest its break asks: a dynamic alarm goes from spaced beeps
+        at its threshold to one continuous sound at its break (its beeps then last two readings, so that they touch)."""
+        close = [(name, closeness(cfg, name, pct, values)) for name in on]
+        if not close or time.monotonic() - self._last_beep < min(pace(cfg, name, c) for name, c in close):
+            return
+        self._last_beep = time.monotonic()
+        for name, c in close:
+            sound = sound_of(cfg, name)
+            play({**sound, "ms": max(sound["ms"], cfg["pollMs"] * 2)} if c == 1 else sound, cfg["volume"], self.sounds)
 
     def drive(self, values: dict) -> float:
         """A tank or a ship: curves, logs and its overlay ("type:tank", "type:ship": an aircraft's lines mean nothing there);
@@ -1025,17 +1077,16 @@ class Watch:
         self.record(values)
         cfg = self.preview or self.profiles.get(self.profile)
         on = own_alerts(cfg, values) if cfg and self.enabled else []
-        self.warn = bool(on)
+        red = own_alerts(cfg, values, red=True) if cfg and self.enabled else []
+        self.warn = bool(red or on)
         if self.preview or not self.enabled:
             self.display = self.sample(self.preview) if self.preview else []
         else:
-            self.display = lines_for(cfg, values, on) if cfg else []
+            self.display = lines_for(cfg, values, red) if cfg else []
         if cfg:
             self.cfg = cfg
-        if on and not self.muted and time.monotonic() - self._last_beep >= self.cfg["repeat"] / 1000:
-            self._last_beep = time.monotonic()
-            for i in on:
-                play(self.cfg["lines"][i]["rule"], self.cfg["volume"], self.sounds)
+        if not self.muted:
+            self.ring(self.cfg, on, {}, values)
         return self.cfg["pollMs"] / 1000
 
     def run(self):

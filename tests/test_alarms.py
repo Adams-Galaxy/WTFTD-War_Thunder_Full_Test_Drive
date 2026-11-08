@@ -198,7 +198,8 @@ class Settings(unittest.TestCase):
         for test in ("x", {"op": ">", "at": 1}, {"value": "g", "op": "=", "at": 1}, {"value": "g", "op": ">", "at": "1"},
                      {"value": "g", "op": ">", "at": float("nan")}, {"value": "g", "op": ">", "at": True}, {"value": "", "op": ">", "at": 1}):
             self.assertIsNone(self.line(**{"if": test})["lines"][0]["if"], test)
-            self.assertIsNone(self.line(rule=test)["lines"][0]["rule"], test)
+            self.assertEqual(self.line(rule=test)["lines"][0]["rules"], [], test)
+            self.assertEqual(self.line(rules=[test])["lines"][0]["rules"], [], test)
 
     def test_a_sound_is_a_plain_name(self):
         for name in ("../x.wav", "a/b.wav", "x.exe", "", 3):
@@ -570,6 +571,72 @@ class Watching(unittest.TestCase):
         self.watch._last_beep -= 1
         self.fly(**{"IAS, km/h": 1500})
         self.assertEqual(self.beep.call_count, 2)
+
+    def test_red_before_the_beep(self):
+        self.watch.set_config(alarms.clean({"alarms": {"airframe": {"red": 80, "at": 95}}}, WORDS), {})
+        self.fly(**{"IAS, km/h": 1300})  # 84 % of 1543: red, quiet
+        self.assertEqual(self.watch.display[0][1], self.watch.cfg["alert"])
+        self.beep.assert_not_called()
+        self.watch._last_beep -= 5
+        self.fly(**{"IAS, km/h": 1500})  # 97 %: it beeps too
+        self.beep.assert_called_once()
+
+    def test_beeps_close_in_up_to_the_break(self):
+        cfg = alarms.clean({"alarms": {"airframe": {"at": 90, "ms": 100, "gap": 800}}}, WORDS)
+        for pct, wait in ((90, 0.9), (95, 0.5), (100, 0.1), (120, 0.1)):
+            close = alarms.closeness(cfg, "airframe", {"airframe": pct}, {})
+            self.assertAlmostEqual(alarms.pace(cfg, "airframe", close), wait)
+        steady = alarms.clean({"alarms": {"airframe": {"at": 90, "dyn": False}}}, WORDS)
+        self.assertEqual(alarms.pace(steady, "airframe", alarms.closeness(steady, "airframe", {"airframe": 99}, {})), steady["repeat"] / 1000)
+        self.watch.set_config(cfg, {})
+        self.fly(**{"IAS, km/h": 1600})  # past the limit: one continuous sound, its beeps as long as two readings
+        self.beep.assert_called_once_with(cfg["alarms"]["airframe"]["hz"], cfg["pollMs"] * 2, 100)
+
+    def test_several_alarms_on_one_line(self):
+        g = {"value": "g", "op": ">", "ms": 80}
+        self.watch.set_config(alarms.clean({"lines": [{"text": "G {g}", "rules": [{**g, "at": 6, "hz": 900}, {**g, "at": 8, "hz": 1500, "red": 7}]}]}, WORDS), {})
+        self.fly(**{"Ny": 6.5})
+        self.beep.assert_called_once_with(900, 80, 100)
+        self.assertEqual(self.watch.display[0][1], self.watch.cfg["alert"])  # the first one turns it red
+        self.beep.reset_mock()
+        self.watch._last_beep -= 5
+        self.fly(**{"Ny": 9})
+        self.assertEqual(sorted(c.args[0] for c in self.beep.call_args_list), [900, 1500])
+
+    def test_the_test_button_plays_that_alarm(self):  # the page's "Test", on each of a line's alarms
+        g = {"value": "g", "op": ">"}
+        cfg, handler = alarms.clean({"lines": [{"text": "G {g}", "rules": [{**g, "at": 6, "hz": 500}, {**g, "at": 8, "hz": 900}]}]}, WORDS), mock.Mock()
+        with mock.patch.object(server, "WATCH", mock.Mock(profiles={}, base=cfg)), mock.patch.object(alarms, "available", return_value=True), \
+                mock.patch.object(alarms, "play") as play:
+            for body, hz in (({"line": 0, "rule": 1}, 900), ({"line": 0}, 500), ({"alarm": "gear"}, cfg["alarms"]["gear"]["hz"])):
+                server.Handler.post_api(handler, "overlay-test", body)
+                self.assertEqual(play.call_args.args[0]["hz"], hz)
+            play.reset_mock()
+            for body in ({"line": 0, "rule": 2}, {"line": 0, "rule": "1"}, {"line": 1}, {"alarm": "x"}):
+                server.Handler.post_api(handler, "overlay-test", body)
+                self.assertEqual(handler.send_json.call_args.args[0], {"ok": False}, body)
+            play.assert_not_called()
+
+    def test_the_page_offers_several_alarms_per_line(self):
+        script = (alarms.WEB / "overlay.js").read_text(encoding="utf-8")
+        for bit in ("data-oradd", "data-ordel", 'data-or="full"', 'data-oa="red"', 'data-oa="dyn"', "rule: +b.closest('.ov-rule').dataset.j",
+                    f"OV_MAX_RULES = {alarms.MAX_RULES}", f"OV_GAP_MS = {alarms.GAP_MS}"):  # the page and the engine agree
+            self.assertIn(bit, script)
+        for code in ("en", "fr", "de", "es", "it", "pt", "pl", "cs", "ru", "ja", "zh"):
+            words = json.loads((alarms.WEB / "locales" / f"{code}.json").read_text(encoding="utf-8"))
+            for key in ("ov.redFrom", "ov.beepFrom", "ov.dynamic", "ov.gap", "ov.redFromValue", "ov.fullAt", "ov.addAlarm", "ov.removeAlarm", "ov.withBeep", "ov.noFull"):
+                self.assertTrue(words.get(key), (code, key))
+            self.assertIn("{red}", words["ov.example"], code)
+
+    def test_a_lines_own_alarm_red_first_and_continuous_at_its_value(self):
+        self.own_alert(red=25, full=5)
+        self.fly(**{"Mfuel, kg": 1300})  # 22 % of 5945 kg: red only
+        self.assertEqual(self.watch.display[0][1], self.watch.cfg["alert"])
+        self.beep.assert_not_called()
+        rule = self.watch.cfg["lines"][0]["rules"][0]
+        self.assertAlmostEqual(alarms.closeness(self.watch.cfg, (0, 0), {}, {"fuel_pct": 10}), 0.5)
+        self.assertEqual(alarms.closeness(self.watch.cfg, (0, 0), {}, {"fuel_pct": 2}), 1.0)
+        self.assertEqual((rule["red"], rule["full"]), (25, 5))
 
     def test_the_menus_are_not_a_flight(self):  # as read in the hangar on 2.59
         hangar = state(**{"IAS, km/h": 1, "Mfuel, kg": 0, "RPM 1": 0})
@@ -1011,15 +1078,15 @@ class Configuration(unittest.TestCase):
         self.assertEqual(cfg, alarms.defaults(WORDS))
 
     def test_numbers_stay_in_range(self):
-        cfg = alarms.clean({"size": 1, "opacity": 900, "repeat": 1, "alarms": {"gear": {"at": 900, "hz": 1, "ms": 99999}}}, WORDS)
+        cfg = alarms.clean({"size": 1, "opacity": 900, "repeat": 1, "alarms": {"gear": {"at": 900, "hz": 1, "ms": 99999, "gap": -5, "dyn": "y"}}}, WORDS)
         self.assertEqual((cfg["size"], cfg["opacity"], cfg["repeat"]), (6, 100, 100))
-        self.assertEqual(cfg["alarms"]["gear"], {"on": True, "at": 200, "hz": 37, "ms": 2000, "sound": ""})
+        self.assertEqual(cfg["alarms"]["gear"], {"on": True, "red": 200, "at": 200, "hz": 37, "ms": 2000, "sound": "", "dyn": True, "gap": 0})
 
     def test_lines_are_limited(self):
         cfg = alarms.clean({"lines": [{"text": "x" * 500, "when": "?", "alarm": "?", "color": "?", "size": -3}, "no"] * 40}, WORDS)
         self.assertEqual(len(cfg["lines"]), alarms.MAX_LINES)
         self.assertEqual(cfg["lines"][0], {"text": "x" * alarms.MAX_TEXT, "when": "always", "alarm": "", "color": "", "size": 0, "valueColor": "",
-                                           "unitColor": "", "blink": False, "hideNA": False, "block": 0, "if": None, "rule": None})
+                                           "unitColor": "", "blink": False, "hideNA": False, "block": 0, "if": None, "rules": []})
 
     def test_no_lines_at_all_is_a_choice(self):
         self.assertEqual(alarms.clean({"lines": []}, WORDS)["lines"], [])

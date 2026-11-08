@@ -1081,9 +1081,10 @@ class Handler(BaseHTTPRequestHandler):
             on = alarms.available() and body.get("on") is True
             WATCH.set_preview(WATCH.profiles.get(str(body.get("profile") or ""), WATCH.base) if on else None, str(body.get("profile") or ""))
             return self.send_json(overlay_status(str(body.get("profile") or "")))
-        if route == "overlay-test":  # hear an alarm, or a line's own alert
-            cfg, line = WATCH.profiles.get(str(body.get("profile") or ""), WATCH.base), body.get("line")
-            a = cfg["lines"][line]["rule"] if type(line) is int and 0 <= line < len(cfg["lines"]) else cfg["alarms"].get(str(body.get("alarm")))
+        if route == "overlay-test":  # hear an alarm, or one of a line's own
+            cfg, line, rule = WATCH.profiles.get(str(body.get("profile") or ""), WATCH.base), body.get("line"), body.get("rule", 0)
+            own = cfg["lines"][line]["rules"] if type(line) is int and 0 <= line < len(cfg["lines"]) else None
+            a = (own[rule] if type(rule) is int and 0 <= rule < len(own) else None) if own is not None else cfg["alarms"].get(str(body.get("alarm")))
             if a and alarms.available():
                 alarms.play(a, cfg["volume"], SOUNDS)
             return self.send_json({"ok": bool(a)})

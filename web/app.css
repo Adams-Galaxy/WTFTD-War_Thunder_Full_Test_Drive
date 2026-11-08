@@ -1352,6 +1352,13 @@ body.no-sidebar .sidebar, body.no-sidebar #compareTray { display: none; }
 .ov-alarm { gap: 10px; }
 .ov-panel #ovAlarms { margin-bottom: 2px; }
 .ov-alarm-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 4px; }
+.ov-line-alarms { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 8px; font-size: 12px; padding-top: 6px; border-top: 1px dashed var(--line); }
+.ov-rule { display: flex; flex-direction: column; gap: 6px; }
+.ov-rule + .ov-rule { padding-top: 8px; border-top: 1px solid var(--line); }
+.ov-dyn-row { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: end; margin-bottom: 4px; }
+.ov-dyn-row .ov-mini { width: 110px; }
+.ov-dyn-row .switch { min-height: 34px; box-sizing: border-box; }
+.ov-add-alarm { align-self: flex-start; }
 @media (max-width: 1250px) {
   .ov-line, .ov-line.ov-blocks { grid-template-columns: auto minmax(0, 1fr) 118px 118px; }
 }

@@ -4,6 +4,16 @@ What changed in each version of WTFTD. Downloads: [Releases](https://github.com/
 (only the latest version is kept there; from 0.19.0 on, each version's code stays available through its git tag).
 Versions follow `major.minor.patch`; "beta" until 1.0.
 
+## Not released yet
+
+- **Overlay: a line's alarms in sight, several per line.** Under each line of *My overlay → Lines*: **Add an alarm**, up
+  to four per line, each its own condition on any value, its sound, the value the line turns red from (before the beep,
+  or with it) and the value where its beeps become continuous. A line's former *Alert if* is its first alarm.
+- **Overlay: red and beep thresholds apart, beeps that close in.** Airframe, gear and flaps each have **Red from** and
+  **Beeps from** (% of the limit), in the Alarms tab and on the lines that turn red with them. *Beeps closer up to the
+  break* (on by default): spaced at the threshold (**Gap at the threshold**, 700 ms), closer and closer up to the limit,
+  continuous at 100 %. Off, they repeat as before.
+
 ## 0.26.0 - 2026-11-08
 
 - **A mission's own difficulty, each setting changeable.** The *Mission* window picks Arcade, Realistic or Simulator, or
