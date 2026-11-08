@@ -4,7 +4,7 @@ What changed in each version of WTFTD. Downloads: [Releases](https://github.com/
 (only the latest version is kept there; from 0.19.0 on, each version's code stays available through its git tag).
 Versions follow `major.minor.patch`; "beta" until 1.0.
 
-## Not released yet
+## 0.28.0 - 2026-11-08
 
 - **Turn time against the aircraft's reference**: the game's card gives each aircraft's best turn, without and with WEP
   (980 of 1,234 flight models). New values for lines, alarms and curves: **reference turn time** (the WEP one while a
