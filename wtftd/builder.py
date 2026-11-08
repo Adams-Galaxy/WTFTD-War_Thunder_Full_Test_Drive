@@ -37,7 +37,7 @@ from pathlib import Path
 from . import patches, vromfs
 from .paths import CACHE, DATA, HOME as ROOT
 DM = CACHE / "datamine"
-SCHEMA = 35  # bump when data/*.json gains fields the app needs: installed data gets rebuilt
+SCHEMA = 36  # bump when data/*.json gains fields the app needs: installed data gets rebuilt
 REPO = "https://github.com/gszabi99/War-Thunder-Datamine.git"
 SPARSE = [
     "aces.vromfs.bin_u/gamedata/flightmodels",
@@ -1126,6 +1126,23 @@ def flight_limits(fm: dict, cat: str) -> dict:
     out["mass"] = _numval(mass.get("EmptyMass")) or 0
     if "Jet" in engine_kinds(fm):
         out["jet"] = True
+    crit = strength.get("CritOverload") or mass.get("WingCritOverload")  # jets, then older flight models (Bf 109 F-4)
+    if isinstance(crit, list) and len(crit) == 2 and all(isinstance(x, (int, float)) for x in crit) and crit[1] > 0:
+        out["load"] = crit  # N on one wing: alarms.load_limits makes it G at the mass flown
+    polars = [aero.get("NoFlaps"), aero.get("FullFlaps")] if "NoFlaps" in aero else \
+        [(aero.get("WingPlane") or {}).get(f"FlapsPolar{n}") for n in (0, 1)]  # older flight models, then jets
+    aoa = [[p["alphaCritLow"], p["alphaCritHigh"]] for p in polars if isinstance(p, dict) and "alphaCritHigh" in p and "alphaCritLow" in p]
+    if aoa:
+        out["aoa"] = aoa  # the wing's critical angles of attack, flaps up then full flaps
+    engines = [v for k, v in fm.items() if re.fullmatch(r"Engine\d+", k) and isinstance(v, dict)]
+    kinds = [fm.get(f"EngineType{e.get('Type')}") or {} for e in engines]
+    nitro = sum((k.get("Afterburner") or {}).get("NitroConsumption") or 0 for k in kinds if not k.get("Booster"))
+    if (mass.get("MaxNitro") or 0) > 0 and nitro > 0:
+        out["wep"] = [mass["MaxNitro"], round(nitro, 4)]  # the WEP tank, kg, and what the engines burn of it, kg/s
+    boost = [[mass.get(f"MaxFuelMass{(e.get('Main') or {}).get('FuelSystemNum', 0)}") or 0, (k.get("Main") or {}).get("FuelConsumptionOnFullThr") or 0]
+             for e, k in zip(engines, kinds) if k.get("Booster")]
+    if any(f > 0 and r > 0 for f, r in boost):
+        out["boost"] = [x for x in boost if x[0] > 0 and x[1] > 0]  # take-off rockets: their fuel, kg, and burn, kg/s
     return out
 
 

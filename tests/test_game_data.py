@@ -86,11 +86,21 @@ class ReferenceWeapons(unittest.TestCase):
 class ReferenceLimits(unittest.TestCase):
     def test_su_30mkk(self):
         self.assertEqual(flight_limits(load(FM / "su_30mkk.blkx"), "air"),
-                         {"v": 1540, "m": 2.1, "gear": 700, "flaps": [[0.2, 1018], [1, 600]], "fuel": [9400, 9400], "eng": 2, "mass": 17520, "jet": True})
+                         {"v": 1540, "m": 2.1, "gear": 700, "flaps": [[0.2, 1018], [1, 600]], "fuel": [9400, 9400], "eng": 2, "mass": 17520, "jet": True,
+                          "load": [-550000, 1450000], "aoa": [[-20, 28], [-22, 29]]})
 
     def test_j_10c(self):
         self.assertEqual(flight_limits(load(FM / "j_10c.blkx"), "air"),
-                         {"v": 1543, "m": 2.1, "gear": 620, "flaps": [[0.1, 550], [1, 400]], "fuel": [5945, 6220.02], "eng": 1, "mass": 9045, "jet": True})
+                         {"v": 1543, "m": 2.1, "gear": 620, "flaps": [[0.1, 550], [1, 400]], "fuel": [5945, 6220.02], "eng": 1, "mass": 9045, "jet": True,
+                          "load": [-230000, 630000], "aoa": [[-32, 35], [-31, 35]]})
+
+    def test_wep_tank_and_take_off_rockets(self):  # A-26B: water injection; A-4B: two take-off rockets
+        self.assertEqual(flight_limits(load(FM / "a-26b.blkx"), "air")["wep"], [162.8, 0.18])
+        self.assertEqual(flight_limits(load(FM / "a_4b.blkx"), "air")["boost"], [[40.5, 8], [40.5, 8]])
+
+    def test_older_flight_model_s_wing_load(self):  # Bf 109 F-4: Mass/WingCritOverload, NoFlaps and FullFlaps
+        lim = flight_limits(load(FM / "bf-109f-4.blkx"), "air")
+        self.assertEqual((lim["load"], lim["aoa"]), ([-85000, 175100], [[-14, 17.2], [-17, 15.1]]))
 
     def test_f_14a_variable_sweep(self):
         lim = flight_limits(load(FM / "f_14a_early.blkx"), "air")

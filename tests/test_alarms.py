@@ -21,6 +21,11 @@ PLANES = {"su_30mkk": SU30, "j_10c": J10, "j_10_twin": dict(J10, v=900), "j_10a"
 WORDS = alarms.labels("en")
 
 
+def airframe(**fields) -> dict:
+    """An overlay of one line with the airframe's alarm, as set."""
+    return alarms.clean({"lines": [{"text": "IAS {ias}", "rules": [{"limit": "airframe", **fields}]}]}, WORDS)
+
+
 def state(**fields) -> dict:
     return {"valid": True, "Mfuel0, kg": 5945, "IAS, km/h": 500, "M": 0.5, "throttle 1, %": 100, **fields}
 
@@ -100,6 +105,54 @@ class Limits(unittest.TestCase):
         self.assertEqual(builder.engine_count(fm), 1)
 
 
+class Migration(unittest.TestCase):
+    """An overlay saved before 0.27: the aircraft's alarms in a tab, lines red "with" one."""
+
+    OLD = {"alarms": {"airframe": {"on": True, "red": 85, "at": 95, "hz": 1500, "dyn": False}, "gear": {"on": True}, "flaps": {"on": False}},
+           "lines": [{"text": "IAS {ias}", "alarm": "airframe", "blink": True, "rules": [{"value": "g", "op": ">", "at": 9}]},
+                     {"text": "FLAPS", "alarm": "flaps"}]}
+
+    def test_each_line_gets_the_alarm_it_followed(self):
+        cfg = alarms.clean(self.OLD, WORDS)
+        first = cfg["lines"][0]["rules"]
+        self.assertEqual([(r["limit"], r["at"], r["red"], r["hz"], r["full"]) for r in first], [("airframe", 95, 85, 1500, None), ("", 9, None, 1000, None)])
+        self.assertEqual(first[0]["blink"], list(alarms.PARTS))
+        self.assertEqual(cfg["lines"][1]["rules"], [])  # flaps was off
+
+    def test_an_alarm_no_line_followed_gets_one_and_g_and_aoa_come(self):
+        cfg = alarms.clean(self.OLD, WORDS)
+        extra = [(x["when"], x["rules"][0]["limit"]) for x in cfg["lines"][2:]]
+        self.assertEqual(extra, [("own", "gear"), ("own", "load"), ("own", "aoa")])
+        self.assertNotIn("alarms", cfg)
+        self.assertEqual(alarms.clean(cfg, WORDS), cfg)  # once
+
+
+class Limits(unittest.TestCase):
+    LIM = {"mass": 10000, "load": [-100000, 245166], "aoa": [[-20, 30], [-10, 20]]}
+
+    def test_g_at_the_mass_flown(self):
+        self.assertEqual([round(x, 2) for x in alarms.load_limits(self.LIM, {"Mfuel, kg": 2500})], [-1.63, 4.0])
+
+    def test_negative_g_against_its_own_limit(self):
+        pct = alarms.percents({"v": 1000, "m": 0, **self.LIM}, {"Ny": -0.8, "Mfuel, kg": 2500})
+        self.assertAlmostEqual(pct["load"], 49, delta=0.1)
+
+    def test_aoa_moves_with_the_flaps(self):
+        self.assertEqual(alarms.aoa_limits(self.LIM, {"flaps, %": 50}), (-15, 25))
+
+    def test_the_flight_model_s(self):
+        jet = {"Aerodynamics": {"WingPlane": {"Strength": {"VNE": 1000, "MNE": 1, "CritOverload": [-1, 2]},
+                                              "FlapsPolar0": {"alphaCritLow": -20, "alphaCritHigh": 28}, "FlapsPolar1": {"alphaCritLow": -22, "alphaCritHigh": 29}}}}
+        self.assertEqual({k: builder.flight_limits(jet, "air")[k] for k in ("load", "aoa")}, {"load": [-1, 2], "aoa": [[-20, 28], [-22, 29]]})
+        old = {"Aerodynamics": {"WingPlane": {"Strength": {"VNE": 700}}, "NoFlaps": {"alphaCritLow": -14, "alphaCritHigh": 17.2},
+                                "FullFlaps": {"alphaCritLow": -17, "alphaCritHigh": 15.1}},
+               "Mass": {"WingCritOverload": [-85000, 175100], "MaxNitro": 100, "MaxFuelMass1": 40},
+               "Engine0": {"Type": 0}, "EngineType0": {"Afterburner": {"NitroConsumption": 0.1}},
+               "Engine1": {"Type": 1, "Main": {"FuelSystemNum": 1}}, "EngineType1": {"Booster": True, "Main": {"Type": "Rocket", "FuelConsumptionOnFullThr": 8}}}
+        lim = builder.flight_limits(old, "air")
+        self.assertEqual((lim["load"], lim["aoa"], lim["wep"], lim["boost"]), ([-85000, 175100], [[-14, 17.2], [-17, 15.1]], [100, 0.1], [[40, 8]]))
+
+
 class Speeds(unittest.TestCase):
     def test_flaps_between_points(self):
         self.assertEqual(alarms.flaps_limit([[0.2, 1000], [1, 600]], 0.6), 800)
@@ -128,13 +181,14 @@ class Speeds(unittest.TestCase):
         self.assertEqual(alarms.percents(J10, {"IAS, km/h": 0})["airframe"], 0)
 
     def test_thresholds(self):
-        on = alarms.clean(None, WORDS)["alarms"]
-        self.assertEqual(alarms.active({"airframe": 92.9, "gear": 89.9, "flaps": 89.9}, on), [])
-        self.assertEqual(alarms.active({"airframe": 93, "gear": 90, "flaps": 90}, on), ["airframe", "gear", "flaps"])
+        cfg = alarms.clean(None, WORDS)
+        on = lambda pct: sorted({alarms.sound_of(cfg, x)["limit"] for x in alarms.own_alerts(cfg, {}, pct)})
+        self.assertEqual(on({"airframe": 92.9, "gear": 89.9, "flaps": 89.9, "load": 89.9, "aoa": 89.9}), [])
+        self.assertEqual(on({"airframe": 93, "gear": 90, "flaps": 90, "load": 90, "aoa": 90}), ["airframe", "aoa", "flaps", "gear", "load"])
 
-    def test_a_switched_off_alarm_stays_off(self):
-        on = alarms.clean({"alarms": {"gear": {"on": False}}}, WORDS)["alarms"]
-        self.assertEqual(alarms.active({"gear": 500}, on), [])
+    def test_a_switched_off_alarm_stays_off(self):  # saved before 0.27: no line gets it
+        cfg = alarms.clean({"alarms": {"gear": {"on": False}}, "lines": [{"text": "GEAR", "alarm": "gear"}]}, WORDS)
+        self.assertEqual(alarms.own_alerts(cfg, {}, {"gear": 500}), [])
 
 
 class Recognition(unittest.TestCase):
@@ -192,7 +246,8 @@ class Settings(unittest.TestCase):
         self.assertEqual((cfg["logMs"], cfg["outline"], cfg["spacing"], cfg["outlineColor"]), (1000, 4, 0, "#000000"))
         self.assertEqual((cfg["muteKey"], cfg["holdKey"]), ([], []))
         self.assertEqual([b["scale"] for b in cfg["blocks"]], [400] * alarms.MAX_BLOCKS)
-        self.assertEqual(cfg["blocks"][0], {"x": 0, "y": 0, "scale": 400, "columns": 1, "frame": 0, "frameColor": "#FFFFFF", "background": "", "bgOpacity": 50})
+        self.assertEqual(cfg["blocks"][0], {"x": 0, "y": 0, "scale": 400, "columns": 1, "frame": 0, "frameColor": "#FFFFFF", "background": "", "bgOpacity": 50,
+                                            "title": "", "feed": "", "rows": alarms.FEED_ROWS})
 
     def test_a_bad_condition_is_no_condition(self):
         for test in ("x", {"op": ">", "at": 1}, {"value": "g", "op": "=", "at": 1}, {"value": "g", "op": ">", "at": "1"},
@@ -202,9 +257,10 @@ class Settings(unittest.TestCase):
             self.assertEqual(self.line(rules=[test])["lines"][0]["rules"], [], test)
 
     def test_a_sound_is_a_plain_name(self):
+        sound = lambda name: self.line(rules=[{"limit": "gear", "sound": name}])["lines"][0]["rules"][0]["sound"]
         for name in ("../x.wav", "a/b.wav", "x.exe", "", 3):
-            self.assertEqual(alarms.clean({"alarms": {"gear": {"sound": name}}}, WORDS)["alarms"]["gear"]["sound"], "", name)
-        self.assertEqual(alarms.clean({"alarms": {"gear": {"sound": "Horn 2.wav"}}}, WORDS)["alarms"]["gear"]["sound"], "Horn 2.wav")
+            self.assertEqual(sound(name), "", name)
+        self.assertEqual(sound("Horn 2.wav"), "Horn 2.wav")
 
     def test_a_line_shows_on_its_condition(self):
         cfg = self.line(**{"if": {"value": "alt", "op": "<", "at": 100}})
@@ -222,9 +278,14 @@ class Settings(unittest.TestCase):
         self.assertEqual([(x[0], x[2], x[4]) for x in alarms.lines_for(cfg, {}, [])], [("a", 40, 0), ("b", 20, 1), ("c", 40, 0)])
 
     def test_a_line_blinks_only_with_its_alarm(self):
-        cfg = self.line(alarm="gear", blink=True)
+        cfg = self.line(blink=True, rules=[alarms.limit_alarm("gear")])  # saved before 0.27: the whole line, now each part
         self.assertFalse(alarms.lines_for(cfg, {}, [])[0][3])
-        self.assertTrue(alarms.lines_for(cfg, {}, ["gear"])[0][3])
+        self.assertTrue(alarms.lines_for(cfg, {}, [(0, 0)])[0][3])
+        self.assertEqual(cfg["lines"][0]["rules"][0]["blink"], list(alarms.PARTS))
+
+    def test_only_the_parts_asked_flash(self):
+        cfg = self.line(text="IAS {ias} km/h", rules=[{**alarms.limit_alarm("gear"), "blink": ["value"]}])
+        self.assertEqual([x[2] for x in alarms.lines_for(cfg, {"IAS, km/h": 700}, [(0, 0)])[0][5]], [False, True, False])
 
     def test_several_conditions(self):
         test = {"value": "alt", "op": "<", "at": 100, "more": [{"value": "ias", "op": ">", "at": 300}]}
@@ -237,14 +298,20 @@ class Settings(unittest.TestCase):
 
     def test_a_lines_colours_by_part(self):
         cfg = alarms.clean({"color": "#111111", "valueColor": "#222222", "unitColor": "#333333", "alert": "#FF0000",
-                            "lines": [{"text": "IAS {ias} km/h", "alarm": "gear"}]}, WORDS)
+                            "lines": [{"text": "IAS {ias} km/h", "rules": [alarms.limit_alarm("gear")]}]}, WORDS)
         parts = alarms.lines_for(cfg, {"IAS, km/h": 700}, [])[0][5]
-        self.assertEqual(parts, [("IAS ", "#111111"), ("700", "#222222"), (" km/h", "#333333")])
-        self.assertEqual(alarms.lines_for(cfg, {"IAS, km/h": 700}, ["gear"])[0][5], [("IAS 700 km/h", "#FF0000")])  # the alert is the whole line
+        self.assertEqual(parts, [("IAS ", "#111111", False), ("700", "#222222", False), (" km/h", "#333333", False)])
+        self.assertEqual(alarms.lines_for(cfg, {"IAS, km/h": 700}, [(0, 0)])[0][5], [("IAS 700 km/h", "#FF0000", False)])  # the alert is the whole line
+
+    def test_each_alarm_its_colour_the_last_one_on_wins(self):
+        rules = [{"value": "ias", "op": ">", "at": 600, "color": "#FFA500"}, {"value": "ias", "op": ">", "at": 800}]
+        cfg = alarms.clean({"alert": "#FF0000", "lines": [{"text": "{ias}", "rules": rules}]}, WORDS)
+        color = lambda ias: alarms.lines_for(cfg, {"IAS, km/h": ias}, alarms.own_alerts(cfg, {"IAS, km/h": ias}, red=True))[0][1]
+        self.assertEqual((color(700), color(900)), ("#FFA500", "#FF0000"))  # orange first, then the overlay's alert colour
 
     def test_a_line_keeps_its_own_colours(self):
         cfg = alarms.clean({"valueColor": "#222222", "lines": [{"text": "{ias}", "valueColor": "#00FF00"}]}, WORDS)
-        self.assertEqual(alarms.lines_for(cfg, {"IAS, km/h": 700}, [])[0][5], [("700", "#00FF00")])
+        self.assertEqual(alarms.lines_for(cfg, {"IAS, km/h": 700}, [])[0][5], [("700", "#00FF00", False)])
 
     def test_columns_read_top_to_bottom(self):
         self.assertEqual(alarms.columns_of([1, 2, 3, 4, 5], 2), [[1, 2, 3], [4, 5]])
@@ -257,7 +324,7 @@ class Settings(unittest.TestCase):
         out = alarms.computed(SU30, state, WORDS, always=True)
         self.assertEqual(round(out["gear_pct"]), 50)
         self.assertIn("flaps_pct", out)
-        self.assertEqual(alarms.active(alarms.percents(SU30, state), alarms.defaults(WORDS)["alarms"]), [])  # no alarm from it
+        self.assertEqual(alarms.own_alerts(alarms.defaults(WORDS), state, alarms.percents(SU30, state)), [])  # no alarm from it
 
     def test_a_beep_at_its_volume(self):
         loud, soft = [array("h", wave.open(io.BytesIO(alarms.tone(1000, 100, v)), "rb").readframes(10 ** 6)) for v in (100, 50)]
@@ -551,7 +618,7 @@ class Watching(unittest.TestCase):
         self.assertEqual([x[1] for x in self.watch.display], [cfg["color"], cfg["color"], cfg["alert"]])
 
     def test_thresholds_and_sounds_are_the_players(self):
-        self.watch.set_config(alarms.clean({"alarms": {"airframe": {"at": 30, "hz": 500, "ms": 80}}}, WORDS), {})
+        self.watch.set_config(airframe(at=30, hz=500, ms=80), {})
         self.fly()
         self.beep.assert_called_once_with(500, 80, 100)
 
@@ -573,7 +640,7 @@ class Watching(unittest.TestCase):
         self.assertEqual(self.beep.call_count, 2)
 
     def test_red_before_the_beep(self):
-        self.watch.set_config(alarms.clean({"alarms": {"airframe": {"red": 80, "at": 95}}}, WORDS), {})
+        self.watch.set_config(airframe(red=80, at=95), {})
         self.fly(**{"IAS, km/h": 1300})  # 84 % of 1543: red, quiet
         self.assertEqual(self.watch.display[0][1], self.watch.cfg["alert"])
         self.beep.assert_not_called()
@@ -582,15 +649,15 @@ class Watching(unittest.TestCase):
         self.beep.assert_called_once()
 
     def test_beeps_close_in_up_to_the_break(self):
-        cfg = alarms.clean({"alarms": {"airframe": {"at": 90, "ms": 100, "gap": 800}}}, WORDS)
+        cfg = alarms.clean({"lines": [{"text": "IAS", "rules": [{"limit": "airframe", "at": 90, "ms": 100, "gap": 800}]}]}, WORDS)
         for pct, wait in ((90, 0.9), (95, 0.5), (100, 0.1), (120, 0.1)):
-            close = alarms.closeness(cfg, "airframe", {"airframe": pct}, {})
-            self.assertAlmostEqual(alarms.pace(cfg, "airframe", close), wait)
-        steady = alarms.clean({"alarms": {"airframe": {"at": 90, "dyn": False}}}, WORDS)
-        self.assertEqual(alarms.pace(steady, "airframe", alarms.closeness(steady, "airframe", {"airframe": 99}, {})), steady["repeat"] / 1000)
+            close = alarms.closeness(cfg, (0, 0), {"airframe": pct}, {})
+            self.assertAlmostEqual(alarms.pace(cfg, (0, 0), close), wait)
+        steady = alarms.clean({"lines": [{"text": "IAS", "rules": [{"limit": "airframe", "at": 90, "full": None, "repeat": 450}]}]}, WORDS)
+        self.assertEqual(alarms.pace(steady, (0, 0), alarms.closeness(steady, (0, 0), {"airframe": 99}, {})), 0.45)  # its own repeat
         self.watch.set_config(cfg, {})
         self.fly(**{"IAS, km/h": 1600})  # past the limit: one continuous sound, its beeps as long as two readings
-        self.beep.assert_called_once_with(cfg["alarms"]["airframe"]["hz"], cfg["pollMs"] * 2, 100)
+        self.beep.assert_called_once_with(cfg["lines"][0]["rules"][0]["hz"], cfg["pollMs"] * 2, 100)
 
     def test_several_alarms_on_one_line(self):
         g = {"value": "g", "op": ">", "ms": 80}
@@ -603,30 +670,109 @@ class Watching(unittest.TestCase):
         self.fly(**{"Ny": 9})
         self.assertEqual(sorted(c.args[0] for c in self.beep.call_args_list), [900, 1500])
 
+    def test_gear_torn_off_goes_quiet(self):
+        self.fly(**{"gear, %": 100, "IAS, km/h": 640})  # 103 % of 620: past its breaking speed
+        self.beep.assert_called()
+        self.beep.reset_mock()
+        self.watch._last_beep -= 5
+        self.fly(**{"gear, %": 100, "IAS, km/h": 640})
+        self.beep.assert_not_called()
+        self.assertEqual(self.watch.broken, {"gear"})
+        self.reply = b'{"valid": false}'
+        self.watch.tick()  # the next spawn has its gear again
+        self.assertEqual(self.watch.broken, set())
+
+    def test_an_alarm_that_must_last(self):
+        self.watch.set_config(airframe(at=30, after=500), {})
+        with mock.patch.object(alarms.time, "monotonic", return_value=100.0):
+            self.fly()
+        self.beep.assert_not_called()
+        self.assertEqual(self.watch.display[0][1], self.watch.cfg["color"])  # not red yet either
+        with mock.patch.object(alarms.time, "monotonic", return_value=100.6):
+            self.fly()
+        self.beep.assert_called_once()
+        self.assertEqual(self.watch.display[0][1], self.watch.cfg["alert"])
+
+    def test_the_same_alarm_on_two_lines_beeps_once(self):
+        self.fly(**{"IAS, km/h": 1500})  # IAS and MACH lines both follow the airframe
+        self.beep.assert_called_once()
+
+    def test_wep_left(self):
+        self.data = details({"j_10c": dict(J10, wep=[60, 0.5])})  # 120 s of WEP
+        times = iter([10.0, 10.0, 10.0, 11.0, 11.0, 11.0, 12.0, 12.0, 12.0, 13.0, 13.0, 13.0])
+        with mock.patch.object(alarms.time, "monotonic", side_effect=lambda: next(times, 13.0)):
+            for throttle in (110, 110, 100, 100):
+                self.fly(**{"throttle 1, %": throttle})
+        self.assertAlmostEqual(self.watch.wep.left(self.watch._lim)["wep_s"], 118, delta=1)
+
+    def test_g_load_and_aoa_alarms(self):
+        self.data = details({"j_10c": dict(J10, mass=9045, load=[-230000, 630000], aoa=[[-32, 35], [-31, 35]])})
+        self.fly(**{"Ny": 4, "Mfuel, kg": 2900})  # 4 G of 10.8 at this mass: quiet
+        self.beep.assert_not_called()
+        self.assertEqual(round(self.watch.last["g_lim"], 1), 10.8)
+        self.fly(**{"Ny": 10, "Mfuel, kg": 2900})
+        self.beep.assert_called_once_with(1200, alarms.BEEP_MS, 100)
+        self.assertIn("G      10.0 / 10.8", self.texts())  # its line shows during its alarm only
+
+    def test_a_block_of_the_chat_with_a_title(self):
+        cfg = alarms.clean({"blocks": [{"x": 5, "feed": "chat", "rows": 2, "title": "CHAT"}]}, WORDS)
+        rows = alarms.lines_for(cfg, {}, [], {"chat": ["a", "b", "c"]})
+        self.assertEqual([x[0] for x in rows if x[4] == 1], ["CHAT", "b", "c"])
+
+    def test_the_chat_comes_once(self):
+        cfg = alarms.clean({"blocks": [{"feed": "chat"}]}, WORDS)
+        said = {"/gamechat?lastId=0": [{"id": 1, "msg": "o7", "sender": "Bob", "time": 1}], "/gamechat?lastId=1": []}
+        self.watch.get = lambda path: json.dumps(said.get(path.split("&")[0], {})).encode() if "gamechat" in path or "hudmsg" in path else None
+        self.watch.read_feeds(cfg)
+        self.watch._feed["t"] = -9
+        self.watch.read_feeds(cfg)
+        self.assertEqual(list(self.watch.feeds["chat"]), ["Bob: o7"])
+
+    def test_the_sheet_while_its_key_is_held(self):
+        self.watch.sheet = True
+        self.fly()
+        self.assertEqual(self.texts()[:2], ["j_10c", "Vne 1543 km/h   Mne 2.10"])
+
+    def test_the_profile_key_goes_through_the_overlays(self):
+        mine = airframe(at=30)
+        self.watch.set_config(self.watch.base, {"type:fighter": mine})
+        self.watch.next_profile()
+        self.assertEqual((self.watch.profile, self.watch.cfg), ("type:fighter", mine))
+        self.watch.next_profile()
+        self.assertEqual(self.watch.profile, "")
+        self.reply = b'{"valid": false}'
+        self.watch.tick()  # the next spawn picks its own again
+        self.assertIsNone(self.watch.forced)
+
     def test_the_test_button_plays_that_alarm(self):  # the page's "Test", on each of a line's alarms
         g = {"value": "g", "op": ">"}
         cfg, handler = alarms.clean({"lines": [{"text": "G {g}", "rules": [{**g, "at": 6, "hz": 500}, {**g, "at": 8, "hz": 900}]}]}, WORDS), mock.Mock()
         with mock.patch.object(server, "WATCH", mock.Mock(profiles={}, base=cfg)), mock.patch.object(alarms, "available", return_value=True), \
                 mock.patch.object(alarms, "play") as play:
-            for body, hz in (({"line": 0, "rule": 1}, 900), ({"line": 0}, 500), ({"alarm": "gear"}, cfg["alarms"]["gear"]["hz"])):
+            for body, hz in (({"line": 0, "rule": 1}, 900), ({"line": 0}, 500)):
                 server.Handler.post_api(handler, "overlay-test", body)
                 self.assertEqual(play.call_args.args[0]["hz"], hz)
             play.reset_mock()
-            for body in ({"line": 0, "rule": 2}, {"line": 0, "rule": "1"}, {"line": 1}, {"alarm": "x"}):
+            for body in ({"line": 0, "rule": 2}, {"line": 0, "rule": "1"}, {"line": 1}, {"alarm": "gear"}):
                 server.Handler.post_api(handler, "overlay-test", body)
                 self.assertEqual(handler.send_json.call_args.args[0], {"ok": False}, body)
             play.assert_not_called()
 
     def test_the_page_offers_several_alarms_per_line(self):
         script = (alarms.WEB / "overlay.js").read_text(encoding="utf-8")
-        for bit in ("data-oradd", "data-ordel", 'data-or="full"', 'data-oa="red"', 'data-oa="dyn"', "rule: +b.closest('.ov-rule').dataset.j",
+        for bit in ("data-oradd", "data-ordel", "data-orclear", "data-orblink", "data-or=\"${key}\"", "'red'", "'dyn'", "'after'", "'repeat'",
+                    "rule: +b.closest('.ov-rule').dataset.j", "'own'", "load: [90, 1200]", "aoa: [90, 500]", "'wep'",
                     f"OV_MAX_RULES = {alarms.MAX_RULES}", f"OV_GAP_MS = {alarms.GAP_MS}"):  # the page and the engine agree
             self.assertIn(bit, script)
         for code in ("en", "fr", "de", "es", "it", "pt", "pl", "cs", "ru", "ja", "zh"):
             words = json.loads((alarms.WEB / "locales" / f"{code}.json").read_text(encoding="utf-8"))
-            for key in ("ov.redFrom", "ov.beepFrom", "ov.dynamic", "ov.gap", "ov.redFromValue", "ov.fullAt", "ov.addAlarm", "ov.removeAlarm", "ov.withBeep", "ov.noFull"):
+            for key in ("ov.redFrom", "ov.beepFrom", "ov.dynamic", "ov.gap", "ov.redFromValue", "ov.fullAt", "ov.addAlarm", "ov.removeAlarm", "ov.withBeep",
+                        "ov.noFull", "ov.alarm.load", "ov.alarm.aoa", "ov.when.own", "ov.alarmValue", "ov.alarmColor", "ov.flash", "ov.after",
+                        "ov.feed.chat", "ov.feed.log", "ov.sheetKey", "ov.profileKey", "ov.v.g_lim", "ov.v.wep"):
                 self.assertTrue(words.get(key), (code, key))
-            self.assertIn("{red}", words["ov.example"], code)
+        page = (alarms.WEB / "index.html").read_text(encoding="utf-8")
+        self.assertNotIn('id="ovAlarms"', page)  # the alarms live on the lines
+        self.assertIn('data-ovkey="sheetKey"', page)
 
     def test_a_lines_own_alarm_red_first_and_continuous_at_its_value(self):
         self.own_alert(red=25, full=5)
@@ -637,6 +783,12 @@ class Watching(unittest.TestCase):
         self.assertAlmostEqual(alarms.closeness(self.watch.cfg, (0, 0), {}, {"fuel_pct": 10}), 0.5)
         self.assertEqual(alarms.closeness(self.watch.cfg, (0, 0), {}, {"fuel_pct": 2}), 1.0)
         self.assertEqual((rule["red"], rule["full"]), (25, 5))
+
+    def test_an_aircraft_with_fuel_in_the_hangar_is_not_flying(self):  # the Swiss F/A-18C, read live on 2.60 (2026-11-08)
+        hangar = state(**{"IAS, km/h": 1, "Mfuel, kg": 925, "Mfuel0, kg": 7460, "RPM 1": 0})
+        self.assertIsNone(alarms.flying(json.dumps(hangar).encode(), lambda: False))
+        moving = {**hangar, "IAS, km/h": 300}
+        self.assertEqual(alarms.flying(json.dumps(moving).encode(), lambda: False), moving)  # in the air, a map or not
 
     def test_the_menus_are_not_a_flight(self):  # as read in the hangar on 2.59
         hangar = state(**{"IAS, km/h": 1, "Mfuel, kg": 0, "RPM 1": 0})
@@ -876,15 +1028,17 @@ class Lines(unittest.TestCase):
 
     def test_conditions(self):
         cfg = alarms.clean(None, WORDS)
-        cfg["lines"] = [{"text": w, "when": w, "alarm": "", "color": "", "size": 0} for w in alarms.WHEN]
+        cfg["lines"] = [alarms._line({"text": w, "when": w, "rules": [alarms.limit_alarm("gear")]}) for w in alarms.WHEN]
         shown = lambda values, on: [x[0] for x in alarms.lines_for(cfg, values, on)]
         self.assertEqual(shown({}, []), ["always"])
-        self.assertEqual(shown({"gear, %": 1, "flaps, %": 1, "airbrake, %": 1, "rec": 1}, ["gear"]), list(alarms.WHEN))
+        own = list(alarms.WHEN).index("own")
+        self.assertEqual(shown({"gear, %": 1, "flaps, %": 1, "airbrake, %": 1, "rec": 1}, [(own, 0)]), list(alarms.WHEN))
+        self.assertNotIn("own", shown({}, [(0, 0)]))  # another line's alarm: not its own
 
     def test_a_line_keeps_its_own_size_and_colour(self):
         cfg = alarms.clean(None, WORDS)
-        cfg["lines"] = [{"text": "x", "when": "always", "alarm": "", "color": "#123456", "size": 90}]
-        self.assertEqual(alarms.lines_for(cfg, {}, []), [("x", "#123456", 90, False, 0, [("x", "#123456")])])
+        cfg["lines"] = [alarms._line({"text": "x", "color": "#123456", "size": 90})]
+        self.assertEqual(alarms.lines_for(cfg, {}, []), [("x", "#123456", 90, False, 0, [("x", "#123456", False)])])
 
 
 class Computed(unittest.TestCase):
@@ -1070,7 +1224,8 @@ class Configuration(unittest.TestCase):
     def test_a_setting_survives_with_the_rest_filled_in(self):
         cfg = alarms.clean({"x": 12, "font": "Segoe UI"}, WORDS)
         self.assertEqual((cfg["x"], cfg["font"], cfg["opacity"]), (12, "Segoe UI", 100))
-        self.assertEqual(cfg["alarms"]["airframe"]["at"], 93)
+        self.assertEqual(cfg["lines"][0]["rules"][0]["limit"], "airframe")
+        self.assertEqual(cfg["lines"][0]["rules"][0]["at"], 93)
 
     def test_odd_values_fall_back(self):
         cfg = alarms.clean({"x": "a", "size": True, "font": "x;y{}", "color": "red", "alert": "#12", "bold": 1,
@@ -1078,15 +1233,18 @@ class Configuration(unittest.TestCase):
         self.assertEqual(cfg, alarms.defaults(WORDS))
 
     def test_numbers_stay_in_range(self):
-        cfg = alarms.clean({"size": 1, "opacity": 900, "repeat": 1, "alarms": {"gear": {"at": 900, "hz": 1, "ms": 99999, "gap": -5, "dyn": "y"}}}, WORDS)
+        rule = {"limit": "gear", "at": 900, "hz": 1, "ms": 99999, "gap": -5, "repeat": -1, "after": 99999, "color": "red", "blink": ["value", "x"]}
+        cfg = alarms.clean({"size": 1, "opacity": 900, "repeat": 1, "lines": [{"text": "x", "rules": [rule]}]}, WORDS)
         self.assertEqual((cfg["size"], cfg["opacity"], cfg["repeat"]), (6, 100, 100))
-        self.assertEqual(cfg["alarms"]["gear"], {"on": True, "red": 200, "at": 200, "hz": 37, "ms": 2000, "sound": "", "dyn": True, "gap": 0})
+        self.assertEqual(cfg["lines"][0]["rules"][0], {"value": "", "op": ">", "at": 200, "join": "and", "more": [], "limit": "gear", "hz": 37,
+                                                       "ms": 2000, "sound": "", "red": None, "full": 100, "gap": 0, "color": "",
+                                                       "blink": ["value"], "repeat": 0, "after": 10000})
 
     def test_lines_are_limited(self):
         cfg = alarms.clean({"lines": [{"text": "x" * 500, "when": "?", "alarm": "?", "color": "?", "size": -3}, "no"] * 40}, WORDS)
         self.assertEqual(len(cfg["lines"]), alarms.MAX_LINES)
-        self.assertEqual(cfg["lines"][0], {"text": "x" * alarms.MAX_TEXT, "when": "always", "alarm": "", "color": "", "size": 0, "valueColor": "",
-                                           "unitColor": "", "blink": False, "hideNA": False, "block": 0, "if": None, "rules": []})
+        self.assertEqual(cfg["lines"][0], {"text": "x" * alarms.MAX_TEXT, "when": "always", "color": "", "size": 0, "valueColor": "",
+                                           "unitColor": "", "hideNA": False, "block": 0, "if": None, "rules": []})
 
     def test_no_lines_at_all_is_a_choice(self):
         self.assertEqual(alarms.clean({"lines": []}, WORDS)["lines"], [])
@@ -1104,7 +1262,7 @@ class Configuration(unittest.TestCase):
         page = (alarms.WEB / "overlay.js").read_text(encoding="utf-8")
         names = set(re.findall(r"'(\w+)'", page[page.index("OV_VALUES = {"):page.index("function ovShow")]))
         self.assertTrue(names)
-        self.assertLessEqual(names, set(alarms.FIELDS) | set(alarms.COMPUTED) | set(alarms.SAMPLE_STATS) | {"swept", "fuel_time", "vehicle"})
+        self.assertLessEqual(names, set(alarms.FIELDS) | set(alarms.COMPUTED) | set(alarms.SAMPLE_STATS) | {"swept", "fuel_time", "wep", "vehicle"})
 
 
 class Preview(unittest.TestCase):
@@ -1114,9 +1272,9 @@ class Preview(unittest.TestCase):
 
     def test_sample_lines_show_all_with_an_alarm_on(self):
         lines = self.watch.sample(self.watch.cfg)
-        self.assertEqual(len(lines), 4)
+        self.assertEqual(len(lines), 4)  # G and AoA show only during their alarm
         alert = self.watch.cfg["alert"]
-        self.assertEqual(lines[2], ("GEAR   640 / 700 km/h", alert, self.watch.cfg["size"], False, 0, [("GEAR   640 / 700 km/h", alert)]))
+        self.assertEqual(lines[2], ("GEAR   640 / 700 km/h", alert, self.watch.cfg["size"], False, 0, [("GEAR   640 / 700 km/h", alert, False)]))
 
     def test_shown_without_the_game_then_taken_off(self):
         self.watch.set_preview(self.watch.cfg)
@@ -1225,7 +1383,7 @@ class VehicleName(unittest.TestCase):
     def test_the_page_offers_it_for_lines_only(self):
         script = (alarms.WEB / "overlay.js").read_text(encoding="utf-8")
         self.assertLess(script.index("vehicle: ['vehicle']"), script.index("speed: ["))
-        self.assertIn("x !== 'vehicle'", script)  # no number to compare in a condition
+        self.assertIn("'wep', 'vehicle'].includes(x)", script)  # no number to compare in a condition
         self.assertIn("group !== 'vehicle'", (alarms.WEB / "flight.js").read_text(encoding="utf-8"))  # nor to draw in a curve
 
     def test_every_language_has_its_labels(self):
@@ -1318,7 +1476,7 @@ class Profiles(unittest.TestCase):
         self.assertEqual(self.texts()[0], "IAS    500 / 1543 km/h")
 
     def test_alarms_are_the_profile_s_too(self):
-        self.watch.set_config(self.watch.base, {"j_10c": alarms.clean({"alarms": {"airframe": {"at": 30, "hz": 500, "ms": 80}}}, WORDS)})
+        self.watch.set_config(self.watch.base, {"j_10c": airframe(at=30, hz=500, ms=80)})
         with mock.patch.object(alarms, "beep") as beep:
             self.watch.tick()
         beep.assert_called_once_with(500, 80, 100)
@@ -1590,7 +1748,7 @@ class Pitch(unittest.TestCase):
 class Labels(unittest.TestCase):
     def test_every_language_has_every_word(self):
         en = alarms.labels("en")
-        self.assertEqual(set(en), {"gear", "flaps", "swept", "unknown", "unbreakable"})
+        self.assertEqual(set(en), {"gear", "flaps", "swept", "unknown", "unbreakable", "booster", "mass"})
         for path in Path(alarms.WEB / "locales").glob("*.json"):
             if path.stem != "index":
                 self.assertEqual(set(alarms.labels(path.stem)), set(en), path.stem)

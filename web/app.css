@@ -1312,8 +1312,8 @@ body.no-sidebar .sidebar, body.no-sidebar #compareTray { display: none; }
 .ov-zoom { padding: 12px; overflow: hidden; white-space: pre; line-height: 1.17; }
 .ov-text { display: grid; grid-auto-flow: column; justify-content: start; position: absolute; cursor: move; white-space: pre; line-height: 1.17; user-select: none; touch-action: none; outline: 1px dashed rgba(255,255,255,.35); outline-offset: 3px; }
 .ov-lines { display: flex; flex-direction: column; gap: 6px; }
-.ov-line { display: grid; grid-template-columns: auto minmax(180px, 1fr) 118px 118px 58px 46px 26px auto; gap: 6px; align-items: end; padding: 6px 8px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
-.ov-line.ov-blocks { grid-template-columns: auto minmax(180px, 1fr) 118px 118px 58px 58px 46px 26px auto; }
+.ov-line { display: grid; grid-template-columns: auto minmax(180px, 1fr) 118px 58px 46px 26px auto; gap: 6px; align-items: end; padding: 6px 8px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
+.ov-line.ov-blocks { grid-template-columns: auto minmax(180px, 1fr) 118px 58px 58px 46px 26px auto; }
 .ov-line .icon-btn { width: 26px; height: 26px; }
 .ov-move { display: flex; flex-direction: column; }
 .ov-move .icon-btn { height: 16px; font-size: 9px; border: 0; }
@@ -1358,9 +1358,12 @@ body.no-sidebar .sidebar, body.no-sidebar #compareTray { display: none; }
 .ov-dyn-row { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: end; margin-bottom: 4px; }
 .ov-dyn-row .ov-mini { width: 110px; }
 .ov-dyn-row .switch { min-height: 34px; box-sizing: border-box; }
-.ov-add-alarm { align-self: flex-start; }
+.ov-add-alarm { align-self: flex-start; width: 220px; }
+.ov-parts { display: flex; gap: 10px; height: 34px; align-items: center; }
+.ov-parts label { display: flex; align-items: center; gap: 4px; color: var(--text-2); font-size: 12px; cursor: pointer; }
+.ov-dyn-row .ov-flash { width: auto; }
 @media (max-width: 1250px) {
-  .ov-line, .ov-line.ov-blocks { grid-template-columns: auto minmax(0, 1fr) 118px 118px; }
+  .ov-line, .ov-line.ov-blocks { grid-template-columns: auto minmax(0, 1fr) 118px 58px; }
 }
 
 /* ------------------------------------------------------------------ Flight data */

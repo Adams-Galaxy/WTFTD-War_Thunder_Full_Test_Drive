@@ -1081,13 +1081,15 @@ class Handler(BaseHTTPRequestHandler):
             on = alarms.available() and body.get("on") is True
             WATCH.set_preview(WATCH.profiles.get(str(body.get("profile") or ""), WATCH.base) if on else None, str(body.get("profile") or ""))
             return self.send_json(overlay_status(str(body.get("profile") or "")))
-        if route == "overlay-test":  # hear an alarm, or one of a line's own
+        if route == "overlay-test":  # hear one of a line's alarms
             cfg, line, rule = WATCH.profiles.get(str(body.get("profile") or ""), WATCH.base), body.get("line"), body.get("rule", 0)
-            own = cfg["lines"][line]["rules"] if type(line) is int and 0 <= line < len(cfg["lines"]) else None
-            a = (own[rule] if type(rule) is int and 0 <= rule < len(own) else None) if own is not None else cfg["alarms"].get(str(body.get("alarm")))
+            own = cfg["lines"][line]["rules"] if type(line) is int and 0 <= line < len(cfg["lines"]) else []
+            a = own[rule] if type(rule) is int and 0 <= rule < len(own) else None
             if a and alarms.available():
                 alarms.play(a, cfg["volume"], SOUNDS)
             return self.send_json({"ok": bool(a)})
+        if route == "overlay-joy":  # a key field of My overlay waits for a joystick button
+            return self.send_json({"key": alarms.joy_wait() if alarms.available() else None})
         if route == "sound-import":  # a .wav the player picked, for the alarms
             try:
                 return self.send_json({"file": alarms.save_sound(SOUNDS, str(body.get("name", "")), str(body.get("data", ""))),

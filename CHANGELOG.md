@@ -6,13 +6,29 @@ Versions follow `major.minor.patch`; "beta" until 1.0.
 
 ## Not released yet
 
-- **Overlay: a line's alarms in sight, several per line.** Under each line of *My overlay → Lines*: **Add an alarm**, up
-  to four per line, each its own condition on any value, its sound, the value the line turns red from (before the beep,
-  or with it) and the value where its beeps become continuous. A line's former *Alert if* is its first alarm.
-- **Overlay: red and beep thresholds apart, beeps that close in.** Airframe, gear and flaps each have **Red from** and
-  **Beeps from** (% of the limit), in the Alarms tab and on the lines that turn red with them. *Beeps closer up to the
-  break* (on by default): spaced at the threshold (**Gap at the threshold**, 700 ms), closer and closer up to the limit,
-  continuous at 100 %. Off, they repeat as before.
+- **Overlay: every alarm lives on its line.** Under each line of *My overlay → Lines*, its alarms (up to six), added from
+  **Add an alarm**: one of the aircraft's limits (airframe, gear, flaps, and now **G load** and **angle of attack**) in %
+  of it, or a condition on any value. Each has its **Red from** and **Beeps from** thresholds, its beeps closing in up to
+  one continuous sound at the break (100 % of a limit, or **Continuous at** a value; spaced by the **Gap at the
+  threshold**, 700 ms by default), its sound, its own **colour** (the last alarm on wins: orange first, then red), the
+  parts of the line that **flash** (name, value, unit), its **Repeat every** and **Only after** (it must last that long).
+  The *Alert colour with* menu and the Alarms tab's settings are gone, that tab is now **Sounds**; saved overlays move
+  over once: each line gets the alarm it followed, as it was set, and G load and angle of attack get lines shown
+  **During its alarm** (a new *Shows* choice).
+- **G load and angle of attack limits** from the flight models: the G that breaks the wings at the mass flown (without
+  weapons: the game doesn't tell their mass, so loaded the limit reads high), the critical angle of attack between flaps
+  up and full flaps. New values for lines and curves: G limit, negative G limit, G load and AoA in % of their limit,
+  critical AoA. The game data is rebuilt once.
+- **Gear and flaps torn off**: past their breaking speed, their alarm goes quiet until the next spawn.
+- **WEP left** (aircraft with water or methanol injection): time of WEP left, counted from the spawn while a throttle is
+  past 100 %.
+- **The aircraft's sheet in the overlay**, while a key is held: its speed limits, gear, flaps, G and AoA limits at this
+  mass, WEP time, take-off rockets, mass.
+- **A text block can show the game chat or the battle log** (its last lines), and any block can have a **title**.
+- **Keys**: a mouse button (middle, side buttons) or a joystick button works too; a **key for the next overlay** goes
+  through your overlays until the next spawn.
+- **Fixed: the overlay showed in the hangar** with some aircraft (Swiss F/A-18C, F-2A ADTW): they carry fuel there,
+  which made the hangar look like a flight. Standing still without a map loaded is now always the hangar.
 
 ## 0.26.0 - 2026-11-08
 

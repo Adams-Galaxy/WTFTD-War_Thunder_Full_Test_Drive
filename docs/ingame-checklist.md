@@ -657,6 +657,26 @@ a battle: if a kind of object is missing, read `http://127.0.0.1:8111/map_obj.js
 - [ ] The map picture shows, PNG or JPEG (GDI+ reads both). A dark map with marks only means it couldn't read it.
 - [ ] A Simulator battle: does the minimap show your position where the game's own map doesn't? If so it must be turned off there.
 
+## 2ad. Alarms on the lines, G load, AoA, WEP (new)
+
+**What was built.** Every alarm lives on its line: one of the aircraft's limits in % of it (airframe, gear, flaps, G load, angle of
+attack) or a condition on a value, each with its red and beep thresholds, beeps closing in up to one continuous sound at the break, its
+sound, colour, flashing parts, repeat and delay. The G limit is 2 x the flight model's wing load (`CritOverload`, one wing's) over the
+weight at empty mass + fuel: an estimate (an Su-30MKK pulled 11 G whole on 2026-10-31, one wing's load alone gives 6.6). Nothing of this
+was heard in a real flight.
+
+- [ ] The beeps close in: spaced at the threshold, closer and closer, continuous at 100 %. No gap at the break (beeps as long as two readings)?
+- [ ] G load: a hard pull in a jet, light then loaded. Do the wings break near 100 %? Note the G shown and the G limit, with and without weapons.
+- [ ] Angle of attack: a slow, high-AoA turn. Does the stall come near 100 %? Flaps out: does the limit move as the game's?
+- [ ] Gear past its speed: torn off in the game, and its alarm quiet until the next spawn? Flaps the same.
+- [ ] WEP left (an aircraft with water or methanol injection, the A-26B): does the throttle read past 100 % with WEP, and does the time match the game's?
+- [ ] An alarm with *Only after* 500 ms: a short pull doesn't beep, a held one does.
+- [ ] Sheet key held: the aircraft's sheet in place of the lines, its values right.
+- [ ] A block showing the chat, one the battle log: the lines come as the game shows them, no markup.
+- [ ] Keys: a mouse side button, a joystick button (the field waits for it while focused) as the show / hide key.
+- [ ] Next overlay key: goes through the overlays, back to the aircraft's own at the next spawn.
+- [ ] The hangar: no overlay with the Swiss F/A-18C or the F-2A ADTW (they read fuel there), nor any other aircraft.
+
 ## 3. Ammunition icons (UI only)
 
 Shell icons (tanks), belt icons (aircraft, helicopters, ships) and flare / chaff icons come from the game's own

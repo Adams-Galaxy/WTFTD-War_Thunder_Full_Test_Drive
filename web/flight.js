@@ -249,7 +249,7 @@ function flPickView(name) {
 }
 
 function flRenderValues() {
-  $('#flValues').innerHTML = Object.entries(OV_VALUES).filter(([group]) => group !== 'vehicle').map(([group, names]) => `<div class="ov-group"><b>${esc(t('ov.g.' + group))}</b>${names.filter(n => n !== 'swept' && n !== 'fuel_time').map(n => `<button class="chip ov-chip${FL.sel.includes(n) ? ' on' : ''}" data-flv="${n}" aria-pressed="${FL.sel.includes(n)}">${esc(t('ov.v.' + n))}</button>`).join('')}</div>`).join('');
+  $('#flValues').innerHTML = Object.entries(OV_VALUES).filter(([group]) => group !== 'vehicle').map(([group, names]) => `<div class="ov-group"><b>${esc(t('ov.g.' + group))}</b>${names.filter(n => !['swept', 'fuel_time', 'wep'].includes(n)).map(n => `<button class="chip ov-chip${FL.sel.includes(n) ? ' on' : ''}" data-flv="${n}" aria-pressed="${FL.sel.includes(n)}">${esc(t('ov.v.' + n))}</button>`).join('')}</div>`).join('');
 }
 
 function bindFlight() {

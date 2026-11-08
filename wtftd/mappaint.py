@@ -337,8 +337,8 @@ class Painter:
                 for _, color, size, blinks, _, row in column:
                     font, _, _, height = self._text_font(cfg, size)
                     x = left
-                    for text, tint in row or [(" ", color)]:
-                        parts.append((x, y, text, tint, size, blinks))
+                    for text, tint, *flash in row or [(" ", color)]:  # each part flashes on its own, or with its line
+                        parts.append((x, y, text, tint, size, flash[0] if flash else blinks))
                         x += self._width(text, font)
                     y += height + cfg["spacing"]
                     wide = max(wide, x - left)

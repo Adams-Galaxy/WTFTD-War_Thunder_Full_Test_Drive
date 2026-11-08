@@ -4,18 +4,19 @@
 'use strict';
 
 const OV = { cfg: null, screen: [3840, 2160], lines: [], input: null, timer: 0, profile: '', keys: new Map(), sounds: [], hud: {}, hudPlace: 'cockpit' };
-const OV_MAX_BLOCKS = 3, OV_MAX_TESTS = 4, OV_MAX_RULES = 4, OV_GAP_MS = 700;
+const OV_MAX_BLOCKS = 3, OV_MAX_TESTS = 4, OV_MAX_RULES = 6, OV_GAP_MS = 700;
 const OV_SOUND_RATE = 22050, OV_SOUND_S = 15;  // what a sound is kept as: enough for an alarm, and it fits a request
 const OV_TYPES = ['fighter', 'assault', 'bomber', 'helicopter', 'jet', 'prop', 'tank', 'ship'];
-const OV_WHEN = ['always', 'gear', 'flaps', 'airbrake', 'alarm', 'log'];
-const OV_ALARMS = { airframe: 1540, gear: 700, flaps: 600 };  // the example under each threshold, km/h
+const OV_WHEN = ['always', 'gear', 'flaps', 'airbrake', 'alarm', 'own', 'log'];
+const OV_LIMITS = { airframe: [93, 1400], gear: [90, 1000], flaps: [90, 700], load: [90, 1200], aoa: [90, 500] };  // an alarm on the aircraft's limit: %, Hz
+const OV_PARTS = ['name', 'value', 'unit'];  // what of a line can flash with its alarm
 const OV_FONTS = ['Consolas', 'Cascadia Mono', 'Courier New', 'Lucida Console', 'Segoe UI', 'Bahnschrift', 'Arial', 'Tahoma', 'Verdana', 'Impact'];
 const OV_VALUES = {
   vehicle: ['vehicle'],
   speed: ['speed', 'ias', 'tas', 'mach', 'hspeed', 'accel', 'sep', 'vne', 'mne', 'margin', 'airframe_pct', 'swept'],
   gearflaps: ['gear', 'gear_max', 'gear_pct', 'flaps', 'flaps_max', 'flaps_pct', 'airbrake'],
-  flight: ['alt', 'vy', 'aoa', 'aos', 'g', 'g_max', 'turn', 'turn_rate', 'turn_radius', 'roll', 'pitch', 'bank', 'heading'],
-  engine: ['throttle', 'rpm', 'thrust', 'thrust_total', 'twr', 'mass', 'power', 'oil', 'fuel', 'fuel_max', 'fuel_pct', 'burn', 'fuel_time', 'range'],
+  flight: ['alt', 'vy', 'aoa', 'aoa_crit', 'aoa_low', 'aoa_pct', 'aos', 'g', 'g_max', 'g_lim', 'g_neg', 'load_pct', 'turn', 'turn_rate', 'turn_radius', 'roll', 'pitch', 'bank', 'heading'],
+  engine: ['throttle', 'rpm', 'thrust', 'thrust_total', 'twr', 'mass', 'power', 'oil', 'fuel', 'fuel_max', 'fuel_pct', 'burn', 'fuel_time', 'range', 'wep', 'wep_s'],
   stats: ['kd', 'winrate', 'battles', 'kills', 'deaths', 'live_kd', 'live_kills', 'live_deaths'],
 };
 
@@ -92,7 +93,7 @@ function ovDraw() {
   const k = box.clientWidth / OV.screen[0];
   const look = { fontFamily: `"${c.font}", monospace`, fontWeight: c.bold ? 700 : 400, fontStyle: c.italic ? 'italic' : 'normal' };
   const stroke = scale => (c.outline ? `${2 * c.outline * scale}px ${c.outlineColor}` : '');
-  const html = (rows, scale) => rows.map(([s, color, size, blinks, , parts]) => `<div class="${blinks ? 'ov-blink' : ''}" style="color:${esc(color)};font-size:${size * scale}px;margin-bottom:${c.spacing * scale}px">${(parts || []).map(([p, tint]) => `<span style="color:${esc(tint)}">${esc(p)}</span>`).join('') || '&nbsp;'}</div>`).join('');
+  const html = (rows, scale) => rows.map(([s, color, size, blinks, , parts]) => `<div style="color:${esc(color)};font-size:${size * scale}px;margin-bottom:${c.spacing * scale}px">${(parts || []).map(([p, tint, flash]) => `<span class="${flash ? 'ov-blink' : ''}" style="color:${esc(tint)}">${esc(p)}</span>`).join('') || '&nbsp;'}</div>`).join('');
   [c, ...c.blocks].forEach((spot, i) => {
     const text = ovBlockEl(i), rows = OV.lines.filter(l => (l[4] || 0) === i), boxed = spot.frame || spot.background, pad = boxed ? (10 + spot.frame) * k : 0;
     Object.assign(text.style, look, { left: `${spot.x * k}px`, top: `${spot.y * k}px`, opacity: c.opacity / 100, webkitTextStroke: stroke(k),
@@ -120,7 +121,7 @@ const ovSoundHTML = (attr, on, pick) => `<div class="ov-sound"><label class="ov-
 const ovField = (label, html) => `<label class="ov-mini"><span>${esc(label)}</span>${html}</label>`;
 
 // the values a condition can test: numbers only
-const ovCondNames = () => Object.values(OV_VALUES).flat().filter(x => x !== 'swept' && x !== 'fuel_time' && x !== 'vehicle');
+const ovCondNames = () => Object.values(OV_VALUES).flat().filter(x => !['swept', 'fuel_time', 'wep', 'vehicle'].includes(x));
 // one condition of a line's showing (if) or its own alert (rule); n: 0 for the first, then its place in test.more
 function ovCondHTML(part, n, cond, join) {
   const names = ovCondNames();
@@ -130,42 +131,54 @@ function ovCondHTML(part, n, cond, join) {
       <input type="number" step="any" data-oc="${part}.at" value="${esc(cond.at)}">` : ''}${first ? '' : `<button class="icon-btn" data-ocdel="${part}" title="${esc(t('action.delete'))}">${icon('x', 'ic-sm')}</button>`}</div>`;
 }
 
-// j: which of the line's own alarms, for a 'rule'
-function ovTestHTML(part, label, test, i, j = 0) {
+// a list of conditions: a line's showing (if), or one of its alarms on a value (rule)
+function ovTestHTML(part, label, test) {
   const conds = [test, ...(test?.more || [])].map((x, n) => ovCondHTML(part, n, x, test?.join)).join('');
   const add = test && (test.more?.length || 0) < OV_MAX_TESTS - 1 ? `<button class="btn btn-sm btn-ghost" data-ocadd="${part}">${esc(t('ov.addCond'))}</button>` : '';
-  const sound = part === 'rule' && test ? `<div class="ov-alert-sound">${ovField(t('ov.pitch'), `<input type="number" data-oc="rule.hz" min="37" max="32767" step="50" value="${test.hz}"${test.sound ? ' disabled' : ''}>`)}
-      ${ovField(t('ov.length'), `<input type="number" data-oc="rule.ms" min="10" max="2000" step="10" value="${test.ms}"${test.sound ? ' disabled' : ''}>`)}
-      ${ovSoundHTML('data-oc="rule.sound"', test.sound, `line:${i}:${j}`)}<button class="btn btn-sm" data-ovruletest>${esc(t('ov.test'))}</button></div>` : '';
-  return `<div class="ov-test"><span class="ov-test-name">${esc(label)}</span><div class="ov-conds">${conds}${add}${sound}</div></div>`;
+  return `<div class="ov-test"><span class="ov-test-name">${esc(label)}</span><div class="ov-conds">${conds}${add}</div></div>`;
 }
 
-// a line's alarms, in sight: the aircraft's it turns red with (its thresholds, the same in the Alarms tab), then its own, any
-// number of them on any value: each its condition (it beeps), the value it turns the line red from, and the one where its
-// beeps become one continuous sound
-function ovLineAlarmsHTML(l, i) {
-  const num = (attr, label, value, extra = '') => ovField(label, `<input type="number" ${attr} value="${value ?? ''}"${extra}>`);
-  const a = l.alarm && OV.cfg.alarms[l.alarm];
-  const follow = a ? `<div class="ov-rule ov-follow" data-a="${l.alarm}"><div class="ov-test"><span class="ov-test-name">${esc(t('ov.alarm.' + l.alarm))}</span><div class="ov-dyn-row">
-      ${num('data-oa="red"', t('ov.redFrom'), a.red, ' min="1" max="200"')}${num('data-oa="at"', t('ov.beepFrom'), a.at, ' min="1" max="200"')}
-      ${num('data-oa="gap"', t('ov.gap'), a.gap, ` min="0" max="5000" step="50"${a.dyn ? '' : ' disabled'}`)}
-      <label class="switch"><input type="checkbox" data-oa="dyn"${a.dyn ? ' checked' : ''}><span class="sw"></span><span>${esc(t('ov.dynamic'))}</span></label></div></div></div>` : '';
-  const own = (l.rules || []).map((r, j) => `<div class="ov-rule" data-j="${j}">${ovTestHTML('rule', t('ov.ownAlert'), r, i, j)}
-      <div class="ov-test"><span></span><div class="ov-dyn-row">${num('data-or="red"', t('ov.redFromValue'), r.red, ` step="any" placeholder="${esc(t('ov.withBeep'))}"`)}
-        ${num('data-or="full"', t('ov.fullAt'), r.full, ` step="any" placeholder="${esc(t('ov.noFull'))}"`)}${num('data-or="gap"', t('ov.gap'), r.gap, ` min="0" max="5000" step="50"${r.full == null ? ' disabled' : ''}`)}
-        <button class="btn btn-sm btn-ghost" data-ordel>${icon('trash', 'ic-sm')}<span>${esc(t('ov.removeAlarm'))}</span></button></div></div></div>`).join('');
-  const add = (l.rules || []).length < OV_MAX_RULES ? `<button class="btn btn-sm btn-ghost ov-add-alarm" data-oradd>${esc(t('ov.addAlarm'))}</button>` : '';
-  return `<div class="ov-line-alarms">${follow}${own}${add}</div>`;
+// one of a line's alarms: on one of the aircraft's limits (in % of it), or on any value. Its thresholds (red, beep, the
+// value where the beeps become continuous), its sound, and the line in it: colour, the parts that flash, repeat, delay
+function ovRuleHTML(r, i, j) {
+  const num = (key, label, value, extra = '') => ovField(label, `<input type="number" data-or="${key}" value="${value ?? ''}"${extra}>`);
+  const row = (label, html) => `<div class="ov-test"><span class="ov-test-name">${esc(label)}</span><div class="ov-dyn-row">${html}</div></div>`;
+  const gap = num('gap', t('ov.gap'), r.gap, ` min="0" max="5000" step="50"${r.full == null ? ' disabled' : ''}`);
+  const withBeep = ` placeholder="${esc(t('ov.withBeep'))}"`;
+  const levels = r.limit
+    ? row(t('ov.alarm.' + r.limit), `${num('red', t('ov.redFrom'), r.red, ` min="1" max="200"${withBeep}`)}${num('at', t('ov.beepFrom'), r.at, ' min="1" max="200"')}${gap}
+        <label class="switch"><input type="checkbox" data-or="dyn"${r.full != null ? ' checked' : ''}><span class="sw"></span><span>${esc(t('ov.dynamic'))}</span></label>`)
+    : ovTestHTML('rule', t('ov.ownAlert'), r) + row('', `${num('red', t('ov.redFromValue'), r.red, ` step="any"${withBeep}`)}
+        ${num('full', t('ov.fullAt'), r.full, ` step="any" placeholder="${esc(t('ov.noFull'))}"`)}${gap}`);
+  const sound = row('', `${num('hz', t('ov.pitch'), r.hz, ` min="37" max="32767" step="50"${r.sound ? ' disabled' : ''}`)}${num('ms', t('ov.length'), r.ms, ` min="10" max="2000" step="10"${r.sound ? ' disabled' : ''}`)}
+      ${ovSoundHTML('data-or="sound"', r.sound, `line:${i}:${j}`)}<button class="btn btn-sm" data-ovruletest>${esc(t('ov.test'))}</button>`);
+  const look = row('', `<label class="ov-mini ov-swatch"><span>${esc(t('ov.alarmColor'))}</span><span class="ov-color"><input type="color" data-or="color" value="${esc(r.color || OV.cfg.alert)}">
+        <button class="icon-btn${r.color ? '' : ' hidden'}" data-orclear title="${esc(t('ov.sameAsAlert'))}">${icon('x', 'ic-sm')}</button></span></label>
+      <div class="ov-mini ov-flash"><span>${esc(t('ov.flash'))}</span><div class="ov-parts">${OV_PARTS.map(x => `<label><input type="checkbox" data-orblink="${x}"${(r.blink || []).includes(x) ? ' checked' : ''}>${esc(t('ov.part.' + x))}</label>`).join('')}</div></div>
+      ${num('repeat', t('ov.repeat'), r.repeat || '', ` min="0" max="10000" step="50" placeholder="${esc(OV.cfg.repeat)}"`)}${num('after', t('ov.after'), r.after || '', ' min="0" max="10000" step="100" placeholder="0"')}
+      <button class="btn btn-sm btn-ghost" data-ordel>${icon('trash', 'ic-sm')}<span>${esc(t('ov.removeAlarm'))}</span></button>`);
+  return `<div class="ov-rule" data-j="${j}">${levels}${sound}${look}</div>`;
 }
-// where a condition lives: [the object holding it, its key]; a line's 'if', or one of its own alarms
+
+// a line's alarms, in sight under it, and a menu to add one
+function ovLineAlarmsHTML(l, i) {
+  const rules = l.rules || [];
+  const kinds = [...Object.keys(OV_LIMITS).map(a => ovOpt(a, t('ov.alarm.' + a), '')), ovOpt('value', t('ov.alarmValue'), '')].join('');
+  const add = rules.length < OV_MAX_RULES ? `<label class="ov-mini ov-add-alarm"><span>${esc(t('ov.addAlarm'))}</span><select data-oradd><option value="">…</option>${kinds}</select></label>` : '';
+  return `<div class="ov-line-alarms">${rules.map((r, j) => ovRuleHTML(r, i, j)).join('')}${add}</div>`;
+}
+// where a condition lives: [the object holding it, its key]; a line's 'if', or one of its alarms
 function ovOwner(el, part) {
   const line = OV.cfg.lines[+el.closest('.ov-line').dataset.i];
   return part === 'rule' ? [line.rules, +el.closest('.ov-rule').dataset.j] : [line, part];
 }
-// a new alarm watches the line's first value (any above 0), else the g load above 9
-function ovNewRule(l) {
+const ovRuleOf = el => ovOwner(el, 'rule')[0][+el.closest('.ov-rule').dataset.j];
+// a new alarm: on one of the aircraft's limits, or on the line's first value (any above 0, else the G load above 9)
+function ovNewRule(l, kind) {
+  const common = { more: [], join: 'and', ms: 150, sound: '', red: null, gap: OV_GAP_MS, color: '', blink: [], repeat: 0, after: 0 };
+  if (OV_LIMITS[kind]) return { ...common, limit: kind, value: '', op: '>', at: OV_LIMITS[kind][0], full: 100, hz: OV_LIMITS[kind][1] };
   const value = (l.text.match(/\{(\w+)/) || [])[1], known = ovCondNames().includes(value);
-  return { value: known ? value : 'g', op: '>', at: known ? 0 : 9, more: [], hz: 1000, ms: 150, sound: '', red: null, full: null, gap: OV_GAP_MS };
+  return { ...common, limit: '', value: known ? value : 'g', op: '>', at: known ? 0 : 9, full: null, hz: 1000 };
 }
 
 function ovLineColor(l, key, label) {
@@ -176,9 +189,9 @@ function ovLineColor(l, key, label) {
 function ovMoreHTML(l, i) {
   const on = (key, label) => `<label class="switch"><input type="checkbox" data-ol="${key}"${l[key] ? ' checked' : ''}><span class="sw"></span><span>${esc(t(label))}</span></label>`;
   return `<details class="ov-more"${l.open ? ' open' : ''}><summary>${esc(t('ov.more'))}</summary><div class="ov-opts">
-      <div class="ov-switches">${on('blink', 'ov.blink')}${on('hideNA', 'ov.hideNA')}</div>
+      <div class="ov-switches">${on('hideNA', 'ov.hideNA')}</div>
       <div class="ov-line-look">${ovLineColor(l, 'valueColor', 'ov.valueColor')}${ovLineColor(l, 'unitColor', 'ov.unitColor')}</div>
-      ${ovTestHTML('if', t('ov.showIf'), l.if, i)}</div></details>`;
+      ${ovTestHTML('if', t('ov.showIf'), l.if)}</div></details>`;
 }
 
 // every block the same card, the main one too
@@ -188,6 +201,9 @@ function ovRenderBlocks() {
     return `<div class="ov-card ov-block" data-i="${i}">
       <div class="row-between"><h3 class="ov-h">${esc(t('ov.blockN', { n: i + 1 }))}</h3>${i ? `<button class="icon-btn btn-danger" data-obdel title="${esc(t('action.delete'))}">${icon('trash')}</button>` : ''}</div>
       <div class="field-row">${num('x', 'X')}${num('y', 'Y')}</div>
+      <div class="field"><label>${esc(t('ov.blockTitle'))}</label><input type="text" data-ob="title" value="${esc(b.title || '')}" maxlength="120"></div>
+      <div class="field-row"><div class="field"><label>${esc(t('ov.feed'))}</label><select data-ob="feed">${['', 'chat', 'log'].map(f => ovOpt(f, t('ov.feed.' + (f || 'lines')), b.feed || '')).join('')}</select></div>
+        ${num('rows', t('ov.feedRows'), ` min="1" max="20"${b.feed ? '' : ' disabled'}`)}</div>
       <div class="field-row">${num('scale', t('ov.blockSize'), ' min="10" max="400"')}${num('columns', t('ov.columns'), ' min="1" max="4"')}</div>
       <div class="field-row">${num('frame', t('ov.frame'), ' min="0" max="8"')}<div class="field"><label>${esc(t('ov.frameColor'))}</label><input type="color" data-ob="frameColor" value="${esc(b.frameColor)}"${b.frame ? '' : ' disabled'}></div></div>
       <label class="switch"><input type="checkbox" data-ob="hasBg"${b.background ? ' checked' : ''}><span class="sw"></span><span>${esc(t('ov.background'))}</span></label>
@@ -217,7 +233,7 @@ async function ovSoundData(file) {
 }
 
 function ovAddLine(block) {
-  OV.cfg.lines.push({ text: '', when: 'always', alarm: '', color: '', size: 0, block });
+  OV.cfg.lines.push({ text: '', when: 'always', color: '', size: 0, block, rules: [] });
   ovRenderLines();
   ovTab('lines');
   $$('#ovLines .ov-tpl').pop().focus();
@@ -230,7 +246,6 @@ function ovRenderLines() {
       <div class="ov-move"><button class="icon-btn" data-ovmove="-1"${i ? '' : ' disabled'} title="${esc(t('ov.up'))}">▲</button><button class="icon-btn" data-ovmove="1"${i < OV.cfg.lines.length - 1 ? '' : ' disabled'} title="${esc(t('ov.down'))}">▼</button></div>
       <input type="text" class="ov-tpl" data-ol="text" value="${esc(l.text)}" maxlength="120" spellcheck="false">
       <label class="ov-mini"><span>${esc(t('ov.when'))}</span><select data-ol="when">${OV_WHEN.map(w => opt(w, t('ov.when.' + w), l.when)).join('')}</select></label>
-      <label class="ov-mini"><span>${esc(t('ov.redWith'))}</span><select data-ol="alarm">${opt('', t('ov.redNone'), l.alarm)}${Object.keys(OV_ALARMS).map(a => opt(a, t('ov.alarm.' + a), l.alarm)).join('')}</select></label>
       ${blocks ? ovField(t('ov.block'), `<select data-ol="block">${Array.from({ length: blocks + 1 }, (_, n) => opt(n, n + 1, l.block || 0)).join('')}</select>`) : ''}
       <label class="ov-mini ov-num"><span>${esc(t('ov.lineSize'))}</span><input type="number" data-ol="size" min="0" max="400" value="${l.size || ''}" placeholder="${esc(OV.cfg.size)}"></label>
       <label class="ov-mini ov-swatch"><span>${esc(t('ov.lineColor'))}</span><input type="color" data-ol="color" value="${esc(l.color || OV.cfg.color)}"></label>
@@ -247,15 +262,17 @@ function ovStyleLines(style) {
                 [word('gear'), `${speed ? '{ias} / {gear_max} km/h' : ''}${pct('gear')}`, 'gear', 'gear'],
                 [word('flaps'), `${speed ? '{ias} / {flaps_max} km/h' : ''}${pct('flaps')}`, 'flaps', 'flaps']];
   const width = Math.max(...rows.map(r => r[0].length)) + 2;
-  return rows.map(([label, text, when, alarm]) => ({ text: label.padEnd(width) + text, when, alarm, color: '', size: 0 }));
+  return rows.map(([label, text, when, alarm]) => ({ text: label.padEnd(width) + text, when, alarm, color: '', size: 0, rules: [ovNewRule({ text }, alarm)] }));
 }
 function ovShowStyle() {
   const texts = OV.cfg.lines.map(l => l.text);
   $$('#ovStyle button').forEach(b => b.classList.toggle('active', ovStyleLines(b.dataset.style).every(l => texts.includes(l.text))));
 }
 function ovSetStyle(style) {
-  const lines = OV.cfg.lines, own = a => lines.find(l => l.alarm === a) || {};  // a colour or size set on a line stays
-  OV.cfg.lines = [...ovStyleLines(style).map(l => ({ ...l, color: own(l.alarm).color || '', size: own(l.alarm).size || 0 })), ...lines.filter(l => !l.alarm)];
+  const speed = l => (l.rules || []).find(r => ['airframe', 'gear', 'flaps'].includes(r.limit))?.limit;  // the lines a style rewrites
+  const lines = OV.cfg.lines, own = a => lines.find(l => speed(l) === a);  // their colour, size and alarms stay
+  OV.cfg.lines = [...ovStyleLines(style).map(({ alarm, ...l }) => ({ ...l, color: own(alarm)?.color || '', size: own(alarm)?.size || 0, rules: own(alarm)?.rules || l.rules })),
+                  ...lines.filter(l => !speed(l))];
   ovRenderLines();
   ovSave();
 }
@@ -276,32 +293,6 @@ async function ovSetBg(file) {
     store.set('overlayBg', c.toDataURL('image/jpeg', .8));
     ovShowBg();
   } catch (e) { toastErr(e); }
-}
-
-function ovRenderAlarms() {
-  $('#ovAlarms').innerHTML = Object.entries(OV_ALARMS).map(([n, limit]) => {
-    const a = OV.cfg.alarms[n];
-    return `<div class="ov-card ov-alarm" data-a="${n}">
-      <div class="row-between"><label class="switch"><input type="checkbox" data-oa="on"${a.on ? ' checked' : ''}><span class="sw"></span><b>${esc(t('ov.alarm.' + n))}</b></label>
-        <button class="btn btn-sm" data-ovtest="${n}">${esc(t('ov.test'))}</button></div>
-      <div class="ov-alarm-row">
-        <label class="ov-mini"><span>${esc(t('ov.redFrom'))}</span><input type="number" data-oa="red" min="1" max="200" value="${a.red}"></label>
-        <label class="ov-mini"><span>${esc(t('ov.beepFrom'))}</span><input type="number" data-oa="at" min="1" max="200" value="${a.at}"></label>
-        <label class="ov-mini"><span>${esc(t('ov.pitch'))}</span><input type="number" data-oa="hz" min="37" max="32767" step="50" value="${a.hz}"${a.sound ? ' disabled' : ''}></label>
-        <label class="ov-mini"><span>${esc(t('ov.length'))}</span><input type="number" data-oa="ms" min="10" max="2000" step="10" value="${a.ms}"${a.sound ? ' disabled' : ''}></label>
-      </div>
-      <div class="ov-dyn-row"><label class="switch"><input type="checkbox" data-oa="dyn"${a.dyn ? ' checked' : ''}><span class="sw"></span><span>${esc(t('ov.dynamic'))}</span></label>
-        <label class="ov-mini"><span>${esc(t('ov.gap'))}</span><input type="number" data-oa="gap" min="0" max="5000" step="50" value="${a.gap}"${a.dyn ? '' : ' disabled'}></label></div>
-      ${ovSoundHTML('data-oa="sound"', a.sound, `alarm:${n}`)}
-      <small class="muted" data-oex="${limit}"></small></div>`;
-  }).join('');
-  ovExamples();
-}
-function ovExamples() {
-  $$('#ovAlarms [data-oex]').forEach(el => {
-    const limit = +el.dataset.oex, a = OV.cfg.alarms[el.closest('[data-a]').dataset.a];
-    el.textContent = t('ov.example', { red: Math.round(limit * a.red / 100), speed: Math.round(limit * a.at / 100), limit });
-  });
 }
 
 const ovProfileName = key => (!key ? t('ov.profile.all') : key.startsWith('type:') ? t('ov.type.' + key.slice(5)) : I18N.unit(key));
@@ -335,7 +326,6 @@ function ovRender(st) {
   $$('#view-overlay [data-ovkey]').forEach(el => { el.value = OV.cfg[el.dataset.ovkey + 'Name']; });
   ovRenderBlocks();
   ovRenderLines();
-  ovRenderAlarms();
   ovShow(st);
 }
 
@@ -474,18 +464,21 @@ function bindOverlay() {
       ovShowStyle();
       if (el.dataset.ol === 'color') $('.ov-clear', el.closest('.ov-line')).classList.remove('hidden');
       if (el.dataset.ol === 'valueColor' || el.dataset.ol === 'unitColor') $(`[data-olclear="${el.dataset.ol}"]`, el.closest('.ov-line')).classList.remove('hidden');
-    } else if (el.dataset.oa) {
-      if (el.type === 'number' && Number.isNaN(value)) return;
-      const n = el.closest('[data-a]').dataset.a, key = el.dataset.oa;
-      OV.cfg.alarms[n][key] = value;
-      if (key === 'sound') ovRenderAlarms();
-      $$(`#view-overlay [data-a="${n}"] [data-oa="${key}"]`).forEach(x => { if (x !== el) x[x.type === 'checkbox' ? 'checked' : 'value'] = value; });
-      if (key === 'dyn') $$(`#view-overlay [data-a="${n}"] [data-oa="gap"]`).forEach(x => { x.disabled = !value; });
-      ovExamples();
-    } else if (el.dataset.or) {  // a line's own alarm: an empty field is none (red with its beep, no continuous sound)
-      const rule = ovOwner(el, 'rule')[0][+el.closest('.ov-rule').dataset.j], v = parseFloat(el.value), key = el.dataset.or;
-      rule[key] = Number.isFinite(v) ? v : key === 'gap' ? OV_GAP_MS : null;
-      if (key === 'full') $('[data-or="gap"]', el.closest('.ov-rule')).disabled = rule.full == null;
+    } else if (el.dataset.or) {  // one of a line's alarms: an empty field is none (red with its beep, no continuous sound)
+      const rule = ovRuleOf(el), key = el.dataset.or, v = parseFloat(el.value), box = el.closest('.ov-rule');
+      if (key === 'dyn') rule.full = el.checked ? 100 : null;
+      else if (key === 'color') { rule.color = el.value; $('[data-orclear]', box).classList.remove('hidden'); }
+      else if (key === 'sound') { rule.sound = el.value; ovRenderLines(); }
+      else if (key === 'at' || key === 'hz' || key === 'ms') { if (!Number.isFinite(v)) return; rule[key] = v; }
+      else rule[key] = Number.isFinite(v) ? v : key === 'gap' ? OV_GAP_MS : key === 'repeat' || key === 'after' ? 0 : null;
+      if (key === 'dyn' || key === 'full') $('[data-or="gap"]', box).disabled = rule.full == null;
+    } else if (el.dataset.orblink) {
+      ovRuleOf(el).blink = OV_PARTS.filter(x => $(`[data-orblink="${x}"]`, el.closest('.ov-rule')).checked);
+    } else if ('oradd' in el.dataset) {
+      if (!el.value) return;
+      const line = OV.cfg.lines[+el.closest('.ov-line').dataset.i];
+      (line.rules ||= []).push(ovNewRule(line, el.value));
+      ovRenderLines();
     } else if (el.dataset.oc) {
       const [part, key] = el.dataset.oc.split('.'), [box, at] = ovOwner(el, part), n = +(el.closest('.ov-cond')?.dataset.n || 0);
       const v = el.type === 'number' ? parseFloat(el.value) || 0 : el.value;
@@ -498,6 +491,9 @@ function bindOverlay() {
       if (key === 'hasBg') {
         spot.background = el.checked ? spot.lastBg || '#000000' : '';
         ovRenderBlocks();
+      } else if (key === 'title' || key === 'feed') {
+        spot[key] = el.value;
+        if (key === 'feed') ovRenderBlocks();
       } else if (el.type === 'color') {
         spot[key] = el.value;
         if (key === 'background') spot.lastBg = el.value;
@@ -516,7 +512,6 @@ function bindOverlay() {
     if (!b) return;
     const row = b.closest('.ov-line'), i = row ? +row.dataset.i : -1, lines = OV.cfg.lines;
     if (b.dataset.ovv) return ovInsert(b.dataset.ovv);
-    if (b.dataset.ovtest) { await ovFlush(); return api('overlay-test', { alarm: b.dataset.ovtest, profile: OV.profile }).catch(toastErr); }
     if ('ovruletest' in b.dataset) { await ovFlush(); return api('overlay-test', { line: i, rule: +b.closest('.ov-rule').dataset.j, profile: OV.profile }).catch(toastErr); }
     if (b.dataset.ovpick) { OV.pick = b.dataset.ovpick; return $('#ovSoundFile').click(); }
     if ('obline' in b.dataset) return ovAddLine(+b.closest('.ov-block').dataset.i);
@@ -524,9 +519,9 @@ function bindOverlay() {
     if (b.dataset.ocadd) { const [box, at] = ovOwner(b, b.dataset.ocadd); box[at].more = [...(box[at].more || []), { value: 'alt', op: '>', at: 0 }]; }
     else if (b.dataset.ocdel) { const [box, at] = ovOwner(b, b.dataset.ocdel); box[at].more.splice(+b.closest('.ov-cond').dataset.n - 1, 1); }
     else if (b.dataset.olclear) { lines[i][b.dataset.olclear] = ''; }
-    else if ('oradd' in b.dataset) (lines[i].rules ||= []).push(ovNewRule(lines[i]));
     else if ('ordel' in b.dataset) lines[i].rules.splice(+b.closest('.ov-rule').dataset.j, 1);
-    if (b.dataset.ocadd || b.dataset.ocdel || b.dataset.olclear || 'oradd' in b.dataset || 'ordel' in b.dataset) { ovRenderLines(); return ovSave(); }
+    else if ('orclear' in b.dataset) ovRuleOf(b).color = '';
+    if (b.dataset.ocadd || b.dataset.ocdel || b.dataset.olclear || 'ordel' in b.dataset || 'orclear' in b.dataset) { ovRenderLines(); return ovSave(); }
     if ('obdel' in b.dataset) {
       const at = +b.closest('.ov-block').dataset.i;  // its lines go back to the main block, the next ones move up
       OV.cfg.blocks.splice(at - 1, 1);
@@ -561,8 +556,7 @@ function bindOverlay() {
     try {
       const saved = await api('sound-import', { name: file.name, data: await ovSoundData(file) }), [kind, key, j] = OV.pick.split(':');
       OV.sounds = saved.sounds;
-      (kind === 'alarm' ? OV.cfg.alarms[key] : OV.cfg.lines[+key].rules[+j]).sound = saved.file;
-      ovRenderAlarms();
+      if (kind === 'line') OV.cfg.lines[+key].rules[+j].sound = saved.file;
       ovRenderLines();
       ovSave();
     } catch { toast({ title: t('ov.soundBad'), err: true }); }
@@ -594,6 +588,28 @@ function bindOverlay() {
     field.value = OV.cfg[key + 'Name'];
     ovSave();
   }));
+  const ovSetKey = (field, codes, name) => {
+    OV.cfg[field.dataset.ovkey] = codes;
+    OV.cfg[field.dataset.ovkey + 'Name'] = field.value = name;
+    ovSave();
+  };
+  $$('#view-overlay [data-ovkey]').forEach(field => {
+    field.addEventListener('mousedown', e => {  // the middle and side buttons; the left one picks the field
+      const vk = { 1: 4, 3: 5, 4: 6 }[e.button];
+      if (vk && document.activeElement === field) { e.preventDefault(); ovSetKey(field, [vk], `Mouse ${{ 1: 3, 3: 4, 4: 5 }[e.button]}`); }
+    });
+    field.addEventListener('focus', async () => {  // a joystick button: the server watches them while the field waits
+      while (document.activeElement === field && S.status?.alarms) {
+        const asked = Date.now(), got = await api('overlay-joy').catch(() => ({}));
+        if (got.key && document.activeElement === field) {
+          const n = got.key - 256;
+          ovSetKey(field, [got.key], `Joy ${(n >> 5) + 1} B${(n & 31) + 1}`);
+          break;
+        }
+        if (!got.key && Date.now() - asked < 1000) break;  // no joystick reader here
+      }
+    });
+  });
   addEventListener('resize', () => { if (OV.cfg && !$('#view-overlay').classList.contains('hidden')) ovDraw(); });
   $('#ovHudPlace').addEventListener('click', e => {
     const b = e.target.closest('[data-place]');
