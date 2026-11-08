@@ -13,8 +13,8 @@ Versions follow `major.minor.patch`; "beta" until 1.0.
   threshold**, 700 ms by default), its sound, its own **colour** (the last alarm on wins: orange first, then red), the
   parts of the line that **flash** (name, value, unit), its **Repeat every**, **Only after** (it must last that long) and
   its **glow around the screen** (in its colour, its depth, flashing or not). The *Alert colour with* menu, the Alarms
-  tab's settings and the overlay's own glow are gone: that tab is now **Sounds** (volume, output, repeat), the flash
-  cycle is in Look. Saved overlays move over once: each line gets the alarm it followed, as it was set, every alarm the
+  tab's settings, the overlay's own glow and its repeat are gone: that tab is now **Sounds** (volume, output), the flash
+  cycle is in Look; an alarm without a repeat of its own beeps every 300 ms. Saved overlays move over once: each line gets the alarm it followed, as it was set, every alarm the
   glow if it was on, and G load and angle of attack get lines shown **During its alarm** (a new *Shows* choice).
 - **Limit shown as, per line**: a line following one of the aircraft's limits shows it as its value against the limit
   (*640 / 700 km/h*), in % of it (*91 %*) or both, chosen in its own row next to *Shows*. The choice above the lines,
@@ -22,8 +22,9 @@ Versions follow `major.minor.patch`; "beta" until 1.0.
 - **Try each alarm**: **Try**, next to *Test*, gives the alarm a slider of the value it follows (its limit's %, or its
   value), from quiet to past its break. Moving it shows the overlay on your screen as it would be at that value (the
   line's speed, Mach, G, AoA or fuel follow it, red, flashing, its glow) and beeps as in flight, closing in, after its
-  delay; only that alarm reacts. An alarm's own sound file is paced by its length, so a long one no longer starts over
-  and over. **Stop**
+  delay; only that alarm reacts. In flight too: the value moves in your flight, on your aircraft's limits, and an alarm
+  of the flight that comes on wins over the trial. An alarm's own sound file is paced by its length, so a long one no
+  longer starts over and over. **Stop**
   ends it, and so does leaving the page.
 - **G load and angle of attack limits** from the flight models: the G that breaks the wings at the mass flown (without
   weapons: the game doesn't tell their mass, so loaded the limit reads high), the critical angle of attack between flaps

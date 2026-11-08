@@ -56,7 +56,7 @@ IDLE_S = 1.0  # not flying: nothing to read fast
 TRY_S = 60  # My overlay's Try, left alone this long, stops: the page that started it may be gone
 RING_S = 0.5  # what rings, not told again for this long (two readings at least), stops: muted, landed, the app gone
 HANGAR_IAS = 1  # km/h: the aircraft on show in the hangar reads 0 or 1
-REPEAT_MS = 300
+REPEAT_MS = 300  # an alarm whose beeps don't close in, without a repeat of its own
 BEEP_MS = 150
 GAP_MS = 700  # a dynamic alarm: the silence between its beeps at its threshold, none left at its break
 MAX_RULES = 6  # a line's alarms: an old line's 4 own ones and the aircraft's it followed fit
@@ -218,7 +218,7 @@ def defaults(words: dict) -> dict:
             **HUD_DEFAULTS, "mapMode": "off", "mapZoom": 1, "mapTrail": True, "mapOpacity": 85, "mapShape": "square", "mapUp": "north", "mapAllies": False, "mapAlliesGround": False, "mapDim": 30,
             **{f"mapMark{k}": 100 for k in minimap.MARKS},  # the minimap: off until the player turns it on
             "mapSize": round(560 * scale), "mapX": round(40 * scale), "mapY": round(1100 * scale),
-            "logKey": [], "logKeyName": "", "hideCrash": False, "hideUnknown": False, "repeat": REPEAT_MS,
+            "logKey": [], "logKeyName": "", "hideCrash": False, "hideUnknown": False,
             "sheetKey": [], "sheetKeyName": "", "profileKey": [], "profileKeyName": "",
             "lines": [*lines, _line({"text": "REC", "when": "log", "color": "#FF0000"})]}
 
@@ -246,6 +246,18 @@ def _glow_moved(cfg: dict) -> list:
         if isinstance(line, dict):
             rules = line.get("rules") if isinstance(line.get("rules"), list) else [line.get("rule")]
             line = {**line, "rules": [{**glow, **r} if isinstance(r, dict) else r for r in rules]}
+        out.append(line)
+    return out
+
+
+def _repeat_moved(cfg: dict) -> list:
+    """The overlay's repeat, when it wasn't the default, given to the alarms without one of their own."""
+    every = _num(cfg["repeat"], REPEAT_MS, 100, 10000)
+    out = []
+    for line in cfg["lines"]:
+        if isinstance(line, dict) and every != REPEAT_MS:
+            rules = line.get("rules") if isinstance(line.get("rules"), list) else [line.get("rule")]
+            line = {**line, "rules": [{**r, "repeat": r.get("repeat") or every} if isinstance(r, dict) else r for r in rules]}
         out.append(line)
     return out
 
@@ -316,7 +328,7 @@ def _value_at(v):
 def _rule(rule) -> dict | None:
     """One of a line's alarms. limit: one of the aircraft's (ALARMS), its values in % of that limit; "": a condition on any
     value (its first one against "at"). at: the beep; red: the line goes red from there (None: with the beep); full: the
-    beeps have come closer and closer from "gap" to one continuous sound (None: they keep "repeat", 0 = the overlay's);
+    beeps have come closer and closer from "gap" to one continuous sound (None: they keep "repeat", 0 = REPEAT_MS);
     color: the line's in that alarm ("" = the overlay's alert colour); blink: the parts of the line that flash; after: ms
     the alarm must last before it shows and beeps; glow: it lights a glow around the screen, in its colour, glowSize % of
     the screen's height deep, flashing with glowFlash."""
@@ -376,6 +388,8 @@ def clean(cfg, words: dict) -> dict:
         cfg = {**cfg, "lines": _migrated(cfg, words)}
     if "glow" in cfg and isinstance(cfg.get("lines"), list):  # before 0.27 the glow was the overlay's, for every alarm
         cfg = {**cfg, "lines": _glow_moved(cfg)}
+    if "repeat" in cfg and isinstance(cfg.get("lines"), list):  # and so was the repeat of the beeps that don't close in
+        cfg = {**cfg, "lines": _repeat_moved(cfg)}
     out = {"x": _num(cfg.get("x"), base["x"], -20000, 20000), "y": _num(cfg.get("y"), base["y"], -20000, 20000),
            "font": cfg["font"] if isinstance(cfg.get("font"), str) and FONT.fullmatch(cfg["font"]) else base["font"],
            "size": _num(cfg.get("size"), base["size"], 6, 400), "bold": _flag(cfg.get("bold"), base["bold"]),
@@ -389,7 +403,6 @@ def clean(cfg, words: dict) -> dict:
            "flashMs": _num(cfg.get("flashMs"), base["flashMs"], 200, 4000), "volume": _num(cfg.get("volume"), base["volume"], 0, 100),
            "soundFocus": _flag(cfg.get("soundFocus"), base["soundFocus"]), "soundEngine": _flag(cfg.get("soundEngine"), base["soundEngine"]),
            "pollMs": _num(cfg.get("pollMs"), base["pollMs"], 50, 1000), "logMs": _num(cfg.get("logMs"), base["logMs"], 100, 10000),
-           "repeat": _num(cfg.get("repeat"), base["repeat"], 100, 10000),
            **_keys(cfg, "sheetKey", "sheetKeyName"), **_keys(cfg, "profileKey", "profileKeyName"), **_keys(cfg, "hotkey", "hotkeyName"), **_keys(cfg, "logKey", "logKeyName"), **_keys(cfg, "muteKey", "muteKeyName"),
            **_keys(cfg, "holdKey", "holdKeyName"), **_hud(cfg), **_map(cfg, base)}
     lines, blocks = cfg.get("lines"), cfg.get("blocks")
@@ -570,7 +583,7 @@ def pace(cfg: dict, place: tuple, close: float | None, ms: float | None = None) 
     """Seconds from one beep to the next: the gap shrinks as the alarm nears its break, the beeps touch at it. ms: the
     sound's length, when it isn't the beep's (a file)."""
     a = sound_of(cfg, place)
-    return (a.get("repeat") or cfg["repeat"]) / 1000 if close is None else ((ms or a["ms"]) + a["gap"] * (1 - close)) / 1000
+    return (a.get("repeat") or REPEAT_MS) / 1000 if close is None else ((ms or a["ms"]) + a["gap"] * (1 - close)) / 1000
 
 
 def sound_ms(alarm: dict, folder: Path | None) -> float:
@@ -870,11 +883,11 @@ def game_focused() -> bool:
     return name.value == GAME_WINDOW_CLASS
 
 
-def tried_state(rule: dict, value: float, text: str = "") -> tuple:
-    """The sample reading with a tried alarm's value in it, so that every line shows it: a limit's % gives the speed, G
-    or angle of attack it means; the airframe's, from a line showing the Mach number (text), the Mach number. Returns
-    (reading, the limit tried or None, its %)."""
-    st, lim = dict(SAMPLE_STATE), SAMPLE_LIM
+def tried_state(rule: dict, value: float, text: str = "", base: dict | None = None, lim: dict | None = None) -> tuple:
+    """A reading with a tried alarm's value in it, so that every line shows it: a limit's % gives the speed, G or angle of
+    attack it means; the airframe's, from a line showing the Mach number (text), the Mach number. base, lim: the flight
+    under way and its aircraft's limits, else the sample's. Returns (reading, the limit tried or None, its %)."""
+    st, lim = dict(base or SAMPLE_STATE), lim or SAMPLE_LIM
     name = rule.get("limit") or rule["value"]
     limit = name if name in ALARMS else name[:-4] if name.endswith("_pct") and name[:-4] in ALARMS else None
     k = value / 100
@@ -882,21 +895,24 @@ def tried_state(rule: dict, value: float, text: str = "") -> tuple:
         st["M"] = k * lim["m"]
         st["IAS, km/h"] = min(st["IAS, km/h"], 0.9 * k * lim["v"])  # under the Mach number's share: it's what's tried
     elif limit in ("airframe", "gear", "flaps"):
-        top = {"airframe": lim["v"], "gear": lim["gear"], "flaps": flaps_limit(lim["flaps"], st["flaps, %"] / 100)}[limit]
-        st["TAS, km/h"] = st["TAS, km/h"] / st["IAS, km/h"] * k * top
-        st["IAS, km/h"] = k * top
-        st["M"] = min(st["M"], 0.9 * k * lim["m"]) if limit == "airframe" else st["M"]  # under the IAS's share: it's what's tried
-        st["gear, %"] = 100 if limit == "gear" else st["gear, %"]
-    elif limit == "load":
+        flaps = (st.get("flaps, %") or 0) / 100
+        top = {"airframe": lim["v"], "gear": lim.get("gear"), "flaps": lim.get("flaps") and flaps_limit(lim["flaps"], flaps)}[limit]
+        if top:
+            ias = st.get("IAS, km/h") or 0
+            st["TAS, km/h"] = (st.get("TAS, km/h") or 0) / ias * k * top if ias else k * top
+            st["IAS, km/h"] = k * top
+            st["M"] = min(st.get("M") or 0, 0.9 * k * lim["m"]) if limit == "airframe" else st.get("M")  # under the IAS's share
+            st["gear, %"] = 100 if limit == "gear" else st.get("gear, %")
+    elif limit == "load" and load_limits(lim, st):
         st["Ny"] = k * load_limits(lim, st)[1]
-    elif limit == "aoa":
+    elif limit == "aoa" and aoa_limits(lim, st):
         st["AoA, deg"] = k * aoa_limits(lim, st)[1]
-    elif name == "fuel_pct":
+    elif name == "fuel_pct" and st.get("Mfuel0, kg"):
         st["Mfuel, kg"] = k * st["Mfuel0, kg"]
     elif name not in COMPUTED and name != "fuel_time":
         st[FIELDS.get(name, (name,))[0]] = value
         if name == "ias":
-            st["TAS, km/h"] = SAMPLE_STATE["TAS, km/h"] / SAMPLE_STATE["IAS, km/h"] * value
+            st["TAS, km/h"] = SAMPLE_STATE["TAS, km/h"] / SAMPLE_STATE["IAS, km/h"] * value  # shortcut: the sample's TAS/IAS
     return st, limit, value
 
 
@@ -1045,6 +1061,7 @@ class Watch:
         self.sheet = False  # the sheet key is held
         self.forced = None  # the overlay the profile key picked, until the next spawn
         self.trial = None  # My overlay's Try: {"key": its overlay, "place": (line, alarm), "value", "t", "since"}
+        self._real = None  # in flight: (its reading, its aircraft's limits, its values), for a trial
 
     def start_overlay(self):
         if not self.overlay:
@@ -1103,15 +1120,16 @@ class Watch:
             self._wake.set()
         else:
             self.glow = self.ringing = None
-        return self.trial_frame()
+        return self.trial_frame(self._real, ring=False)
 
     def shown_cfg(self) -> dict:
         """The overlay the window draws: the one shown by My overlay, the one tried, or the aircraft's."""
         return self.preview or (self.profiles.get(self.trial["key"], self.base) if self.trial else self.cfg)
 
-    def trial_frame(self) -> list:
-        """The trial's overlay: the sample values with the tried alarm's own at the value set; only that alarm turns its
-        line red, beeps (closing in as in flight, after its delay) and lights its glow."""
+    def trial_frame(self, real: tuple | None = None, ring: bool = True) -> list:
+        """The trial's overlay: the tried alarm's value set in the sample, or in the flight under way (real: its reading,
+        its aircraft's limits, its values); only that alarm turns its line red, beeps (closing in as in flight, after its
+        delay) and lights its glow. ring: False from the page's request, the loop rings it at once (one beat, not two)."""
         t = self.trial
         cfg = self.profiles.get(t["key"], self.base) if t else None
         i, j = t["place"] if t else (-1, -1)
@@ -1119,10 +1137,11 @@ class Watch:
             self.trial, self.glow = None, None
             return []
         rule = cfg["lines"][i]["rules"][j]
-        state, limit, value = tried_state(rule, t["value"], cfg["lines"][i]["text"])
-        values = {**state, **SAMPLE_STATS, "vehicle": self.vehicle(SAMPLE_VEHICLE), "wep": "4:32", "wep_s": 272,
-                  **computed(SAMPLE_LIM, state, self.words, {"burn": 95, "accel": 1.2}, cfg["pctAlways"])}
-        pct = percents(SAMPLE_LIM, state)
+        base, lim, known = real or (SAMPLE_STATE, SAMPLE_LIM, {**SAMPLE_STATS, "vehicle": self.vehicle(SAMPLE_VEHICLE), "wep": "4:32", "wep_s": 272})
+        state, limit, value = tried_state(rule, t["value"], cfg["lines"][i]["text"], base, lim)
+        rates = self.trend.rates() if real and self.trend.points else {"burn": 95, "accel": 1.2}
+        values = {**known, **state, **computed(lim, state, self.words, rates, cfg["pctAlways"])}
+        pct = percents(lim, state)
         if limit:
             pct[limit] = values[f"{limit}_pct"] = value
         elif rule["value"] in COMPUTED or rule["value"] == "fuel_time":  # worked out from the readings: set as it is
@@ -1131,8 +1150,9 @@ class Watch:
         on = self.held(cfg, mine(own_alerts(cfg, values, pct)), "beep", t["since"])
         red = self.held(cfg, mine(own_alerts(cfg, values, pct, red=True)), "red", t["since"])
         self.warn, self.glow = bool(red or on), glow_of(cfg, red or on)
-        self.ring(cfg, [] if self.muted else on, pct, values)
-        return lines_for(cfg, values, red, SAMPLE_FEEDS)
+        if ring:
+            self.ring(cfg, [] if self.muted else on, pct, values)
+        return lines_for(cfg, values, red, self.feeds if real else SAMPLE_FEEDS)
 
     def read_feeds(self, cfg: dict):
         """The chat and the battle log, for the blocks that show them, once a second: only what's new."""
@@ -1336,6 +1356,7 @@ class Watch:
         if vehicle:
             return self.drive(vehicle)
         if state is None:
+            self._real = None
             if not self.trial:
                 self.glow = self.ringing = None
             self.display = self.trial_frame() if self.trial else self.sample(self.preview) if self.preview else []
@@ -1396,7 +1417,11 @@ class Watch:
             self.read_map()
         rpm = _engines(state)[0]
         silent = self.muted or (cfg["soundFocus"] and not game_focused()) or (cfg["soundEngine"] and rpm and not any(rpm))
-        self.ring(cfg, [] if silent else on, pct, values)
+        self._real = (state, lim, values) if lim else None
+        if self.trial and not (on or red):  # My overlay's Try in flight: its alarm, unless one of the flight's is on
+            self.display = self.trial_frame(self._real)
+        else:
+            self.ring(cfg, [] if silent else on, pct, values)
         return min(cfg["pollMs"] / 1000, HUD_POLL_S) if self.hud_live or fast else cfg["pollMs"] / 1000
 
     def ring(self, cfg: dict, on: list, pct: dict, values: dict):

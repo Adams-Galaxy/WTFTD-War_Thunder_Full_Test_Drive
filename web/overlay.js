@@ -5,7 +5,7 @@
 
 const OV = { cfg: null, screen: [3840, 2160], lines: [], input: null, timer: 0, profile: '', keys: new Map(), sounds: [], hud: {}, hudPlace: 'cockpit',
              trying: null, trialGlow: null };  // trying: the alarm tried, {i, j, value}
-const OV_MAX_BLOCKS = 3, OV_MAX_TESTS = 4, OV_MAX_RULES = 6, OV_GAP_MS = 700;
+const OV_MAX_BLOCKS = 3, OV_MAX_TESTS = 4, OV_MAX_RULES = 6, OV_GAP_MS = 700, OV_REPEAT_MS = 300;
 const OV_SOUND_RATE = 22050, OV_SOUND_S = 15;  // what a sound is kept as: enough for an alarm, and it fits a request
 const OV_TYPES = ['fighter', 'assault', 'bomber', 'helicopter', 'jet', 'prop', 'tank', 'ship'];
 const OV_WHEN = ['always', 'gear', 'flaps', 'airbrake', 'alarm', 'own', 'log'];
@@ -174,7 +174,7 @@ function ovRuleHTML(r, i, j) {
   const look = row('', `<label class="ov-mini ov-swatch"><span>${esc(t('ov.alarmColor'))}</span><span class="ov-color"><input type="color" data-or="color" value="${esc(r.color || OV.cfg.alert)}">
         <button class="icon-btn${r.color ? '' : ' hidden'}" data-orclear title="${esc(t('ov.sameAsAlert'))}">${icon('x', 'ic-sm')}</button></span></label>
       <div class="ov-mini ov-flash"><span>${esc(t('ov.flash'))}</span><div class="ov-parts">${OV_PARTS.map(x => `<label><input type="checkbox" data-orblink="${x}"${(r.blink || []).includes(x) ? ' checked' : ''}>${esc(t('ov.part.' + x))}</label>`).join('')}</div></div>
-      ${num('repeat', t('ov.repeat'), r.repeat || '', ` min="0" max="10000" step="50" placeholder="${esc(OV.cfg.repeat)}"`)}${num('after', t('ov.after'), r.after || '', ' min="0" max="10000" step="100" placeholder="0"')}`);
+      ${num('repeat', t('ov.repeat'), r.repeat || '', ` min="0" max="10000" step="50" placeholder="${OV_REPEAT_MS}"`)}${num('after', t('ov.after'), r.after || '', ' min="0" max="10000" step="100" placeholder="0"')}`);
   const sw = (key, label) => `<label class="switch"><input type="checkbox" data-or="${key}"${r[key] ? ' checked' : ''}><span class="sw"></span><span>${esc(t(label))}</span></label>`;
   const glow = row('', `${sw('glow', 'ov.glow')}${num('glowSize', t('ov.glowSize'), r.glowSize, ` min="3" max="50"${r.glow ? '' : ' disabled'}`)}${sw('glowFlash', 'ov.glowFlash')}
       <button class="btn btn-sm btn-ghost" data-ordel>${icon('trash', 'ic-sm')}<span>${esc(t('ov.removeAlarm'))}</span></button>`);

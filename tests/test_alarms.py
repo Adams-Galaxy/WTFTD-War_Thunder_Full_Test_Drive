@@ -561,6 +561,15 @@ class Glow(unittest.TestCase):
         self.assertFalse(alarms.clean(None, WORDS)["lines"][0]["rules"][0]["glow"])
         self.assertIsNone(alarms.first_glow(alarms.clean(None, WORDS)))
 
+    def test_the_overlay_s_repeat_goes_to_the_alarms_without_one(self):  # saved before 0.27
+        lines = [{"text": "x", "rules": [{"limit": "gear", "full": None}, {"limit": "flaps", "full": None, "repeat": 900}]}]
+        cfg = alarms.clean({"repeat": 450, "lines": lines}, WORDS)
+        self.assertEqual([r["repeat"] for r in cfg["lines"][0]["rules"]], [450, 900])
+        self.assertNotIn("repeat", cfg)
+        self.assertEqual(alarms.pace(cfg, (0, 0), None), 0.45)
+        self.assertEqual(alarms.clean({"repeat": alarms.REPEAT_MS, "lines": lines}, WORDS)["lines"][0]["rules"][0]["repeat"], 0)  # the default: left empty
+        self.assertEqual(alarms.pace(alarms.clean({"lines": lines}, WORDS), (0, 0), None), alarms.REPEAT_MS / 1000)
+
     def test_the_overlay_s_glow_goes_to_every_alarm(self):  # saved before 0.27
         cfg = alarms.clean({"glow": True, "glowSize": 25, "glowFlash": True, "glowColor": "#00FF00", "lines": [{"text": "x", "rules": [{"limit": "gear"}]}]}, WORDS)
         rule = cfg["lines"][0]["rules"][0]
@@ -763,10 +772,13 @@ class Watching(unittest.TestCase):
 
     def test_try_an_alarm(self):  # My overlay's Try: the IAS line's airframe alarm at a value set by hand
         cfg = self.watch.base
+        self.reply = b'{"valid": false}'  # in the hangar: the sample
         with mock.patch.object(self.watch, "start_overlay"):
             rows = self.watch.set_trial("", (0, 0), 95)
         self.assertEqual([r[1] for r in rows][:3], [cfg["alert"], cfg["color"], cfg["color"]])  # only it: not Mach, not the sample's gear
         self.assertEqual(rows[0][0], "IAS    1463 / 1540 km/h")  # the line follows the value tried, not only its colour
+        self.beep.assert_not_called()  # the loop rings it, woken at once
+        self.watch.tick()
         self.beep.assert_called_once()
         self.beep.reset_mock()
         self.watch._last_beep -= 5
@@ -776,6 +788,20 @@ class Watching(unittest.TestCase):
         self.watch.trial["t"] -= alarms.TRY_S + 1  # the page that started it is gone
         self.assertEqual(self.watch.trial_frame(), [])
         self.assertIsNone(self.watch.trial)
+
+    def test_try_in_flight(self):  # the flight's own lines and limits; a real alarm wins
+        with mock.patch.object(self.watch, "start_overlay"):
+            self.watch.set_trial("", (0, 0), 96)
+            self.fly()  # 500 km/h: no alarm of the flight
+        self.beep.assert_called_once()
+        self.assertEqual(self.texts()[0], "IAS    1481 / 1543 km/h")  # 96 % of the J-10C's limit
+        self.assertEqual(self.watch.display[0][1], self.watch.cfg["alert"])
+        self.beep.reset_mock()
+        self.watch._last_beep -= 5
+        self.fly(**{"IAS, km/h": 1000, "gear, %": 100})  # gear out past its limit, for real
+        self.assertEqual(self.texts()[0], "IAS    1000 / 1543 km/h")  # the flight's own overlay again
+        self.assertEqual(self.watch.display[2][1], self.watch.cfg["alert"])
+        self.assertEqual(self.beep.call_args.args[0], 1000)  # the gear's pitch, continuous past its limit
 
     def test_try_a_value_alarm_and_its_glow(self):
         rule = {"value": "fuel_pct", "op": "<", "at": 15, "red": 25, "glow": True, "color": "#FFA500"}
@@ -1303,8 +1329,8 @@ class Configuration(unittest.TestCase):
     def test_numbers_stay_in_range(self):
         rule = {"limit": "gear", "at": 900, "hz": 1, "ms": 99999, "gap": -5, "repeat": -1, "after": 99999, "color": "red", "blink": ["value", "x"],
                 "glow": "yes", "glowSize": 999}
-        cfg = alarms.clean({"size": 1, "opacity": 900, "repeat": 1, "lines": [{"text": "x", "rules": [rule]}]}, WORDS)
-        self.assertEqual((cfg["size"], cfg["opacity"], cfg["repeat"]), (6, 100, 100))
+        cfg = alarms.clean({"size": 1, "opacity": 900, "lines": [{"text": "x", "rules": [rule]}]}, WORDS)
+        self.assertEqual((cfg["size"], cfg["opacity"]), (6, 100))
         self.assertEqual(cfg["lines"][0]["rules"][0], {"value": "", "op": ">", "at": 200, "join": "and", "more": [], "limit": "gear", "hz": 37,
                                                        "ms": 2000, "sound": "", "red": None, "full": 100, "gap": 0, "color": "",
                                                        "blink": ["value"], "repeat": 0, "after": 10000, "glow": False, "glowSize": 50, "glowFlash": False})
