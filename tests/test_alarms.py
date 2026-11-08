@@ -766,6 +766,7 @@ class Watching(unittest.TestCase):
         with mock.patch.object(self.watch, "start_overlay"):
             rows = self.watch.set_trial("", (0, 0), 95)
         self.assertEqual([r[1] for r in rows][:3], [cfg["alert"], cfg["color"], cfg["color"]])  # only it: not Mach, not the sample's gear
+        self.assertEqual(rows[0][0], "IAS    1463 / 1540 km/h")  # the line follows the value tried, not only its colour
         self.beep.assert_called_once()
         self.beep.reset_mock()
         self.watch._last_beep -= 5
@@ -784,6 +785,20 @@ class Watching(unittest.TestCase):
         self.assertEqual(rows[0][1], "#FFA500")
         self.assertEqual(self.watch.glow, ("#FFA500", alarms.GLOW_SIZE, False))
         self.beep.assert_not_called()
+
+    def test_a_tried_value_moves_what_its_line_shows(self):
+        mach = alarms._line({"text": "MACH {mach}", "rules": [alarms.limit_alarm("airframe")]})
+        self.assertEqual(alarms.tried_state(mach["rules"][0], 50, mach["text"])[0]["M"], 1.05)
+        self.assertEqual(alarms.tried_state({"limit": "", "value": "fuel_pct"}, 10)[0]["Mfuel, kg"], 940)
+        self.assertEqual(alarms.tried_state({"limit": "", "value": "RPM 2"}, 9000)[0]["RPM 2"], 9000)  # any field the game sends
+
+    def test_a_sound_file_paces_by_its_length(self):
+        with tempfile.TemporaryDirectory() as folder:
+            with wave.open(str(Path(folder) / "horn.wav"), "wb") as w:
+                w.setparams((1, 2, 22050, 0, "NONE", "not compressed"))
+                w.writeframes(bytes(2 * 22050))  # 1 s
+            self.assertAlmostEqual(alarms.sound_ms({"sound": "horn.wav", "ms": 150}, Path(folder)), 1000)
+            self.assertEqual(alarms.sound_ms({"sound": "gone.wav", "ms": 150}, Path(folder)), 150)
 
     def test_the_try_route(self):
         handler = mock.Mock()
@@ -812,7 +827,7 @@ class Watching(unittest.TestCase):
     def test_the_page_offers_several_alarms_per_line(self):
         script = (alarms.WEB / "overlay.js").read_text(encoding="utf-8")
         for bit in ("data-oradd", "data-ordel", "data-orclear", "data-orblink", "data-or=\"${key}\"", "'red'", "'dyn'", "'after'", "'repeat'",
-                    "rule: +b.closest('.ov-rule').dataset.j", "'own'", "load: [90, 1200]", "aoa: [90, 500]", "'wep'", "api('overlay-try'", "data-ortry ", "data-orshown",
+                    "rule: +b.closest('.ov-rule').dataset.j", "'own'", "load: [90, 1200]", "aoa: [90, 500]", "'wep'", "api('overlay-try'", "data-ortry ", "data-olshown",
                     f"OV_MAX_RULES = {alarms.MAX_RULES}", f"OV_GAP_MS = {alarms.GAP_MS}"):  # the page and the engine agree
             self.assertIn(bit, script)
         for code in ("en", "fr", "de", "es", "it", "pt", "pl", "cs", "ru", "ja", "zh"):
@@ -824,6 +839,7 @@ class Watching(unittest.TestCase):
                 self.assertTrue(words.get(key), (code, key))
         page = (alarms.WEB / "index.html").read_text(encoding="utf-8")
         self.assertNotIn('id="ovAlarms"', page)  # the alarms live on the lines
+        self.assertNotIn('id="ovStyle"', page)  # and so does how a line shows its limit
         self.assertIn('data-ovkey="sheetKey"', page)
 
     def test_a_lines_own_alarm_red_first_and_continuous_at_its_value(self):

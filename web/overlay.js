@@ -155,15 +155,13 @@ function ovTestHTML(part, label, test) {
 // one of a line's alarms: on one of the aircraft's limits (in % of it), or on any value. Its thresholds (red, beep, the
 // value where the beeps become continuous), its sound, and the line in it: colour, the parts that flash, repeat, delay
 function ovRuleHTML(r, i, j) {
-  const tried = OV.trying?.i === i && OV.trying?.j === j, l = OV.cfg.lines[i];
-  const shown = r.limit && l.rules.find(x => x.limit) === r
-    ? ovField(t('ov.shownAs'), `<select data-orshown>${OV_SHOWN_AS.map(x => ovOpt(x, t('ov.shown.' + x), ovShownAs(l, r))).join('')}</select>`) : '';
+  const tried = OV.trying?.i === i && OV.trying?.j === j;
   const num = (key, label, value, extra = '') => ovField(label, `<input type="number" data-or="${key}" value="${value ?? ''}"${extra}>`);
   const row = (label, html) => `<div class="ov-test"><span class="ov-test-name">${esc(label)}</span><div class="ov-dyn-row">${html}</div></div>`;
   const gap = num('gap', t('ov.gap'), r.gap, ` min="0" max="5000" step="50"${r.full == null ? ' disabled' : ''}`);
   const withBeep = ` placeholder="${esc(t('ov.withBeep'))}"`;
   const levels = r.limit
-    ? row(t('ov.alarm.' + r.limit), `${shown}${num('red', t('ov.redFrom'), r.red, ` min="1" max="200"${withBeep}`)}${num('at', t('ov.beepFrom'), r.at, ' min="1" max="200"')}${gap}
+    ? row(t('ov.alarm.' + r.limit), `${num('red', t('ov.redFrom'), r.red, ` min="1" max="200"${withBeep}`)}${num('at', t('ov.beepFrom'), r.at, ' min="1" max="200"')}${gap}
         <label class="switch"><input type="checkbox" data-or="dyn"${r.full != null ? ' checked' : ''}><span class="sw"></span><span>${esc(t('ov.dynamic'))}</span></label>`)
     : ovTestHTML('rule', t('ov.ownAlert'), r) + row('', `${num('red', t('ov.redFromValue'), r.red, ` step="any"${withBeep}`)}
         ${num('full', t('ov.fullAt'), r.full, ` step="any" placeholder="${esc(t('ov.noFull'))}"`)}${gap}`);
@@ -222,6 +220,11 @@ const ovShownKind = (l, r) => (r.limit === 'airframe' && l.text.includes('{mach}
 function ovShownAs(l, r) {
   const value = OV_SHOWN[ovShownKind(l, r)][0].match(/\{\w+\}/)[0], pct = l.text.includes(`{${r.limit}_pct}`);
   return pct && l.text.includes(value) ? 'both' : pct ? 'percent' : 'value';
+}
+// the line's choice, by its first alarm on a limit; a line without one has an empty cell, its row lined up with the others
+function ovShownHTML(l) {
+  const r = (l.rules || []).find(x => x.limit);
+  return r ? ovField(t('ov.shownAs'), `<select data-olshown>${OV_SHOWN_AS.map(x => ovOpt(x, t('ov.shown.' + x), ovShownAs(l, r))).join('')}</select>`) : '<span></span>';
 }
 // rewrites what follows the line's name (the text before its first value)
 function ovSetShown(l, r, how) {
@@ -315,35 +318,12 @@ function ovRenderLines() {
       <div class="ov-move"><button class="icon-btn" data-ovmove="-1"${i ? '' : ' disabled'} title="${esc(t('ov.up'))}">▲</button><button class="icon-btn" data-ovmove="1"${i < OV.cfg.lines.length - 1 ? '' : ' disabled'} title="${esc(t('ov.down'))}">▼</button></div>
       <input type="text" class="ov-tpl" data-ol="text" value="${esc(l.text)}" maxlength="120" spellcheck="false">
       <label class="ov-mini"><span>${esc(t('ov.when'))}</span><select data-ol="when">${OV_WHEN.map(w => opt(w, t('ov.when.' + w), l.when)).join('')}</select></label>
+      ${ovShownHTML(l)}
       ${blocks ? ovField(t('ov.block'), `<select data-ol="block">${Array.from({ length: blocks + 1 }, (_, n) => opt(n, n + 1, l.block || 0)).join('')}</select>`) : ''}
       <label class="ov-mini ov-num"><span>${esc(t('ov.lineSize'))}</span><input type="number" data-ol="size" min="0" max="400" value="${l.size || ''}" placeholder="${esc(OV.cfg.size)}"></label>
       <label class="ov-mini ov-swatch"><span>${esc(t('ov.lineColor'))}</span><input type="color" data-ol="color" value="${esc(l.color || OV.cfg.color)}"></label>
       <button class="icon-btn ov-clear${l.color ? '' : ' hidden'}" data-ovnocolor title="${esc(t('ov.noColor'))}">${icon('x', 'ic-sm')}</button>
       <button class="icon-btn btn-danger" data-ovdel title="${esc(t('action.delete'))}">${icon('trash')}</button>${ovLineAlarmsHTML(l, i)}${ovMoreHTML(l, i)}</div>`).join('');
-  ovShowStyle();
-}
-
-// how the lines of the alarms read: the speed against its limit, how far along the limit it is, or both
-function ovStyleLines(style) {
-  const word = a => t('ov.alarm.' + a).toUpperCase(), speed = style !== 'percent', pct = a => (style === 'speed' ? '' : `${style === 'both' ? '  ' : ''}{${a}_pct} %`);
-  const rows = [speed ? ['IAS', `{ias} / {vne} km/h${pct('airframe') && ` ${pct('airframe').trim()}`} {swept}`, 'always', 'airframe'] : [word('airframe'), `${pct('airframe')} {swept}`, 'always', 'airframe'],
-                ...(speed ? [['MACH', '{mach} / {mne}', 'always', 'airframe']] : []),
-                [word('gear'), `${speed ? '{ias} / {gear_max} km/h' : ''}${pct('gear')}`, 'gear', 'gear'],
-                [word('flaps'), `${speed ? '{ias} / {flaps_max} km/h' : ''}${pct('flaps')}`, 'flaps', 'flaps']];
-  const width = Math.max(...rows.map(r => r[0].length)) + 2;
-  return rows.map(([label, text, when, alarm]) => ({ text: label.padEnd(width) + text, when, alarm, color: '', size: 0, rules: [ovNewRule({ text }, alarm)] }));
-}
-function ovShowStyle() {
-  const texts = OV.cfg.lines.map(l => l.text);
-  $$('#ovStyle button').forEach(b => b.classList.toggle('active', ovStyleLines(b.dataset.style).every(l => texts.includes(l.text))));
-}
-function ovSetStyle(style) {
-  const speed = l => (l.rules || []).find(r => ['airframe', 'gear', 'flaps'].includes(r.limit))?.limit;  // the lines a style rewrites
-  const lines = OV.cfg.lines, own = a => lines.find(l => speed(l) === a);  // their colour, size and alarms stay
-  OV.cfg.lines = [...ovStyleLines(style).map(({ alarm, ...l }) => ({ ...l, color: own(alarm)?.color || '', size: own(alarm)?.size || 0, rules: own(alarm)?.rules || l.rules })),
-                  ...lines.filter(l => !speed(l))];
-  ovRenderLines();
-  ovSave();
 }
 
 // the picture behind the text: the player's own screenshot, shrunk to what the page shows, kept in this browser profile
@@ -531,7 +511,8 @@ function bindOverlay() {
     } else if (el.dataset.ol) {
       const line = OV.cfg.lines[+el.closest('.ov-line').dataset.i];
       line[el.dataset.ol] = el.dataset.ol === 'size' || el.dataset.ol === 'block' ? +value || 0 : value;
-      ovShowStyle();
+      const shown = $('[data-olshown]', el.closest('.ov-line')), limit = (line.rules || []).find(x => x.limit);
+      if (shown && limit) shown.value = ovShownAs(line, limit);  // its text written by hand
       if (el.dataset.ol === 'color') $('.ov-clear', el.closest('.ov-line')).classList.remove('hidden');
       if (el.dataset.ol === 'valueColor' || el.dataset.ol === 'unitColor') $(`[data-olclear="${el.dataset.ol}"]`, el.closest('.ov-line')).classList.remove('hidden');
     } else if (el.dataset.or) {  // one of a line's alarms: an empty field is none (red with its beep, no continuous sound)
@@ -544,8 +525,9 @@ function bindOverlay() {
       else if (key === 'at' || key === 'hz' || key === 'ms') { if (!Number.isFinite(v)) return; rule[key] = v; }
       else rule[key] = Number.isFinite(v) ? v : key === 'gap' ? OV_GAP_MS : key === 'repeat' || key === 'after' ? 0 : null;
       if (key === 'dyn' || key === 'full') $('[data-or="gap"]', box).disabled = rule.full == null;
-    } else if ('orshown' in el.dataset) {
-      ovSetShown(OV.cfg.lines[+el.closest('.ov-line').dataset.i], ovRuleOf(el), el.value);
+    } else if ('olshown' in el.dataset) {
+      const line = OV.cfg.lines[+el.closest('.ov-line').dataset.i];
+      ovSetShown(line, line.rules.find(x => x.limit), el.value);
       ovRenderLines();
     } else if ('ortry' in el.dataset) {
       const r = ovRuleOf(el);
@@ -649,7 +631,6 @@ function bindOverlay() {
       ovSave();
     } catch { toast({ title: t('ov.soundBad'), err: true }); }
   });
-  $('#ovStyle').addEventListener('click', e => { if (e.target.dataset.style) ovSetStyle(e.target.dataset.style); });
   ovShowBg();
   $('#ovBgFile').addEventListener('change', e => { if (e.target.files[0]) ovSetBg(e.target.files[0]); e.target.value = ''; });
   $('#ovBgRemove').addEventListener('click', () => { store.set('overlayBg', ''); ovShowBg(); });

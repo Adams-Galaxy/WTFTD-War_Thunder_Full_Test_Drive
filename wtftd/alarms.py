@@ -566,10 +566,22 @@ def closeness(cfg: dict, place: tuple, pct: dict, values: dict) -> float | None:
     return min(1.0, max(0.0, (v - a["at"]) / (a["full"] - a["at"])))
 
 
-def pace(cfg: dict, place: tuple, close: float | None) -> float:
-    """Seconds from one beep to the next: the gap shrinks as the alarm nears its break, the beeps touch at it."""
+def pace(cfg: dict, place: tuple, close: float | None, ms: float | None = None) -> float:
+    """Seconds from one beep to the next: the gap shrinks as the alarm nears its break, the beeps touch at it. ms: the
+    sound's length, when it isn't the beep's (a file)."""
     a = sound_of(cfg, place)
-    return (a.get("repeat") or cfg["repeat"]) / 1000 if close is None else (a["ms"] + a["gap"] * (1 - close)) / 1000
+    return (a.get("repeat") or cfg["repeat"]) / 1000 if close is None else ((ms or a["ms"]) + a["gap"] * (1 - close)) / 1000
+
+
+def sound_ms(alarm: dict, folder: Path | None) -> float:
+    """How long an alarm's sound lasts, ms: its file's length (a long one played at a beep's pace would start over and
+    over), else its beep's."""
+    path = folder / alarm["sound"] if folder and alarm.get("sound") else None
+    try:
+        with wave.open(io.BytesIO(scaled(str(path), path.stat().st_mtime, 100)), "rb") as w:
+            return w.getnframes() / w.getframerate() * 1000
+    except (AttributeError, OSError, EOFError, wave.Error, ZeroDivisionError):
+        return alarm["ms"]
 
 
 def _value(m: re.Match, values: dict) -> str:
@@ -858,6 +870,36 @@ def game_focused() -> bool:
     return name.value == GAME_WINDOW_CLASS
 
 
+def tried_state(rule: dict, value: float, text: str = "") -> tuple:
+    """The sample reading with a tried alarm's value in it, so that every line shows it: a limit's % gives the speed, G
+    or angle of attack it means; the airframe's, from a line showing the Mach number (text), the Mach number. Returns
+    (reading, the limit tried or None, its %)."""
+    st, lim = dict(SAMPLE_STATE), SAMPLE_LIM
+    name = rule.get("limit") or rule["value"]
+    limit = name if name in ALARMS else name[:-4] if name.endswith("_pct") and name[:-4] in ALARMS else None
+    k = value / 100
+    if limit == "airframe" and "{mach}" in text:
+        st["M"] = k * lim["m"]
+        st["IAS, km/h"] = min(st["IAS, km/h"], 0.9 * k * lim["v"])  # under the Mach number's share: it's what's tried
+    elif limit in ("airframe", "gear", "flaps"):
+        top = {"airframe": lim["v"], "gear": lim["gear"], "flaps": flaps_limit(lim["flaps"], st["flaps, %"] / 100)}[limit]
+        st["TAS, km/h"] = st["TAS, km/h"] / st["IAS, km/h"] * k * top
+        st["IAS, km/h"] = k * top
+        st["M"] = min(st["M"], 0.9 * k * lim["m"]) if limit == "airframe" else st["M"]  # under the IAS's share: it's what's tried
+        st["gear, %"] = 100 if limit == "gear" else st["gear, %"]
+    elif limit == "load":
+        st["Ny"] = k * load_limits(lim, st)[1]
+    elif limit == "aoa":
+        st["AoA, deg"] = k * aoa_limits(lim, st)[1]
+    elif name == "fuel_pct":
+        st["Mfuel, kg"] = k * st["Mfuel0, kg"]
+    elif name not in COMPUTED and name != "fuel_time":
+        st[FIELDS.get(name, (name,))[0]] = value
+        if name == "ias":
+            st["TAS, km/h"] = SAMPLE_STATE["TAS, km/h"] / SAMPLE_STATE["IAS, km/h"] * value
+    return st, limit, value
+
+
 SAMPLE_FEEDS = {"chat": ["[All] Pilot_1: o7", "[Team] Pilot_2: gear down, landing"],
                 "log": ["Pilot_3 (F-16A) shot down Pilot_4 (MiG-29)", "Pilot_5 (Su-27) has achieved \"Wingman\""]}
 
@@ -1077,13 +1119,14 @@ class Watch:
             self.trial, self.glow = None, None
             return []
         rule = cfg["lines"][i]["rules"][j]
-        values = {**SAMPLE_STATE, **SAMPLE_STATS, "vehicle": self.vehicle(SAMPLE_VEHICLE), "wep": "4:32", "wep_s": 272,
-                  **computed(SAMPLE_LIM, SAMPLE_STATE, self.words, {"burn": 95, "accel": 1.2}, cfg["pctAlways"])}
-        pct = percents(SAMPLE_LIM, SAMPLE_STATE)
-        if rule["limit"]:
-            pct[rule["limit"]] = values[f"{rule['limit']}_pct"] = t["value"]
-        else:
-            values[FIELDS.get(rule["value"], (rule["value"],))[0]] = t["value"]
+        state, limit, value = tried_state(rule, t["value"], cfg["lines"][i]["text"])
+        values = {**state, **SAMPLE_STATS, "vehicle": self.vehicle(SAMPLE_VEHICLE), "wep": "4:32", "wep_s": 272,
+                  **computed(SAMPLE_LIM, state, self.words, {"burn": 95, "accel": 1.2}, cfg["pctAlways"])}
+        pct = percents(SAMPLE_LIM, state)
+        if limit:
+            pct[limit] = values[f"{limit}_pct"] = value
+        elif rule["value"] in COMPUTED or rule["value"] == "fuel_time":  # worked out from the readings: set as it is
+            values[rule["value"]] = value
         mine = lambda places: [x for x in places if x == (i, j)]
         on = self.held(cfg, mine(own_alerts(cfg, values, pct)), "beep", t["since"])
         red = self.held(cfg, mine(own_alerts(cfg, values, pct, red=True)), "red", t["since"])
@@ -1293,9 +1336,8 @@ class Watch:
         if vehicle:
             return self.drive(vehicle)
         if state is None:
-            self.glow = None
             if not self.trial:
-                self.ringing = None
+                self.glow = self.ringing = None
             self.display = self.trial_frame() if self.trial else self.sample(self.preview) if self.preview else []
             self.hud = self.sample_hud(self.preview, self.preview_key, self.hud_place) if self.preview else []
             self.hud_live, self.attitude, self.glide = None, hud.Attitude(), hud.Glide()
@@ -1365,15 +1407,17 @@ class Watch:
         if not close:
             self.ringing = None
             return
-        sounds, played = [], set()  # the same alarm on two lines (IAS and Mach) beeps once
+        sounds, played, waits = [], set(), []  # the same alarm on two lines (IAS and Mach) beeps once
         for name, c in close:
             sound = sound_of(cfg, name)
+            ms = sound_ms(sound, self.sounds)
+            waits.append(pace(cfg, name, c, ms))
             sound = {**sound, "ms": max(sound["ms"], cfg["pollMs"] * 2)} if c == 1 else sound
             if (sound["sound"], sound["hz"], sound["ms"]) not in played:
                 played.add((sound["sound"], sound["hz"], sound["ms"]))
                 sounds.append(sound)
         fresh = max(RING_S, 2 * cfg["pollMs"] / 1000)
-        self.ringing = (time.monotonic() + fresh, min(pace(cfg, name, c) for name, c in close), sounds, cfg["volume"])
+        self.ringing = (time.monotonic() + fresh, min(waits), sounds, cfg["volume"])
         self.chime()
 
     def chime(self) -> float | None:
