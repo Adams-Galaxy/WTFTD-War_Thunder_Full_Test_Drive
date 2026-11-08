@@ -835,6 +835,26 @@ class Watching(unittest.TestCase):
         self.assertEqual(self.watch.display[2][1], self.watch.cfg["alert"])
         self.assertEqual(self.beep.call_args.args[0], 1000)  # the gear's pitch, continuous past its limit
 
+    def test_trying_in_flight_never_shows_the_flight_s_overlay_in_between(self):  # the window draws every 16 ms
+        rule = {"limit": "airframe", "glow": True}
+        self.watch.set_config(alarms.clean({"lines": [{"text": "IAS {ias}", "rules": [rule]}]}, WORDS), {})
+        seen = []
+
+        class Spy(alarms.Watch):  # every overlay and glow the window could catch, as they're set
+            def __setattr__(spy, name, value):
+                if name in ("display", "glow"):
+                    seen.append((name, value))
+                object.__setattr__(spy, name, value)
+
+        self.watch.__class__ = Spy
+        with mock.patch.object(self.watch, "start_overlay"):
+            self.watch.set_trial("", (0, 0), 96)
+            seen.clear()
+            for _ in range(3):
+                self.fly()  # 500 km/h: no alarm of the flight
+        self.assertTrue(all(v and v[0][0] == "IAS 1481" for n, v in seen if n == "display"), seen)  # never the flight's 500
+        self.assertTrue(all(v for n, v in seen if n == "glow"), seen)  # the glow never off in between
+
     def test_try_a_value_alarm_and_its_glow(self):
         rule = {"value": "fuel_pct", "op": "<", "at": 15, "red": 25, "glow": True, "color": "#FFA500"}
         self.watch.set_config(alarms.clean({"lines": [{"text": "FUEL {fuel_pct}", "rules": [rule]}]}, WORDS), {})

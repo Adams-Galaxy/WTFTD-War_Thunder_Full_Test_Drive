@@ -1424,14 +1424,21 @@ class Watch:
         self.broken |= {k for k in ("gear", "flaps") if pct.get(k, 0) >= 100}  # past its breaking speed: torn off
         on = self.held(cfg, [] if wreck else own_alerts(cfg, values, pct), "beep")
         red = self.held(cfg, [] if wreck else own_alerts(cfg, values, pct, red=True), "red")  # their lines red
-        self.warn, self.on = bool(red or on), [sound_of(cfg, x)["limit"] for x in on]  # the HUD lights its speed with these
-        self.glow = glow_of(cfg, red + [x for x in on if x not in red])
+        self._real = (state, lim, values) if lim else None
+        # My overlay's Try in flight: its alarm, unless one of the flight's is on. Decided first: the window, drawing
+        # every 16 ms, would catch the flight's overlay and glow between two of the trial's (text and glow flickering)
+        trying = bool(self.trial) and not (on or red)
+        self.on = [sound_of(cfg, x)["limit"] for x in on]  # the HUD lights its speed with these
+        if not trying:
+            self.warn, self.glow = bool(red or on), glow_of(cfg, red + [x for x in on if x not in red])
         note = self.words["unknown"] if not lim else self.words["unbreakable"] if self._unbreakable else None
         tint = cfg["alert"] if not lim else cfg["color"]
         status = [(note, tint, cfg["size"], False, 0, [(note, tint, False)])] if note else []
         hidden = (wreck and cfg["hideCrash"]) or (not lim and cfg["hideUnknown"])
         self.read_feeds(cfg)
-        if self.sheet and lim:
+        if trying:
+            self.display = self.trial_frame(self._real)  # its lines, its glow, its beeps
+        elif self.sheet and lim:
             rows = sheet(lim, state, self.words, self.vehicle(self.current))
             self.display = [(x, cfg["color"], cfg["size"], False, 0, [(x, cfg["color"], False)]) for x in rows]
         else:
@@ -1444,10 +1451,7 @@ class Watch:
             self.read_map()
         rpm = _engines(state)[0]
         silent = self.muted or (cfg["soundFocus"] and not game_focused()) or (cfg["soundEngine"] and rpm and not any(rpm))
-        self._real = (state, lim, values) if lim else None
-        if self.trial and not (on or red):  # My overlay's Try in flight: its alarm, unless one of the flight's is on
-            self.display = self.trial_frame(self._real)
-        else:
+        if not trying:
             self.ring(cfg, [] if silent else on, pct, values)
         return min(cfg["pollMs"] / 1000, HUD_POLL_S) if self.hud_live or fast else cfg["pollMs"] / 1000
 
