@@ -4,7 +4,7 @@ What changed in each version of WTFTD. Downloads: [Releases](https://github.com/
 (only the latest version is kept there; from 0.19.0 on, each version's code stays available through its git tag).
 Versions follow `major.minor.patch`; "beta" until 1.0.
 
-## Not released yet
+## 0.28.1 - 2026-11-08
 
 - **A gauge's length and step**: with *Gauge* or *Value and gauge*, a line sets its gauge's **Blocks** (1 to 40) and
   **Step** (% each block is worth): 20 blocks of 5 % for a finer one, 12 of 10 % to see past 100 %. Changing the blocks
