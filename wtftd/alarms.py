@@ -659,7 +659,8 @@ def shown(line: dict, values: dict, on: list, i: int = -1) -> bool:
 
 
 def lines_for(cfg: dict, values: dict, on: list, feeds: dict | None = None) -> list:
-    """[(text, colour, size, blinks, block, parts), ...] of the overlay; parts: [(text, colour, blinks), ...]. on: the
+    """[(text, colour, size, blinks, block, parts), ...] of the overlay; parts: [(text, colour, blinks[, colour out of its
+    turn]), ...], blinks: False, or its clock (see clock). on: the
     alarms whose lines go red, by (line, alarm) place: a line takes the colour of the last of its own that is on, and
     flashes the parts they ask. A block's title comes first; a block of the chat or the battle log shows feeds' lines."""
     blocks = [cfg, *cfg["blocks"]]
@@ -682,12 +683,15 @@ def lines_for(cfg: dict, values: dict, on: list, feeds: dict | None = None) -> l
         tints = {"name": color, "value": color if mine else line.get("valueColor") or cfg["valueColor"] or color,
                  "unit": color if mine else line.get("unitColor") or cfg["unitColor"] or color}
         flash = {part: clock(rule) for rule in mine for part in rule.get("blink", ())}  # the last alarm's, by part
+        own = line["color"] or cfg["color"]  # a flashing part out of its turn: the line's colours, still readable
+        off = {"name": own, "value": line.get("valueColor") or cfg["valueColor"] or own, "unit": line.get("unitColor") or cfg["unitColor"] or own}
         parts = []
         for piece, kind in pieces(line["text"], values):
-            if parts and parts[-1][1:] == (tints[kind], flash.get(kind, False)):
-                parts[-1] = (parts[-1][0] + piece, tints[kind], flash.get(kind, False))
+            tail = (tints[kind], flash[kind], off[kind]) if kind in flash else (tints[kind], False)
+            if parts and parts[-1][1:] == tail:
+                parts[-1] = (parts[-1][0] + piece, *tail)
             else:
-                parts.append((piece, tints[kind], flash.get(kind, False)))
+                parts.append((piece, *tail))
         row(text, color, line["size"] or cfg["size"], block, parts)
     return out
 
@@ -1484,12 +1488,12 @@ class Watch:
             return r[1]
 
     def lit(self, beat=True) -> bool:
-        """Whether what flashes on this clock is lit now. True: with each beep, as long as it sounds, while alarms ring
-        (so it closes in with them, and stays lit when they're continuous), else at FLASH_MS (an alarm only red, or
-        muted); a number: that cycle, ms."""
+        """Whether what flashes on this clock is lit now. True: from each beep, as long as it sounds and half the beat at
+        least, while alarms ring (so it closes in with them, and stays lit when they're continuous), else at FLASH_MS (an
+        alarm only red, or muted); a number: that cycle, ms."""
         r, now = self.ringing, time.monotonic()
-        if beat is True and r and now <= r[0]:
-            return now - self._last_beep < r[4]
+        if beat is True and r and now <= r[0]:  # from each beep, half the beat at least: the alarm's look stays the main one
+            return now - self._last_beep < max(r[4], r[1] / 2)
         return int(now * 2000 / (FLASH_MS if beat is True else beat)) % 2 == 0
 
     def bell(self):

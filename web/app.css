@@ -1344,7 +1344,7 @@ body.no-sidebar .sidebar, body.no-sidebar #compareTray { display: none; }
 .fl-views input[type=text] { width: 200px; }
 .ov-text:empty, .ov-text:has(> .ov-grip:only-child) { min-width: 48px; min-height: 18px; }  /* a block with no line yet */
 .ov-blink { animation: ov-blink var(--ov-flash, 500ms) step-end infinite; }
-@keyframes ov-blink { 50% { opacity: 0; } }
+@keyframes ov-blink { 50% { color: var(--ov-off, transparent); } }  /* its colour out of its turn: still readable */
 .ov-group { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
 .ov-group b { width: 100%; font-size: 12px; color: var(--text-2); }
 .ov-chip { border: 0; cursor: pointer; }

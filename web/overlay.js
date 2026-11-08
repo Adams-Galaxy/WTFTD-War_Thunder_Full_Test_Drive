@@ -107,7 +107,7 @@ function ovDraw() {
   const k = box.clientWidth / OV.screen[0];
   const look = { fontFamily: `"${c.font}", monospace`, fontWeight: c.bold ? 700 : 400, fontStyle: c.italic ? 'italic' : 'normal' };
   const stroke = scale => (c.outline ? `${2 * c.outline * scale}px ${c.outlineColor}` : '');
-  const html = (rows, scale) => rows.map(([s, color, size, blinks, , parts]) => `<div style="color:${esc(color)};font-size:${size * scale}px;margin-bottom:${c.spacing * scale}px">${(parts || []).map(([p, tint, flash]) => `<span class="${flash ? 'ov-blink' : ''}" style="color:${esc(tint)};--ov-flash:${flash === true ? 400 : flash}ms">${esc(p)}</span>`).join('') || '&nbsp;'}</div>`).join('');
+  const html = (rows, scale) => rows.map(([s, color, size, blinks, , parts]) => `<div style="color:${esc(color)};font-size:${size * scale}px;margin-bottom:${c.spacing * scale}px">${(parts || []).map(([p, tint, flash, off]) => `<span class="${flash ? 'ov-blink' : ''}" style="color:${esc(tint)};--ov-flash:${flash === true ? 400 : flash}ms;--ov-off:${esc(off || 'transparent')}">${esc(p)}</span>`).join('') || '&nbsp;'}</div>`).join('');
   [c, ...c.blocks].forEach((spot, i) => {
     const text = ovBlockEl(i), rows = OV.lines.filter(l => (l[4] || 0) === i), boxed = spot.frame || spot.background, pad = boxed ? (10 + spot.frame) * k : 0;
     Object.assign(text.style, look, { left: `${spot.x * k}px`, top: `${spot.y * k}px`, opacity: c.opacity / 100, webkitTextStroke: stroke(k),

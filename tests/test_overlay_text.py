@@ -53,6 +53,14 @@ class Text(unittest.TestCase):
         px, box = self.painter.text_pixels(cfg, [line("I")])
         self.assertIn(self.alpha(px, box, 100 - 8, 50 - 8), range(120, 136))  # inside the padding: half see-through
 
+    def test_a_flashing_part_out_of_its_turn_keeps_its_place_in_another_colour(self):
+        lines = [line("W", parts=[("W", "#FF0000", True, "#00FF00")])]
+        lit, box = self.painter.text_pixels(self.cfg, lines, True)
+        dark, box2 = self.painter.text_pixels(self.cfg, lines, False)
+        self.assertEqual(box, box2)
+        self.assertEqual([i for i in range(3, len(lit), 4) if lit[i]], [i for i in range(3, len(dark), 4) if dark[i]])  # the same pixels
+        self.assertNotEqual(lit, dark)  # in another colour
+
     def test_a_blinking_line_out_of_its_turn(self):
         lines = [line("W", blinks=True)]
         lit, box = self.painter.text_pixels(self.cfg, lines, True)

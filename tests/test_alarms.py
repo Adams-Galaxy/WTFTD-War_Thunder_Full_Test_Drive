@@ -285,7 +285,9 @@ class Settings(unittest.TestCase):
 
     def test_only_the_parts_asked_flash(self):
         cfg = self.line(text="IAS {ias} km/h", rules=[{**alarms.limit_alarm("gear"), "blink": ["value"]}])
-        self.assertEqual([x[2] for x in alarms.lines_for(cfg, {"IAS, km/h": 700}, [(0, 0)])[0][5]], [False, True, False])
+        parts = alarms.lines_for(cfg, {"IAS, km/h": 700}, [(0, 0)])[0][5]
+        self.assertEqual([x[2] for x in parts], [False, True, False])
+        self.assertEqual(parts[1][3], cfg["color"])  # out of its turn the value keeps the line's colour: never hidden
 
     def test_several_conditions(self):
         test = {"value": "alt", "op": "<", "at": 100, "more": [{"value": "ias", "op": ">", "at": 300}]}
@@ -775,7 +777,7 @@ class Watching(unittest.TestCase):
         clock = [100.0]
         with mock.patch.object(alarms.time, "monotonic", side_effect=lambda: clock[0]):
             self.watch.ring(self.watch.cfg, [(0, 0)], {"airframe": 95}, {})  # a beep now, the next in 0.5 s
-            for at, lit in ((0.1, True), (0.2, False), (0.45, False)):
+            for at, lit in ((0.1, True), (0.2, True), (0.3, False), (0.45, False)):  # half of the 0.5 s beat at least
                 clock[0] = 100 + at
                 self.assertEqual(self.watch.lit(), lit, at)
             self.watch.ring(self.watch.cfg, [(0, 0)], {"airframe": 100}, {})  # at the break: lit throughout

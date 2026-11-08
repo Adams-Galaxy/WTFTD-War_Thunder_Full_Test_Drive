@@ -11,8 +11,10 @@ Versions follow `major.minor.patch`; "beta" until 1.0.
   of it, or a condition on any value. Each has its **Red from** and **Beeps from** thresholds, its beeps closing in up to
   one continuous sound at the break (100 % of a limit, or **Continuous at** a value; spaced by the **Gap at the
   threshold**, 700 ms by default), its sound, its own **colour** (the last alarm on wins: orange first, then red), the
-  parts of the line that **flash** (name, value, unit) and their **Flash cycle** (empty: with its beeps, lit as long as
-  each one sounds, so the flashes close in with them), its **Repeat every**, **Only after** (it must last that long) and
+  parts of the line that **flash** (name, value, unit) and their **Flash cycle** (empty: with its beeps, so the flashes
+  close in with them; in the alarm's colour from each beep for half the beat at least, steady once the sound is
+  continuous). A flashing part is never hidden: out of its turn it takes the line's colour, so its value stays readable
+  instead of jumping when it comes back. Its **Repeat every**, **Only after** (it must last that long) and
   its **glow around the screen** (in its colour, its depth, flashing or not). The *Alert colour with* menu, the Alarms
   tab's settings, the overlay's own glow, repeat and flash cycle are gone: that tab is now **Sounds** (volume, output);
   an alarm without a repeat of its own beeps every 300 ms. Saved overlays move over once: each line gets the alarm it followed, as it was set, every alarm the

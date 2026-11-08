@@ -326,7 +326,8 @@ class Painter:
 
     def text_layout(self, cfg: dict, lines: list) -> tuple:
         """Where each part of each line goes, as the Tk overlay laid them out: each block's lines in its columns, a column
-        as wide as its widest line. Returns ([(x, y, text, colour, size, blinks)...], [(block, box)...]) in screen pixels."""
+        as wide as its widest line. Returns ([(x, y, text, colour, size, blinks, colour out of its turn)...], [(block, box)...])
+        in screen pixels."""
         from .alarms import columns_of  # here: alarms imports this module
         parts, boxes = [], []
         for index, spot in enumerate([cfg, *cfg["blocks"]]):
@@ -338,7 +339,7 @@ class Painter:
                     font, _, _, height = self._text_font(cfg, size)
                     x = left
                     for text, tint, *flash in row or [(" ", color)]:  # each part flashes on its own, or with its line
-                        parts.append((x, y, text, tint, size, flash[0] if flash else blinks))
+                        parts.append((x, y, text, tint, size, flash[0] if flash else blinks, flash[1] if len(flash) > 1 else None))
                         x += self._width(text, font)
                     y += height + cfg["spacing"]
                     wide = max(wide, x - left)
@@ -369,8 +370,12 @@ class Painter:
                                      x1 - x0 + 2 * pad - spot["frame"], y1 - y0 + 2 * pad - spot["frame"])
                 gp.GdipDeletePen(pen)
         outline = cfg["outline"]
-        for x, y, text, tint, size, blinks in parts:  # lit: a bool, or the clock of what flashes (alarms.Watch.lit)
-            if blinks and not (lit(blinks) if callable(lit) else lit) or not text.strip():
+        for x, y, text, tint, size, blinks, off in parts:  # lit: a bool, or the clock of what flashes (alarms.Watch.lit)
+            if blinks and not (lit(blinks) if callable(lit) else lit):
+                if not off:  # nothing else to show: hidden out of its turn
+                    continue
+                tint = off  # its colour out of its turn: the value stays readable, no jump when it comes back
+            if not text.strip():
                 continue
             _, family, style, _ = self._text_font(cfg, size)
             path, brush = P(), P()
