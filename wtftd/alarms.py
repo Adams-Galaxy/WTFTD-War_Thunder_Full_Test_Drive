@@ -54,6 +54,7 @@ PICTURE_S = 2.0  # a map's picture not had yet (the game not ready, a battle joi
 TRAIL_MAX = 600  # its trail's last places
 IDLE_S = 1.0  # not flying: nothing to read fast
 TRY_S = 60  # My overlay's Try, left alone this long, stops: the page that started it may be gone
+RING_S = 0.5  # what rings, not told again for this long (two readings at least), stops: muted, landed, the app gone
 HANGAR_IAS = 1  # km/h: the aircraft on show in the hangar reads 0 or 1
 REPEAT_MS = 300
 BEEP_MS = 150
@@ -991,6 +992,9 @@ class Watch:
         self._saved = (None, None)
         self._key, self._lim, self._unbreakable = None, None, False
         self._last_beep = 0.0
+        self.ringing = None  # (until when, seconds between beeps, sounds, volume): what the bell plays, see ring
+        self._bell = threading.Lock()
+        self._wake = threading.Event()  # a trial starting: no waiting out a second's sleep
         self.broken = set()  # gear or flaps torn off: their alarms stay silent until the next spawn
         self._since = {}  # {((line, alarm), "beep" or "red"): since when it's on}, for the alarms that must last
         self.wep = Wep()
@@ -1054,8 +1058,9 @@ class Watch:
             if key is not None and place else None
         if self.trial:
             self.start_overlay()
+            self._wake.set()
         else:
-            self.glow = None
+            self.glow = self.ringing = None
         return self.trial_frame()
 
     def shown_cfg(self) -> dict:
@@ -1083,8 +1088,7 @@ class Watch:
         on = self.held(cfg, mine(own_alerts(cfg, values, pct)), "beep", t["since"])
         red = self.held(cfg, mine(own_alerts(cfg, values, pct, red=True)), "red", t["since"])
         self.warn, self.glow = bool(red or on), glow_of(cfg, red or on)
-        if not self.muted:
-            self.ring(cfg, on, pct, values)
+        self.ring(cfg, [] if self.muted else on, pct, values)
         return lines_for(cfg, values, red, SAMPLE_FEEDS)
 
     def read_feeds(self, cfg: dict):
@@ -1290,6 +1294,8 @@ class Watch:
             return self.drive(vehicle)
         if state is None:
             self.glow = None
+            if not self.trial:
+                self.ringing = None
             self.display = self.trial_frame() if self.trial else self.sample(self.preview) if self.preview else []
             self.hud = self.sample_hud(self.preview, self.preview_key, self.hud_place) if self.preview else []
             self.hud_live, self.attitude, self.glide = None, hud.Attitude(), hud.Glide()
@@ -1322,7 +1328,7 @@ class Watch:
             self.display = self.sample(self.preview) if self.preview else []
             self.hud = self.sample_hud(self.preview, self.preview_key, self.hud_place) if self.preview else []
             self.hud_live = self.map_live = None
-            self.warn = False
+            self.warn, self.ringing = False, None
             return min(cfg["pollMs"] / 1000, HUD_POLL_S) if fast else cfg["pollMs"] / 1000
         pct = {k: v for k, v in percents(lim, state).items() if k not in self.broken} if lim and not self._unbreakable and not wreck else {}
         self.broken |= {k for k in ("gear", "flaps") if pct.get(k, 0) >= 100}  # past its breaking speed: torn off
@@ -1348,24 +1354,47 @@ class Watch:
             self.read_map()
         rpm = _engines(state)[0]
         silent = self.muted or (cfg["soundFocus"] and not game_focused()) or (cfg["soundEngine"] and rpm and not any(rpm))
-        if not silent:
-            self.ring(cfg, on, pct, values)
+        self.ring(cfg, [] if silent else on, pct, values)
         return min(cfg["pollMs"] / 1000, HUD_POLL_S) if self.hud_live or fast else cfg["pollMs"] / 1000
 
     def ring(self, cfg: dict, on: list, pct: dict, values: dict):
         """The alarms on beep together, as often as the one nearest its break asks: a dynamic alarm goes from spaced beeps
-        at its threshold to one continuous sound at its break (its beeps then last two readings, so that they touch)."""
+        at its threshold to one continuous sound at its break (its beeps then last two readings, so that they touch).
+        Tells the bell, which beeps between readings too: at a reading's pace a gap would be rounded up to the next one."""
         close = [(name, closeness(cfg, name, pct, values)) for name in on]
-        if not close or time.monotonic() - self._last_beep < min(pace(cfg, name, c) for name, c in close):
+        if not close:
+            self.ringing = None
             return
-        self._last_beep = time.monotonic()
-        played = set()  # the same alarm on two lines (IAS and Mach) beeps once
+        sounds, played = [], set()  # the same alarm on two lines (IAS and Mach) beeps once
         for name, c in close:
             sound = sound_of(cfg, name)
             sound = {**sound, "ms": max(sound["ms"], cfg["pollMs"] * 2)} if c == 1 else sound
             if (sound["sound"], sound["hz"], sound["ms"]) not in played:
                 played.add((sound["sound"], sound["hz"], sound["ms"]))
-                play(sound, cfg["volume"], self.sounds)
+                sounds.append(sound)
+        fresh = max(RING_S, 2 * cfg["pollMs"] / 1000)
+        self.ringing = (time.monotonic() + fresh, min(pace(cfg, name, c) for name, c in close), sounds, cfg["volume"])
+        self.chime()
+
+    def chime(self) -> float | None:
+        """Plays what rings if its time has come. Returns the seconds until it next does, None if nothing rings."""
+        with self._bell:
+            r, now = self.ringing, time.monotonic()
+            if not r or now > r[0]:
+                return None
+            left = self._last_beep + r[1] - now
+            if left > 0:
+                return left
+            self._last_beep = now
+            for sound in r[2]:
+                play(sound, r[3], self.sounds)
+            return r[1]
+
+    def bell(self):
+        """The beeps between two readings, each on its time."""
+        while not self.stopping.is_set():
+            left = self.chime()
+            time.sleep(min(left, 0.05) if left else 0.05)
 
     def drive(self, values: dict) -> float:
         """A tank or a ship: curves, logs and its overlay ("type:tank", "type:ship": an aircraft's lines mean nothing there);
@@ -1388,17 +1417,18 @@ class Watch:
             self.display = lines_for(cfg, values, red, self.feeds) if cfg else []
         if cfg:
             self.cfg = cfg
-        if not self.muted:
-            self.ring(self.cfg, on, {}, values)
+        self.ring(self.cfg, [] if self.muted else on, {}, values)
         return self.cfg["pollMs"] / 1000
 
     def run(self):
+        threading.Thread(target=self.bell, daemon=True).start()
         while True:
             try:
                 wait = self.tick()
             except Exception:  # never let the alarms thread die
                 wait = IDLE_S
-            time.sleep(wait)
+            self._wake.wait(wait)
+            self._wake.clear()
 
     def stop(self):
         self.set_log(False)

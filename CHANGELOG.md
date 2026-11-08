@@ -24,6 +24,9 @@ Versions follow `major.minor.patch`; "beta" until 1.0.
   weapons: the game doesn't tell their mass, so loaded the limit reads high), the critical angle of attack between flaps
   up and full flaps. New values for lines and curves: G limit, negative G limit, G load and AoA in % of their limit,
   critical AoA. The game data is rebuilt once.
+- **Beeps on their exact pace**: they could only come with a reading of the game (every 100 ms), so each gap was rounded
+  up to the next one and the beeps closed in by jumps (0.30 s instead of 0.22 at 99 % of a limit). A bell of its own
+  now plays them on time, in flight and when trying an alarm, whose first beep no longer waits up to a second.
 - **Gear and flaps torn off**: past their breaking speed, their alarm goes quiet until the next spawn.
 - **WEP left** (aircraft with water or methanol injection): time of WEP left, counted from the spawn while a throttle is
   past 100 %.

@@ -747,6 +747,20 @@ class Watching(unittest.TestCase):
         self.watch.tick()  # the next spawn picks its own again
         self.assertIsNone(self.watch.forced)
 
+    def test_the_bell_beeps_between_readings(self):  # 0.22 s apart at 99 %, not rounded up to the next reading (0.3 s)
+        self.watch.set_config(airframe(at=90, ms=150, gap=700), {})
+        clock = [100.0]
+        with mock.patch.object(alarms.time, "monotonic", side_effect=lambda: clock[0]):
+            self.watch.ring(self.watch.cfg, [(0, 0)], {"airframe": 99}, {})
+            self.beep.assert_called_once()
+            self.assertAlmostEqual(self.watch.chime(), 0.22)  # the bell's wait
+            clock[0] += 0.22
+            self.watch.chime()
+            self.assertEqual(self.beep.call_count, 2)
+            clock[0] += 1  # no reading told it again: it stops by itself
+            self.assertIsNone(self.watch.chime())
+            self.assertEqual(self.beep.call_count, 2)
+
     def test_try_an_alarm(self):  # My overlay's Try: the IAS line's airframe alarm at a value set by hand
         cfg = self.watch.base
         with mock.patch.object(self.watch, "start_overlay"):
