@@ -16,6 +16,9 @@ Versions follow `major.minor.patch`; "beta" until 1.0.
   tab's settings and the overlay's own glow are gone: that tab is now **Sounds** (volume, output, repeat), the flash
   cycle is in Look. Saved overlays move over once: each line gets the alarm it followed, as it was set, every alarm the
   glow if it was on, and G load and angle of attack get lines shown **During its alarm** (a new *Shows* choice).
+- **Limit shown as, per line**: a line following one of the aircraft's limits shows it as its value against the limit
+  (*640 / 700 km/h*), in % of it (*91 %*) or both, chosen in that alarm's card; the choice above the lines still sets
+  them all at once.
 - **Try each alarm**: **Try**, next to *Test*, gives the alarm a slider of the value it follows (its limit's %, or its
   value), from quiet to past its break. Moving it shows the overlay on your screen as it would be at that value (the
   line red, flashing, its glow) and beeps as in flight, closing in, after its delay; only that alarm reacts. **Stop**

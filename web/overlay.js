@@ -11,6 +11,16 @@ const OV_TYPES = ['fighter', 'assault', 'bomber', 'helicopter', 'jet', 'prop', '
 const OV_WHEN = ['always', 'gear', 'flaps', 'airbrake', 'alarm', 'own', 'log'];
 const OV_LIMITS = { airframe: [93, 1400], gear: [90, 1000], flaps: [90, 700], load: [90, 1200], aoa: [90, 500] };  // an alarm on the aircraft's limit: %, Hz
 const OV_PARTS = ['name', 'value', 'unit'];  // what of a line can flash with its alarm
+// a line's limit shown as its value against the limit, % of it, or both: the part of its text after its name
+const OV_SHOWN = {
+  airframe: ['{ias} / {vne} km/h {swept}', '{airframe_pct} % {swept}', '{ias} / {vne} km/h  {airframe_pct} % {swept}'],
+  mach: ['{mach} / {mne}', '{airframe_pct} %', '{mach} / {mne}  {airframe_pct} %'],
+  gear: ['{ias} / {gear_max} km/h', '{gear_pct} %', '{ias} / {gear_max} km/h  {gear_pct} %'],
+  flaps: ['{ias} / {flaps_max} km/h', '{flaps_pct} %', '{ias} / {flaps_max} km/h  {flaps_pct} %'],
+  load: ['{g} / {g_lim}', '{load_pct} %', '{g} / {g_lim}  {load_pct} %'],
+  aoa: ['{aoa} / {aoa_crit}°', '{aoa_pct} %', '{aoa} / {aoa_crit}°  {aoa_pct} %'],
+};
+const OV_SHOWN_AS = ['value', 'percent', 'both'];
 const OV_FONTS = ['Consolas', 'Cascadia Mono', 'Courier New', 'Lucida Console', 'Segoe UI', 'Bahnschrift', 'Arial', 'Tahoma', 'Verdana', 'Impact'];
 const OV_VALUES = {
   vehicle: ['vehicle'],
@@ -145,13 +155,15 @@ function ovTestHTML(part, label, test) {
 // one of a line's alarms: on one of the aircraft's limits (in % of it), or on any value. Its thresholds (red, beep, the
 // value where the beeps become continuous), its sound, and the line in it: colour, the parts that flash, repeat, delay
 function ovRuleHTML(r, i, j) {
-  const tried = OV.trying?.i === i && OV.trying?.j === j;
+  const tried = OV.trying?.i === i && OV.trying?.j === j, l = OV.cfg.lines[i];
+  const shown = r.limit && l.rules.find(x => x.limit) === r
+    ? ovField(t('ov.shownAs'), `<select data-orshown>${OV_SHOWN_AS.map(x => ovOpt(x, t('ov.shown.' + x), ovShownAs(l, r))).join('')}</select>`) : '';
   const num = (key, label, value, extra = '') => ovField(label, `<input type="number" data-or="${key}" value="${value ?? ''}"${extra}>`);
   const row = (label, html) => `<div class="ov-test"><span class="ov-test-name">${esc(label)}</span><div class="ov-dyn-row">${html}</div></div>`;
   const gap = num('gap', t('ov.gap'), r.gap, ` min="0" max="5000" step="50"${r.full == null ? ' disabled' : ''}`);
   const withBeep = ` placeholder="${esc(t('ov.withBeep'))}"`;
   const levels = r.limit
-    ? row(t('ov.alarm.' + r.limit), `${num('red', t('ov.redFrom'), r.red, ` min="1" max="200"${withBeep}`)}${num('at', t('ov.beepFrom'), r.at, ' min="1" max="200"')}${gap}
+    ? row(t('ov.alarm.' + r.limit), `${shown}${num('red', t('ov.redFrom'), r.red, ` min="1" max="200"${withBeep}`)}${num('at', t('ov.beepFrom'), r.at, ' min="1" max="200"')}${gap}
         <label class="switch"><input type="checkbox" data-or="dyn"${r.full != null ? ' checked' : ''}><span class="sw"></span><span>${esc(t('ov.dynamic'))}</span></label>`)
     : ovTestHTML('rule', t('ov.ownAlert'), r) + row('', `${num('red', t('ov.redFromValue'), r.red, ` step="any"${withBeep}`)}
         ${num('full', t('ov.fullAt'), r.full, ` step="any" placeholder="${esc(t('ov.noFull'))}"`)}${gap}`);
@@ -203,6 +215,18 @@ function ovTryStop() {
   if (!OV.trying) return;
   OV.trying = null;
   ovTrySend();
+}
+
+// how a line shows the limit of its alarm r: the Mach line is the airframe's by its Mach number
+const ovShownKind = (l, r) => (r.limit === 'airframe' && l.text.includes('{mach}') ? 'mach' : r.limit);
+function ovShownAs(l, r) {
+  const value = OV_SHOWN[ovShownKind(l, r)][0].match(/\{\w+\}/)[0], pct = l.text.includes(`{${r.limit}_pct}`);
+  return pct && l.text.includes(value) ? 'both' : pct ? 'percent' : 'value';
+}
+// rewrites what follows the line's name (the text before its first value)
+function ovSetShown(l, r, how) {
+  const at = l.text.indexOf('{'), name = at < 0 ? `${l.text.trimEnd()} ` : l.text.slice(0, at);
+  l.text = name + OV_SHOWN[ovShownKind(l, r)][OV_SHOWN_AS.indexOf(how)];
 }
 
 // a line's alarms, in sight under it, and a menu to add one
@@ -520,6 +544,9 @@ function bindOverlay() {
       else if (key === 'at' || key === 'hz' || key === 'ms') { if (!Number.isFinite(v)) return; rule[key] = v; }
       else rule[key] = Number.isFinite(v) ? v : key === 'gap' ? OV_GAP_MS : key === 'repeat' || key === 'after' ? 0 : null;
       if (key === 'dyn' || key === 'full') $('[data-or="gap"]', box).disabled = rule.full == null;
+    } else if ('orshown' in el.dataset) {
+      ovSetShown(OV.cfg.lines[+el.closest('.ov-line').dataset.i], ovRuleOf(el), el.value);
+      ovRenderLines();
     } else if ('ortry' in el.dataset) {
       const r = ovRuleOf(el);
       OV.trying.value = parseFloat(el.value);

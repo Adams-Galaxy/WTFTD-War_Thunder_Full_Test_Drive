@@ -812,14 +812,15 @@ class Watching(unittest.TestCase):
     def test_the_page_offers_several_alarms_per_line(self):
         script = (alarms.WEB / "overlay.js").read_text(encoding="utf-8")
         for bit in ("data-oradd", "data-ordel", "data-orclear", "data-orblink", "data-or=\"${key}\"", "'red'", "'dyn'", "'after'", "'repeat'",
-                    "rule: +b.closest('.ov-rule').dataset.j", "'own'", "load: [90, 1200]", "aoa: [90, 500]", "'wep'", "api('overlay-try'", "data-ortry ",
+                    "rule: +b.closest('.ov-rule').dataset.j", "'own'", "load: [90, 1200]", "aoa: [90, 500]", "'wep'", "api('overlay-try'", "data-ortry ", "data-orshown",
                     f"OV_MAX_RULES = {alarms.MAX_RULES}", f"OV_GAP_MS = {alarms.GAP_MS}"):  # the page and the engine agree
             self.assertIn(bit, script)
         for code in ("en", "fr", "de", "es", "it", "pt", "pl", "cs", "ru", "ja", "zh"):
             words = json.loads((alarms.WEB / "locales" / f"{code}.json").read_text(encoding="utf-8"))
             for key in ("ov.redFrom", "ov.beepFrom", "ov.dynamic", "ov.gap", "ov.redFromValue", "ov.fullAt", "ov.addAlarm", "ov.removeAlarm", "ov.withBeep",
                         "ov.noFull", "ov.alarm.load", "ov.alarm.aoa", "ov.when.own", "ov.alarmValue", "ov.alarmColor", "ov.flash", "ov.after",
-                        "ov.feed.chat", "ov.feed.log", "ov.sheetKey", "ov.profileKey", "ov.v.g_lim", "ov.v.wep", "ov.try", "ov.tryStop", "ov.tryHint"):
+                        "ov.feed.chat", "ov.feed.log", "ov.sheetKey", "ov.profileKey", "ov.v.g_lim", "ov.v.wep", "ov.try", "ov.tryStop", "ov.tryHint", "ov.shownAs", "ov.shown.value",
+                        "ov.shown.percent", "ov.shown.both"):
                 self.assertTrue(words.get(key), (code, key))
         page = (alarms.WEB / "index.html").read_text(encoding="utf-8")
         self.assertNotIn('id="ovAlarms"', page)  # the alarms live on the lines
