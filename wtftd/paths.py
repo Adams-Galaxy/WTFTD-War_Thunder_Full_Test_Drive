@@ -1,10 +1,10 @@
 """Where WTFTD reads and writes its files.
 
 From the source tree everything lives next to the code (web/, data/, user/, .cache/).
-In the packaged app (WTFTD.exe on Windows, WTFTD.app on macOS, PyInstaller) the program files are
-read-only, so the writable folders go to %LOCALAPPDATA%\\WTFTD (Windows) or
-~/Library/Application Support/WTFTD (macOS) and the game data shipped in the app is copied there
-on first run (and when a newer app brings newer data).
+In the packaged app (WTFTD.exe on Windows, WTFTD.app on macOS, the WTFTD file on Linux, PyInstaller) the program
+files are read-only, so the writable folders go to %LOCALAPPDATA%\\WTFTD (Windows), ~/Library/Application Support/WTFTD
+(macOS) or $XDG_DATA_HOME/WTFTD, ~/.local/share/WTFTD by default (Linux), and the game data shipped in the app is copied
+there on first run (and when a newer app brings newer data).
 """
 from __future__ import annotations
 
@@ -21,7 +21,10 @@ BUNDLE = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent.parent)) 
 def _app_home() -> Path:
     if sys.platform == "darwin":
         return Path.home() / "Library" / "Application Support" / "WTFTD"
-    return Path(os.environ.get("LOCALAPPDATA") or Path.home()) / "WTFTD"
+    if sys.platform == "win32":
+        return Path(os.environ.get("LOCALAPPDATA") or Path.home()) / "WTFTD"
+    xdg = os.environ.get("XDG_DATA_HOME", "")
+    return (Path(xdg) if os.path.isabs(xdg) else Path.home() / ".local" / "share") / "WTFTD"  # XDG rule: a relative one is ignored
 
 
 HOME = _app_home() if FROZEN else BUNDLE  # writable

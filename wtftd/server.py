@@ -417,7 +417,7 @@ def api_status():
 # --------------------------------------------------------------------------- new app version (GitHub releases)
 _release = {"checked": 0.0, "latest": None}
 RELEASE_CHECK_EVERY = 6 * 3600
-APP_ASSET = {"win32": ".exe", "darwin": "-macos.zip"}  # release download of this platform
+APP_ASSET = {"win32": ".exe", "darwin": "-macos.zip", "linux": "-linux.tar.gz"}  # release download of this platform
 
 
 def _version_tuple(tag: str) -> tuple:
@@ -1028,7 +1028,7 @@ class Handler(BaseHTTPRequestHandler):
             if s.get("gameDir") and not game.resolve_game_dir(Path(s["gameDir"]).expanduser()):
                 return self.send_json({"error": "This folder does not look like a War Thunder install."}, 400)
             if s.get("oodleDll") and maptex.oodle_version(Path(s["oodleDll"]).name) is None:
-                return self.send_json({"error": "Pick an Oodle runtime file: oo2core_<version>_win64.dll (Windows) or liboo2core*.dylib (macOS)."}, 400)
+                return self.send_json({"error": "Pick an Oodle runtime file: oo2core_<version>_win64.dll (Windows), liboo2core*.dylib (macOS) or liboo2corelinux64.so.<version> (Linux)."}, 400)
             if s.get("dataSource", "datamine") not in ("datamine", "game"):
                 return self.send_json({"error": "Unknown game data source."}, 400)
             if body.get("dataSource") == "game" and not vromfs.available():

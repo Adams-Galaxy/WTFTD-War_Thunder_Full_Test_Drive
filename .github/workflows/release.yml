@@ -1,7 +1,7 @@
 name: Build the apps
 
-# Publishing a release builds WTFTD-<version>.exe (Windows) and WTFTD-<version>.zip (WTFTD.app, Apple silicon) from
-# the tagged code on GitHub's servers and attaches them to the release with their SHA-256, so anyone
+# Publishing a release builds WTFTD-<version>.exe (Windows), WTFTD-<version>.zip (WTFTD.app, Apple silicon) and
+# WTFTD-<version>-linux.tar.gz (Linux, x86-64) from the tagged code on GitHub's servers and attaches them to the release with their SHA-256, so anyone
 # can check that the download comes from this source code.
 on:
   release:
@@ -88,4 +88,46 @@ jobs:
 
           **SHA-256** of $zip (built by GitHub Actions from this tag): \`$hash\`
           Check it in Terminal: \`shasum -a 256 $zip\`" ;;
+          esac
+
+  build-linux:
+    needs: build-macos  # one job at a time edits the release notes
+    runs-on: ubuntu-22.04  # the oldest glibc on offer: the app it builds runs on every distribution at least as recent
+    env:
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ env.TAG }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+      - name: Tests
+        run: python -m unittest discover -s tests -t .
+      - name: Reading the game's files works (compression.zstd)
+        run: python -c "import compression.zstd"
+      - name: Build WTFTD-<version>-linux.tar.gz
+        run: ./build_linux.sh
+      - name: The app starts
+        run: |
+          ./dist/WTFTD --no-window --port 8790 > start.log 2>&1 &
+          app=$!
+          for i in $(seq 30); do curl -sf http://127.0.0.1:8790/api/status > /dev/null && break; sleep 1; done
+          curl -sf http://127.0.0.1:8790/api/status | python -c "import json, sys; assert json.load(sys.stdin)['platform'] == 'linux'" || { cat start.log; exit 1; }
+          kill $app
+      - name: Attach the archive and its SHA-256 to the release
+        run: |
+          tgz="WTFTD-$(python3 -c "import wtftd; print(wtftd.__version__)")-linux.tar.gz"  # build_linux.sh's name (tag: no branch)
+          cd dist
+          hash=$(sha256sum "$tgz" | cut -d' ' -f1)
+          echo "$hash  $tgz" > "$tgz.sha256"
+          gh release upload "$TAG" "$tgz" "$tgz.sha256" --clobber
+          body=$(gh release view "$TAG" --json body -q .body)
+          case "$body" in
+            *"SHA-256** of $tgz"*) ;;  # the notes may name the archive: look for this very line
+            *) gh release edit "$TAG" --notes "$body
+
+          **SHA-256** of $tgz (built by GitHub Actions from this tag): \`$hash\`
+          Check it in a terminal: \`sha256sum $tgz\`" ;;
           esac

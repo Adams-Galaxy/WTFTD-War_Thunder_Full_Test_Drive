@@ -4,6 +4,15 @@ What changed in each version of WTFTD. Downloads: [Releases](https://github.com/
 (only the latest version is kept there; from 0.19.0 on, each version's code stays available through its git tag).
 Versions follow `major.minor.patch`; "beta" until 1.0.
 
+## Not released yet
+
+- **Linux**: WTFTD runs on Linux (x86-64). Download `WTFTD-<version>-linux.tar.gz`, unpack it and run `./WTFTD`, or run
+  it from source with `python3 -m wtftd`. It finds the game installed by Steam (also the Flatpak or Snap Steam) or by
+  Gaijin's launcher in `~/WarThunder`, keeps its files in `~/.local/share/WTFTD`, opens in its own window with Chrome,
+  Chromium, Edge or Brave (in the default browser otherwise, Firefox included) and starts War Thunder through Steam or
+  its launcher. My overlay, the alarms, Flight data, the Test bench, the cockpit window and the app window's options
+  stay Windows only, as on macOS.
+
 ## 0.28.2 - 2026-11-11
 
 - **Fixed: the overlay could stay under the game.** Started before War Thunder (with it from Steam), its windows were

@@ -28,6 +28,7 @@ OODLE_CACHE = APP_CACHE / "oodle.json"
 MAP_NAME = re.compile(r"_(tank|infantry)?map$")
 OODLE_DLL = re.compile(r"^oo2core_(\d+)_win64\.dll$", re.I)
 OODLE_DYLIB = re.compile(r"^liboo2core(?:mac)?(?:64)?((?:[._]\d+)*)\.dylib$", re.I)  # liboo2coremac64.2.9.dylib
+OODLE_SO = re.compile(r"^liboo2core(?:linux)?(?:64)?\.so\.(\d+)$", re.I)  # liboo2corelinux64.so.9
 FLG_REV_MIP_ORDER = 0x40000
 FLG_COMPR_MASK = 0xE0000000
 FLG_OODLE = 0x60000000
@@ -93,7 +94,7 @@ def oodle_version(name: str) -> int | None:
         if len(nums) >= 2 and nums[0] == 2:  # 2.<major>.<minor>
             return nums[1]
         return nums[0] if nums else 9  # unversioned name: try it
-    m = OODLE_DLL.match(name)
+    m = (OODLE_DLL if sys.platform == "win32" else OODLE_SO).match(name)
     return int(m.group(1)) if m else None
 
 

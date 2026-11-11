@@ -1,6 +1,6 @@
 """Entry point: python -m wtftd [--browser] [--port N]
 
-Opens the UI in a chromeless Edge/Chrome app window when available and stops the
+Opens the UI in a chromeless Edge/Chrome/Chromium app window when available and stops the
 server when that window is closed. --browser uses the default browser instead.
 """
 from __future__ import annotations
@@ -35,6 +35,9 @@ STAY_AWAKE = ("--disable-background-timer-throttling", "--disable-renderer-backg
 # macOS: Chromium browsers that support app windows (--app), executable inside the bundle
 MAC_BROWSERS = ("Google Chrome.app/Contents/MacOS/Google Chrome", "Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
                 "Chromium.app/Contents/MacOS/Chromium", "Brave Browser.app/Contents/MacOS/Brave Browser")
+# Linux: the same browsers' commands. Firefox has no app window: without one of these, the page opens in the default browser
+LINUX_BROWSERS = ("google-chrome", "google-chrome-stable", "chromium", "chromium-browser", "microsoft-edge", "microsoft-edge-stable",
+                  "brave-browser")
 
 
 def find_app_browser() -> str | None:
@@ -44,6 +47,8 @@ def find_app_browser() -> str | None:
                 if (apps / rel).is_file():
                     return str(apps / rel)
         return None
+    if sys.platform != "win32":
+        return next(filter(None, map(shutil.which, LINUX_BROWSERS)), None)
     pf = [os.environ.get(k) for k in ("PROGRAMFILES(X86)", "PROGRAMFILES", "LOCALAPPDATA")]
     candidates = []
     for base in filter(None, pf):

@@ -1,4 +1,4 @@
-"""War Thunder install detection and launching (Windows and macOS)."""
+"""War Thunder install detection and launching (Windows, macOS and Linux)."""
 from __future__ import annotations
 
 import os
@@ -31,8 +31,9 @@ def _steam_roots() -> list[Path]:
         roots.append(Path(r"C:\Program Files (x86)\Steam"))
     elif sys.platform == "darwin":
         roots.append(Path.home() / "Library" / "Application Support" / "Steam")
-    else:
-        roots += [Path.home() / ".steam" / "steam", Path.home() / ".local" / "share" / "Steam"]
+    else:  # Linux: Steam from the distribution, Flatpak or Snap
+        roots += [Path.home() / p for p in (".steam/steam", ".local/share/Steam", ".var/app/com.valvesoftware.Steam/.local/share/Steam",
+                                            "snap/steam/common/.local/share/Steam")]
     libs = []
     for r in roots:
         vdf = r / "steamapps" / "libraryfolders.vdf"
@@ -105,6 +106,8 @@ def detect_game_dir() -> Path | None:
         for apps in MAC_APPS:
             candidates += [apps / "WarThunderLauncher.app", apps / "WarThunder.app", apps / "WarThunder", apps / "War Thunder"]
         candidates.append(Path.home() / "WarThunder")
+    elif sys.platform != "win32":  # Linux: Gaijin's launcher is unpacked where the player likes, its folder is WarThunder
+        candidates += [Path.home() / "WarThunder", Path.home() / "Games" / "WarThunder"]
     else:
         local = os.environ.get("LOCALAPPDATA")
         if local:
@@ -174,8 +177,9 @@ def _open(target: str):
 
 def launch(game_dir: Path | None) -> str:
     if game_dir and not is_steam_install(game_dir):
-        if (game_dir / "launcher.exe").exists():
-            subprocess.Popen([str(game_dir / "launcher.exe")], cwd=str(game_dir))
+        launcher = game_dir / ("launcher" if sys.platform.startswith("linux") else "launcher.exe")  # Gaijin's launcher
+        if launcher.is_file():
+            subprocess.Popen([str(launcher)], cwd=str(game_dir))
             return "launcher"
         app = _mac_app(game_dir) if sys.platform == "darwin" else None
         if app:

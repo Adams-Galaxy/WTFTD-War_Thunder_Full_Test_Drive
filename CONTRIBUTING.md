@@ -10,9 +10,9 @@ Thanks for helping! Bug reports, ideas, translation fixes and code are all welco
 
 ## Run from source
 
-Windows 10/11 or macOS, Python 3.10+ — no extra package needed (standard library only). Reading the installed game
+Windows 10/11, macOS or Linux, Python 3.10+ - no extra package needed (standard library only). Reading the installed game
 needs Python 3.14+ (`compression.zstd`, in the standard library from that version): below it the app runs as usual and
-the option is shown disabled. The apps are built with a full 3.14 (the exe carries its Python, the overlay needs its tkinter): `build_exe.bat` refuses less, `build_app.sh` warns.
+the option is shown disabled. The apps are built with a full 3.14 (the exe carries its Python, the overlay needs its tkinter): `build_exe.bat` refuses less, `build_app.sh` and `build_linux.sh` warn.
 
 ```bash
 git clone https://github.com/StonewarP/WTFTD-War_Thunder_Full_Test_Drive.git
@@ -85,5 +85,5 @@ from the game's own translations and don't need translating.
 
 1. Bump `__version__` in `wtftd/__init__.py` and add the version to `CHANGELOG.md`.
 2. Commit, push, then publish a release with the tag `v<version>-beta` (notes = the changelog entry).
-3. GitHub Actions builds `WTFTD-<version>.exe` and `WTFTD-<version>.zip` from that tag and attaches them to the release with
-   their SHA-256.
+3. GitHub Actions builds `WTFTD-<version>.exe`, `WTFTD-<version>.zip` and `WTFTD-<version>-linux.tar.gz` from that tag and
+   attaches them to the release with their SHA-256.

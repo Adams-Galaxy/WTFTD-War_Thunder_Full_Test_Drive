@@ -1,4 +1,4 @@
-"""Windows / macOS differences: where the game files are, which Oodle runtime file names count, the alarms."""
+"""Windows / macOS / Linux differences: where the game files are, which Oodle runtime file names count, the alarms."""
 import importlib
 import re
 import sys
@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from wtftd import alarms, game, maptex, server
+from wtftd import __main__ as app, alarms, game, maptex, paths, server
 
 
 class GameFolder(unittest.TestCase):
@@ -78,7 +78,7 @@ class Standalone(unittest.TestCase):
         self.assertEqual(found, self.files)
         self.assertFalse(game.is_steam_install(found))
         self.assertEqual(game.user_missions_dir(found), self.files / "UserMissions")
-        with mock.patch.object(game.subprocess, "Popen") as popen:
+        with mock.patch.object(sys, "platform", "win32"), mock.patch.object(game.subprocess, "Popen") as popen:
             self.assertEqual(game.launch(found), "launcher")
         popen.assert_called_once_with([str(self.files / "launcher.exe")], cwd=str(self.files))
 
@@ -92,15 +92,64 @@ class Standalone(unittest.TestCase):
         op.assert_called_once_with(f"steam://rungameid/{game.STEAM_APP_ID}")
 
 
-class Alarms(unittest.TestCase):
-    """Windows only (winsound, user32): off on macOS, without a trace in the app."""
+class Linux(unittest.TestCase):
+    """Linux: its data folder, Steam (also Flatpak) or Gaijin's launcher, a Chromium browser for the app window."""
 
-    def test_mac_has_no_alarms(self):
-        with mock.patch.object(sys, "platform", "darwin"):
-            self.assertFalse(alarms.available())
-            with mock.patch.object(server.WATCH, "set_enabled") as switch:
-                server.apply_alarm_settings()
-            switch.assert_called_once_with(False)
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.home = Path(self.tmp.name)
+        self.linux = mock.patch.object(sys, "platform", "linux")
+        self.linux.start()
+        self.addCleanup(self.linux.stop)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def install(self, folder: Path, *names: str) -> Path:
+        folder.mkdir(parents=True)
+        for name in ("aces.vromfs.bin", *names):
+            (folder / name).write_bytes(b"")
+        return folder
+
+    def test_data_folder_follows_xdg(self):
+        with mock.patch.object(Path, "home", return_value=self.home):
+            with mock.patch.dict("os.environ", {"XDG_DATA_HOME": str(self.home / "data")}):
+                self.assertEqual(paths._app_home(), self.home / "data" / "WTFTD")
+            for unset in ("", "relative/data"):  # the XDG rule: a relative path is ignored
+                with mock.patch.dict("os.environ", {"XDG_DATA_HOME": unset}):
+                    self.assertEqual(paths._app_home(), self.home / ".local" / "share" / "WTFTD")
+
+    def test_flatpak_steam(self):
+        files = self.install(self.home / ".var/app/com.valvesoftware.Steam/.local/share/Steam/steamapps/common/War Thunder")
+        with mock.patch.object(Path, "home", return_value=self.home):
+            self.assertEqual(game.detect_game_dir(), files)
+        self.assertTrue(game.is_steam_install(files))
+
+    def test_standalone_found_and_launched(self):
+        files = self.install(self.home / "WarThunder", "launcher")
+        with mock.patch.object(Path, "home", return_value=self.home), mock.patch.object(game, "_steam_roots", return_value=[]):
+            self.assertEqual(game.detect_game_dir(), files)
+        with mock.patch.object(game.subprocess, "Popen") as popen:
+            self.assertEqual(game.launch(files), "launcher")
+        popen.assert_called_once_with([str(files / "launcher")], cwd=str(files))
+
+    def test_app_window_in_a_chromium_browser(self):
+        with mock.patch.object(app.shutil, "which", side_effect={"chromium": "/usr/bin/chromium"}.get):
+            self.assertEqual(app.find_app_browser(), "/usr/bin/chromium")
+        with mock.patch.object(app.shutil, "which", return_value=None):  # Firefox alone: the default browser instead
+            self.assertIsNone(app.find_app_browser())
+
+
+class Alarms(unittest.TestCase):
+    """Windows only (winsound, user32): off on macOS and Linux, without a trace in the app."""
+
+    def test_mac_and_linux_have_no_alarms(self):
+        for platform in ("darwin", "linux"):
+            with mock.patch.object(sys, "platform", platform):
+                self.assertFalse(alarms.available())
+                with mock.patch.object(server.WATCH, "set_enabled") as switch:
+                    server.apply_alarm_settings()
+                switch.assert_called_once_with(False)
 
     def test_off_until_the_player_turns_them_on(self):
         for saved, on in (({}, False), ({"alarms": False}, False), ({"alarms": True}, True)):
@@ -143,6 +192,12 @@ class OodleNames(unittest.TestCase):
             self.assertEqual(maptex.oodle_version("liboo2coremac64.2.9.10.dylib"), 9)
             self.assertIsNone(maptex.oodle_version("oo2core_9_win64.dll"))
             self.assertIsNone(maptex.oodle_version("libfoo.dylib"))
+
+    def test_linux(self):
+        with mock.patch.object(sys, "platform", "linux"):
+            self.assertEqual(maptex.oodle_version("liboo2corelinux64.so.9"), 9)
+            self.assertIsNone(maptex.oodle_version("oo2core_9_win64.dll"))
+            self.assertIsNone(maptex.oodle_version("liboo2coremac64.2.9.dylib"))
 
 
 if __name__ == "__main__":

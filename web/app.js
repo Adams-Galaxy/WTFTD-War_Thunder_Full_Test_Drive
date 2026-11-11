@@ -1816,9 +1816,10 @@ async function openSettings(part) {
   try { locales = await (await fetch('locales/index.json')).json(); } catch { /* keep default */ }
   $('#setLang').innerHTML = locales.map(l => `<option value="${esc(l.code)}"${l.code === I18N.code ? ' selected' : ''}>${esc(l.name)}</option>`).join('');
   $('#setGameDir').value = st.settings?.gameDir || '';
-  const mac = st.platform === 'darwin';
-  $('#setGameDir').placeholder = mac ? '~/Library/Application Support/Steam/steamapps/common/War Thunder' : 'D:\\SteamLibrary\\steamapps\\common\\War Thunder';
-  $('#setOodle').placeholder = mac ? '…/liboo2coremac64.2.9.dylib' : '…\\oo2core_9_win64.dll';
+  const mac = st.platform === 'darwin', linux = st.platform === 'linux';
+  $('#setGameDir').placeholder = mac ? '~/Library/Application Support/Steam/steamapps/common/War Thunder'
+    : linux ? '~/.local/share/Steam/steamapps/common/War Thunder' : 'D:\\SteamLibrary\\steamapps\\common\\War Thunder';
+  $('#setOodle').placeholder = mac ? '…/liboo2coremac64.2.9.dylib' : linux ? '…/liboo2corelinux64.so.9' : '…\\oo2core_9_win64.dll';
   $('#setGameDirHint').textContent = st.gameDir ? t('settings.detected', { path: st.gameDir }) : t('settings.gameDirHint');
   $('#rowSteam').classList.toggle('hidden', !st.steamLaunch);  // Steam on Windows: the line to paste in its launch options
   $('#setSteam').value = st.steamLaunch || '';

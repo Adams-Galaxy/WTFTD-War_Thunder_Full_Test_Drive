@@ -30,9 +30,11 @@ is, how to use it, how it works and its limits.
 
 ## Download
 
-**[⬇ Download WTFTD-&lt;version&gt;.exe](https://github.com/StonewarP/WTFTD-War_Thunder_Full_Test_Drive/releases)** (Windows 10/11) or
-**WTFTD-&lt;version&gt;.zip** (macOS, Apple silicon) - nothing to install: double-click it, the app opens in its own
-window and finds your game by itself (Steam or standalone). Close the window to quit.
+**[⬇ Download WTFTD-&lt;version&gt;.exe](https://github.com/StonewarP/WTFTD-War_Thunder_Full_Test_Drive/releases)** (Windows 10/11),
+**WTFTD-&lt;version&gt;.zip** (macOS, Apple silicon) or **WTFTD-&lt;version&gt;-linux.tar.gz** (Linux, x86-64) - nothing to
+install: double-click it (on Linux, unpack it and run `./WTFTD`), the app opens in its own window and finds your game by
+itself (Steam or standalone). Close the window to quit. On Linux the window needs Chrome, Chromium, Edge or Brave;
+without one, WTFTD opens in your default browser.
 
 - **First launch**: a welcome screen says where WTFTD keeps its files and what it downloads from where, and asks where
   the game data comes from. Nothing starts before you accept.
@@ -44,12 +46,12 @@ window and finds your game by itself (Steam or standalone). Close the window to 
 
   Either way WTFTD builds its database on your PC (no game data is shipped with it), and updates it after each game
   patch.
-- Your settings, missions and the game database live in `%LOCALAPPDATA%\WTFTD` (Windows) or
-  `~/Library/Application Support/WTFTD` (macOS).
+- Your settings, missions and the game database live in `%LOCALAPPDATA%\WTFTD` (Windows),
+  `~/Library/Application Support/WTFTD` (macOS) or `~/.local/share/WTFTD` (Linux, `$XDG_DATA_HOME/WTFTD` when set).
 - The apps are not code-signed: if Windows SmartScreen warns you, click **More info → Run anyway**. On macOS, allow it in
-  **System Settings → Privacy & Security → Open Anyway**. Both are built by GitHub Actions from the released source
+  **System Settings → Privacy & Security → Open Anyway**. All are built by GitHub Actions from the released source
   code, and each release lists their **SHA-256**: check your download with `Get-FileHash WTFTD-<version>.exe` in
-  PowerShell or `shasum -a 256 WTFTD-<version>.zip` in Terminal.
+  PowerShell, `shasum -a 256 WTFTD-<version>.zip` in Terminal or `sha256sum WTFTD-<version>-linux.tar.gz` on Linux.
 - When a new version is released, a *New version* button shows at the top: download it and replace the old one; your
   settings and missions are kept.
 
@@ -160,10 +162,10 @@ More: [Safety and fair play](https://github.com/StonewarP/WTFTD-War_Thunder_Full
 
 Needs Python 3.10+ (no extra packages); reading the installed game instead of the datamine, and the 3D views, need
 Python 3.14+. Double-click **`start.bat`** (Windows) or **`start.command`** (macOS), or run `python -m wtftd`
-(`--browser` uses your default browser instead of an app window).
+(`python3 -m wtftd` on Linux; `--browser` uses your default browser instead of an app window).
 
-To build `WTFTD-<version>.exe` or `WTFTD.app` yourself, run **`build_exe.bat`** on Windows or **`./build_app.sh`** on a
-Mac, with a full Python 3.14+. See [CONTRIBUTING.md](CONTRIBUTING.md).
+To build `WTFTD-<version>.exe`, `WTFTD.app` or the Linux `WTFTD` yourself, run **`build_exe.bat`** on Windows,
+**`./build_app.sh`** on a Mac or **`./build_linux.sh`** on Linux, with a full Python 3.14+. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Known limits
 
@@ -172,12 +174,14 @@ WTFTD is in beta. The main limits:
 - Several features haven't been checked in game yet: routes, waves and assets in the scenario editor, most
   modifications, ground missiles on pylons other than the Aster-30, Challenges, the Test bench, the fighter HUD and the
   minimap. The [in-game checklist](docs/ingame-checklist.md) lists what's still open.
-- My overlay, the alarms, Flight data, the Test bench and the cockpit window are Windows only, and were mostly flown on
-  jets in test flights.
+- My overlay, the alarms, Flight data, the Test bench, the cockpit window and the app window's options (start minimized,
+  notification area, close with the game) are Windows only, and were mostly flown on jets in test flights.
 - Missions and custom vehicles are local: they can't be played together online. Share the setup instead.
 - Stats come from the game's own stat cards or are computed from the vehicle files (tank top speed ±10 %); computed
   penetration is within 1 mm of the official wiki on the shells compared.
 - macOS support is new and less tested than Windows; on an Intel Mac, [run from source](#run-from-source).
+- Linux support is newer still: checked on Ubuntu 24.04 with Chromium and the game's files, not yet with the game played
+  on Linux. Ubuntu's own Chromium is a Snap and wasn't tried: if no window opens, start `./WTFTD --browser`.
 
 Every page of the [wiki](https://github.com/StonewarP/WTFTD-War_Thunder_Full_Test_Drive/wiki) ends with its own limits.
 
@@ -186,6 +190,7 @@ Every page of the [wiki](https://github.com/StonewarP/WTFTD-War_Thunder_Full_Tes
 ```
 start.bat / build_exe.bat   run from source / build WTFTD-<version>.exe (Windows)
 start.command / build_app.sh run from source / build WTFTD.app (macOS)
+build_linux.sh              build WTFTD and WTFTD-<version>-linux.tar.gz (Linux)
 wtftd_app.py                entry point of the packaged app
 wtftd/                      Python backend (stdlib only)
   server.py                 local HTTP server + API (127.0.0.1 only)
