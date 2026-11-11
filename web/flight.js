@@ -253,7 +253,8 @@ function flRenderValues() {
 }
 
 function bindFlight() {
-  $('[data-view="flight"]').classList.toggle('hidden', !S.status?.alarms);  // same reader as the overlay: Windows only
+  $('[data-view="flight"]').classList.toggle('hidden', !S.status?.flight);  // the game read in flight: Windows and Linux
+  $('#flCockpit').classList.toggle('hidden', !S.status?.alarms);  // as the overlay: Windows only
   flRenderValues();
   flRenderViews();
   $$('#flSpan button').forEach(b => b.classList.toggle('active', +b.dataset.s === FL.span));

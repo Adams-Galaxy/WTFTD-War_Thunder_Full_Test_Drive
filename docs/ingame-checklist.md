@@ -577,6 +577,8 @@ are the ones picked): each one's test is in its description.
 - [ ] **Test bench: Bf 109 F-4, Acceleration, 500 m**: from 300 to 500 km/h: is the time close to a stopwatch's?
 - [ ] **Test bench: Bf 109 F-4, Hard turn, 1,000 m**: from 450 km/h, half a circle: is 2.5 G (`HARD_G`) a fair threshold, and is 150 m (`BLEED_DH`) possible by hand?
 - [ ] **Test bench: Bf 109 F-4, Stall speed, 2,000 m**: with mouse aim, then with instructor off: does the aircraft sink as expected, is the speed near the game's stall warning?
+- [ ] Linux, the game played there: the game's button at the top says *Game running* (its `aces` process), Flight data draws the flight and a test above
+  gives its result as on Windows. Checked so far in Ubuntu 24.04 (WSL) against a stand-in for port 8111, and with a process named `aces`.
 - [ ] A helicopter, **Test bench: <helicopter>, Top speed, 500 m**: air start at low speed, does `/state` send a throttle, and does the check make sense on a helicopter?
 - [ ] Pause during a run (Esc): do the readings freeze, and does the time paused stay out of the result? A settled aircraft must not read as paused.
 - [ ] Crash and respawn: the bare map respawns the player at 1,500 m, not at the test's height. The results keep the height flown; say if that gets in the way.

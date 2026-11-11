@@ -1,13 +1,22 @@
-"""Windows / macOS / Linux differences: where the game files are, which Oodle runtime file names count, the alarms."""
+"""Windows / macOS / Linux differences: where the game files are, which Oodle runtime file names count, the alarms, the
+game read in flight."""
 import importlib
+import json
+import math
 import re
+import shutil
+import subprocess
 import sys
 import tempfile
+import threading
+import time
+import types
 import unittest
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from unittest import mock
 
-from wtftd import __main__ as app, alarms, game, maptex, paths, server
+from wtftd import __main__ as app, alarms, bench, flightlog, game, maptex, paths, server
 
 
 class GameFolder(unittest.TestCase):
@@ -141,7 +150,13 @@ class Linux(unittest.TestCase):
 
 
 class Alarms(unittest.TestCase):
-    """Windows only (winsound, user32): off on macOS and Linux, without a trace in the app."""
+    """The overlay and its sounds: Windows only (winmm, user32), off on macOS and Linux without a trace in the app. The game
+    read in flight, for Flight data and the Test bench: Windows and Linux."""
+
+    def test_the_game_is_read_in_flight_on_windows_and_linux(self):
+        for platform, on in (("win32", True), ("linux", True), ("darwin", False)):
+            with mock.patch.object(sys, "platform", platform):
+                self.assertEqual(alarms.reader(), on, platform)
 
     def test_mac_and_linux_have_no_alarms(self):
         for platform in ("darwin", "linux"):
@@ -167,6 +182,122 @@ class Alarms(unittest.TestCase):
         w.set_enabled(False)
         self.assertIsNone(w.overlay)
         w.stop()
+
+
+class GameProcess(unittest.TestCase):
+    """Linux: the game is running when one of its processes is (/proc/<pid>/comm), there's no window to look for."""
+
+    def proc(self, *names) -> Path:
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        root = Path(tmp.name)
+        for pid, name in enumerate(names, 100):
+            (root / str(pid)).mkdir()
+            (root / str(pid) / "comm").write_text(name + "\n", encoding="utf-8")
+        (root / "99").mkdir()  # gone between the listing and the read
+        (root / "self").mkdir()  # not a process
+        (root / "self" / "comm").write_text("aces\n", encoding="utf-8")
+        return root
+
+    def test_the_native_client_or_the_windows_one_under_proton(self):
+        with mock.patch.object(sys, "platform", "linux"):
+            for name in ("aces", "aces.exe"):
+                self.assertTrue(alarms.game_running(self.proc("bash", name)), name)
+            self.assertFalse(alarms.game_running(self.proc("bash", "launcher", "steam", "aces_be")))  # the launcher alone isn't the game
+
+    def test_the_page_is_told_on_windows_and_linux(self):
+        for platform, told in (("win32", True), ("linux", True), ("darwin", False)):
+            with mock.patch.object(sys, "platform", platform), mock.patch.object(alarms, "game_running", return_value=True):
+                self.assertEqual(server.game_up(), told, platform)
+
+    @unittest.skipUnless(sys.platform.startswith("linux"), "Linux's /proc")
+    def test_a_real_process(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        aces = Path(tmp.name) / "aces"
+        shutil.copy(shutil.which("sleep"), aces)
+        self.assertFalse(alarms.game_running())
+        proc = subprocess.Popen([str(aces), "30"])
+        try:
+            self.assertTrue(alarms.game_running())
+        finally:
+            proc.kill()
+            proc.wait()
+
+
+class Game(BaseHTTPRequestHandler):
+    """A stand-in for the game's own page on port 8111: what self.server.said holds, by path."""
+
+    def do_GET(self):
+        body = self.server.said.get(self.path.split("?")[0])
+        if body is None:
+            return self.send_error(404)
+        raw = json.dumps(body).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(raw)))
+        self.end_headers()
+        self.wfile.write(raw)
+
+    def log_message(self, *args):
+        pass
+
+
+class FlightOnLinux(unittest.TestCase):
+    """Linux: the game's page on port 8111 read as on Windows (here its stand-in, over HTTP), a test flight recorded to
+    CSV and analysed by the Test bench, the overlay and its sounds left out. The clock is the test's: 25 s flown at once."""
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.folder = Path(tmp.name)
+        self.game = ThreadingHTTPServer(("127.0.0.1", 0), Game)
+        self.game.said = {}
+        threading.Thread(target=self.game.serve_forever, daemon=True).start()
+        self.addCleanup(self.game.server_close)
+        self.addCleanup(self.game.shutdown)
+        self.now = 1000.0
+        clock = types.SimpleNamespace(monotonic=lambda: self.now, time=lambda: 1.8e9 + self.now, strftime=time.strftime)
+        for p in (mock.patch.object(sys, "platform", "linux"), mock.patch.object(server, "WT_API", f"http://127.0.0.1:{self.game.server_port}"),
+                  mock.patch.object(alarms, "time", clock), mock.patch.object(flightlog, "time", clock), mock.patch.object(bench, "time", clock),
+                  mock.patch.object(bench, "FILE", self.folder / "bench.json"), mock.patch.object(bench, "AWAY_S", 0)):
+            p.start()
+            self.addCleanup(p.stop)
+        self.watch = alarms.Watch(server._wt_get, dict, lambda: True, save=lambda: None, logs=self.folder)
+        self.addCleanup(self.watch.set_log, False)
+        self.bench = bench.Bench(self.watch, self.folder, lambda: "2.59.0.92")
+
+    def look(self, seconds: float, flying: bool = True, rate: int = 4):
+        """The bench and Watch, as their threads do, this long; flying: level at full throttle, else in the hangar."""
+        for _ in range(int(seconds * rate)):
+            wobble = math.sin(self.now * 2.3)  # a hand on the stick: a settled game that repeats every number looks paused
+            self.game.said["/state"] = {"valid": True, "Mfuel0, kg": 300, "Mfuel, kg": 250, "IAS, km/h": 500, "TAS, km/h": 610, "M": 0.55,
+                                        "H, m": 5000 + round(2 * wobble), "Vy, m/s": round(.3 * wobble, 1), "Ny": 1.0,
+                                        "throttle 1, %": 100} if flying else {"valid": False}
+            self.game.said["/indicators"] = {"valid": True, "type": "bf-109f-4", "aviahorizon_roll": round(wobble, 1), "compass": 90}
+            self.bench.step()
+            self.watch.tick()
+            self.now += 1 / rate
+
+    def test_a_top_speed_run(self):
+        self.assertTrue(alarms.reader())
+        self.bench.arm({"vehicle": "bf-109f-4", "test": "top", "fuel": 50, "altitude": 5000})
+        with mock.patch.object(alarms, "play") as play:
+            self.look(25)
+            self.assertTrue(self.watch.flying)
+            self.assertEqual(self.watch.trace[-1]["tas"], 610)  # Flight data's curves
+            log = self.bench.log
+            self.assertTrue(log and log.startswith("bf-109f-4-"))
+            self.look(1, flying=False)  # back in the hangar
+        play.assert_not_called()
+        self.assertIsNone(self.watch.overlay)
+        self.assertEqual(self.watch.display, [])
+        names = {alarms.column(n): n for n in alarms.SERIES}
+        rows = flightlog.read_log(self.folder, log, names)["rows"]
+        self.assertGreater(rows[-1]["t"] - rows[0]["t"], bench.TOP_S)
+        run = bench.load()["runs"][0]
+        self.assertEqual((run["test"], run["log"], run["game"], run["points"][0]["tas"]), ("top", log, "2.59.0.92", 610.0))
+        self.assertIsNone(self.watch.log)  # the recording stopped with the flight
 
 
 class Feedback(unittest.TestCase):

@@ -10,8 +10,9 @@ Versions follow `major.minor.patch`; "beta" until 1.0.
   it from source with `python3 -m wtftd`. It finds the game installed by Steam (also the Flatpak or Snap Steam) or by
   Gaijin's launcher in `~/WarThunder`, keeps its files in `~/.local/share/WTFTD`, opens in its own window with Chrome,
   Chromium, Edge or Brave (in the default browser otherwise, Firefox included) and starts War Thunder through Steam or
-  its launcher. My overlay, the alarms, Flight data, the Test bench, the cockpit window and the app window's options
-  stay Windows only, as on macOS.
+  its launcher. Flight data and the Test bench work there too: they read the game's own page (port 8111) as on Windows,
+  and the game's button at the top says whether War Thunder is running (its `aces` process). My overlay, the alarms,
+  the cockpit window and the app window's options stay Windows only, as on macOS.
 
 ## 0.28.2 - 2026-11-11
 

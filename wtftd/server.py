@@ -408,6 +408,7 @@ def api_status():
         "oodle": oodle_dll(gd),
         "settings": STATE.settings(),
         "alarms": alarms.available(),
+        "flight": alarms.reader(),  # Flight data and the Test bench
         "cdk": {"enabled": STATE.cdk_enabled(), "defaultHosts": cdk.DEFAULT_HOSTS,
                 "airMethod": STATE.settings().get("airMethod") or "custom",
                 **cdk.status(gd, USER)},
@@ -480,8 +481,8 @@ def api_vehicle(vid: str):
 
 
 def game_up() -> bool:
-    """The game is running, where the app can tell (Windows)."""
-    return alarms.available() and alarms.game_running()
+    """The game is running, where the app can tell (Windows, Linux)."""
+    return alarms.reader() and alarms.game_running()
 
 
 def vehicle_ids():
@@ -718,7 +719,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def get_api(self, route: str):
         if route == "ping":  # the app page is alive (every 5 s); it shows whether the game is running (None: can't tell here)
-            return self.send_json({"ok": True, "running": game_up() if alarms.available() else None})
+            return self.send_json({"ok": True, "running": game_up() if alarms.reader() else None})
         if route == "status":
             return self.send_json(api_status())
         if route.startswith("vehicle/"):
@@ -1636,7 +1637,7 @@ def serve(port: int = 8777) -> tuple[ThreadingHTTPServer, str]:
     threading.Thread(target=challenge_loop, daemon=True).start()
     threading.Thread(target=warm_weapon_icons, daemon=True).start()
     threading.Thread(target=lambda: models.warm(STATE.game_dir()), daemon=True).start()
-    if alarms.available():
+    if alarms.reader():
         apply_alarm_settings()
         threading.Thread(target=WATCH.run, daemon=True).start()
         threading.Thread(target=BENCH.run, daemon=True).start()

@@ -174,14 +174,15 @@ WTFTD is in beta. The main limits:
 - Several features haven't been checked in game yet: routes, waves and assets in the scenario editor, most
   modifications, ground missiles on pylons other than the Aster-30, Challenges, the Test bench, the fighter HUD and the
   minimap. The [in-game checklist](docs/ingame-checklist.md) lists what's still open.
-- My overlay, the alarms, Flight data, the Test bench, the cockpit window and the app window's options (start minimized,
-  notification area, close with the game) are Windows only, and were mostly flown on jets in test flights.
+- My overlay, the alarms, the cockpit window and the app window's options (start minimized, notification area, close
+  with the game) are Windows only. Flight data and the Test bench work on Windows and Linux. All were mostly flown on jets
+  in test flights.
 - Missions and custom vehicles are local: they can't be played together online. Share the setup instead.
 - Stats come from the game's own stat cards or are computed from the vehicle files (tank top speed ±10 %); computed
   penetration is within 1 mm of the official wiki on the shells compared.
 - macOS support is new and less tested than Windows; on an Intel Mac, [run from source](#run-from-source).
-- Linux support is newer still: checked on Ubuntu 24.04 with Chromium and the game's files, not yet with the game played
-  on Linux. Ubuntu's own Chromium is a Snap and wasn't tried: if no window opens, start `./WTFTD --browser`.
+- Linux support is newer still: checked on Ubuntu 24.04 with Chromium and the game's files, Flight data and the Test
+  bench against a stand-in for the game's port 8111, not yet with the game played on Linux. Ubuntu's own Chromium is a Snap and wasn't tried: if no window opens, start `./WTFTD --browser`.
 
 Every page of the [wiki](https://github.com/StonewarP/WTFTD-War_Thunder_Full_Test_Drive/wiki) ends with its own limits.
 

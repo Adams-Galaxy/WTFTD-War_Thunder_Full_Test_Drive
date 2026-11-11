@@ -100,7 +100,7 @@ function bnMeasured(id, game = '') {
 }
 
 function bnPanelHTML(v) {
-  if (!AIR.includes(v.c) || !S.status?.alarms) return '';
+  if (!AIR.includes(v.c) || !S.status?.flight) return '';
   const rows = bnMeasured(v.id);
   return `<div class="lim"><div class="row-between lim-title"><span>${esc(t('bn.measured'))}</span><button class="btn btn-sm" data-act="bench">${esc(t('nav.bench'))}</button></div>
     ${rows.length ? `<div class="vstats">${rows.map(x => `<div class="vstat" title="${esc(bnConditions(x.run))}"><span>${esc(x.label)}</span><b>${esc(x.text)}</b></div>`).join('')}</div>` : ''}</div>`;
@@ -400,7 +400,7 @@ function bnFrom(v) {
 }
 
 function bindBench() {
-  $('[data-view="bench"]').classList.toggle('hidden', !S.status?.alarms);  // same reader as Flight data: Windows only
+  $('[data-view="bench"]').classList.toggle('hidden', !S.status?.flight);  // same reader as Flight data: Windows and Linux
   bnLoad().then(() => { if (S.sel) renderDrawer(); }).catch(() => {});
   $('#bnView').innerHTML = BN_TESTS.map(k => `<button data-v="${k}">${esc(t('bn.t.' + k))}</button>`).join('');
   $('#bnView').addEventListener('click', e => {

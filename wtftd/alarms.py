@@ -135,6 +135,7 @@ SAMPLE_ATTITUDE = {"compass": 322, "nose_up": 6.0, "aviahorizon_roll": -12.0}
 SAMPLE_STATS = {"battles": 78, "kills": 159, "deaths": 91, "kd": 1.75, "winrate": 89, "live_kills": 2, "live_deaths": 1, "live_kd": 2}
 
 GAME_WINDOW_CLASS = "DagorWClass"
+GAME_PROCESS = ("aces", "aces.exe")  # Linux: the native client (linux64/aces), or the Windows one under Proton
 OVERLAY_KEY = "#010101"  # the colour made see-through
 GLOW_SIZE = 18  # how far the glow reaches into the screen, % of its height
 GLOW_ALPHA = 180  # its opacity at the very edge, out of 255
@@ -142,7 +143,13 @@ GLOW_STEP = 4  # worked out one pixel in 4: a 4K screen has 8 million, too many 
 
 
 def available() -> bool:
+    """The overlay, its sounds and keys, the cockpit window and the app window's options: Windows."""
     return sys.platform == "win32"
+
+
+def reader() -> bool:
+    """Watch reads the game in flight here (port 8111), for Flight data and the Test bench: Windows and Linux."""
+    return sys.platform == "win32" or sys.platform.startswith("linux")
 
 
 def column(name: str) -> str:
@@ -924,9 +931,19 @@ def save_sound(folder: Path, name: str, data: str) -> str:
     return f"{stem}.wav"
 
 
-def game_running() -> bool:
+def game_running(proc: Path = Path("/proc")) -> bool:
+    """Windows: the game's window is there. Linux: one of its processes is (proc: where they're listed)."""
+    if sys.platform != "win32":
+        return any(_process_name(p) in GAME_PROCESS for p in proc.glob("[0-9]*"))
     import ctypes
     return bool(ctypes.windll.user32.FindWindowW(GAME_WINDOW_CLASS, None))
+
+
+def _process_name(folder: Path) -> str:
+    try:
+        return (folder / "comm").read_text(encoding="utf-8", errors="replace").strip()
+    except OSError:  # gone in between, or not ours to read
+        return ""
 
 
 def game_focused() -> bool:
