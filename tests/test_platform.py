@@ -20,7 +20,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from unittest import mock
 
-from wtftd import __main__ as app, alarms, bench, cairopaint, flightlog, game, maptex, minimap, paths, server, waveout, x11, xoverlay
+from wtftd import __main__ as app, alarms, bench, cairopaint, flightlog, game, maptex, minimap, paths, server, waveout, x11, xoverlay, xwindow
 
 
 class GameFolder(unittest.TestCase):
@@ -555,6 +555,145 @@ class OverlayOnLinux(unittest.TestCase):
         c.cairo_surface_destroy(image)
         c.cairo_surface_destroy(window)
         return sum(1 for a in raw[3::4] if a)
+
+
+class FakeWM:
+    """A stand-in for X and its window manager: the app's window (10) and a terminal (9), in a frame with a 30 px title
+    bar. A move counts from the frame's corner (EWMH's usual way), or from the window's (from_window: WSLg's)."""
+
+    TITLE = "WTFTD — War Thunder Full Test Drive".encode()
+
+    def __init__(self, listed: bool = True, from_window: bool = False):
+        self.at, self.from_window, self.sent, self.kept = [100, 80, 1000, 700], from_window, [], []
+        self.props = {(1, "_NET_CLIENT_LIST"): [9, 10] if listed else None, (9, "_NET_WM_NAME"): b"Terminal",
+                      (10, "_NET_WM_NAME"): self.TITLE, (10, "_NET_FRAME_EXTENTS"): [0, 0, 30, 0], (10, "_NET_WM_STATE"): []}
+
+    def prop(self, window, name):
+        return self.props.get((window, name))
+
+    @staticmethod
+    def atom(name):
+        return sum(name.encode()) * 7 + len(name)
+
+    def XDefaultRootWindow(self, d):
+        return 1
+
+    def XDefaultScreen(self, d):
+        return 0
+
+    def XDisplayWidth(self, d, screen):
+        return 1920
+
+    def XDisplayHeight(self, d, screen):
+        return 1080
+
+    def XQueryTree(self, d, window, root, parent, kids, count):
+        found = {1: [5], 5: [9, 10]}.get(window, [])
+        held = (ctypes.c_ulong * max(1, len(found)))(*found)
+        self.kept.append(held)
+        kids._obj.contents = ctypes.c_ulong.from_buffer(held)
+        count._obj.value = len(found)
+        return 1
+
+    def XGetWindowAttributes(self, d, window, attrs):
+        attrs._obj.x, attrs._obj.y, attrs._obj.width, attrs._obj.height = 0, 0, *self.at[2:]
+        return 1
+
+    def XTranslateCoordinates(self, d, window, root, x, y, left, top, child):
+        left._obj.value, top._obj.value = self.at[:2]
+        return 1
+
+    def XMoveResizeWindow(self, d, window, left, top, width, height):
+        self.at = [left, top + (0 if self.from_window else 30), width, height]
+
+    def XSendEvent(self, d, to, propagate, mask, event):
+        message = event._obj.client
+        self.sent.append((to, message.window, message.message_type, list(message.data)))
+
+    def XFlush(self, d):
+        pass
+
+    def XFree(self, data):
+        pass
+
+    def XIconifyWindow(self, d, window, screen):
+        self.sent.append(("iconify", window))
+
+
+class AppWindowOnLinux(unittest.TestCase):
+    """Linux: the app window found, kept in its place, minimized and closed through X and its window manager, as tray does
+    on Windows; no notification area there."""
+
+    def wm(self, **kind) -> FakeWM:
+        wm = FakeWM(**kind)
+        for p in (mock.patch.object(x11, "display", return_value=1), mock.patch.object(x11, "lib", return_value=wm),
+                  mock.patch.object(xwindow, "_lib", return_value=wm), mock.patch.object(x11, "prop", wm.prop),
+                  mock.patch.object(x11, "atom", wm.atom), mock.patch.object(xwindow, "SETTLE_S", 0),
+                  mock.patch.dict(xwindow._normal, clear=True)):
+            p.start()
+            self.addCleanup(p.stop)
+        return wm
+
+    def test_found_by_its_title(self):
+        self.wm()
+        self.assertEqual(xwindow.find_window(), 10)
+        self.wm(listed=False)  # a window manager that lists nothing: the whole tree
+        self.assertEqual(xwindow.find_window(), 10)
+        with mock.patch.object(x11, "display", return_value=None):
+            self.assertIsNone(xwindow.find_window())
+
+    def test_its_place_maximized_or_not(self):
+        wm = self.wm()
+        self.assertEqual(xwindow.place_of(10), {"x": 100, "y": 50, "w": 1000, "h": 700, "max": False})  # the frame's corner
+        wm.props[(10, "_NET_WM_STATE")] = [wm.atom("_NET_WM_STATE_MAXIMIZED_VERT"), wm.atom("_NET_WM_STATE_MAXIMIZED_HORZ")]
+        wm.at = [0, 30, 1920, 1050]
+        self.assertEqual(xwindow.place_of(10), {"x": 100, "y": 50, "w": 1000, "h": 700, "max": True})  # where it goes back to
+
+    def test_put_back_exactly_whichever_way_the_window_manager_counts(self):
+        for from_window in (False, True):
+            self.wm(from_window=from_window)
+            place = {"x": 300, "y": 200, "w": 900, "h": 600, "max": False}
+            xwindow.put(10, place)
+            self.assertEqual(xwindow.place_of(10), place, from_window)
+            xwindow.put(10, xwindow.place_of(10))
+            self.assertEqual(xwindow.place_of(10), place, from_window)  # no creep from one start to the next
+
+    def test_maximized_then(self):
+        wm = self.wm()
+        xwindow.put(10, {"x": 300, "y": 200, "w": 900, "h": 600, "max": True})
+        maximize = [wm.atom("_NET_WM_STATE_MAXIMIZED_VERT"), wm.atom("_NET_WM_STATE_MAXIMIZED_HORZ")]
+        self.assertEqual(wm.sent[-1], (1, 10, wm.atom("_NET_WM_STATE"), [xwindow.ADD, *maximize, xwindow.FROM_PAGER, 0]))
+
+    def test_minimized_brought_forward_and_closed(self):
+        wm = self.wm()
+        self.assertTrue(xwindow.minimize())
+        self.assertTrue(xwindow.show())
+        self.assertTrue(xwindow.close())
+        self.assertEqual(wm.sent, [("iconify", 10), (1, 10, wm.atom("_NET_ACTIVE_WINDOW"), [xwindow.FROM_PAGER, 0, 0, 0, 0]),
+                                   (10, 10, wm.atom("WM_PROTOCOLS"), [wm.atom("WM_DELETE_WINDOW"), 0, 0, 0, 0])])  # to the window itself
+        self.assertFalse(xwindow.Tray().click())  # no notification area
+
+    def test_a_saved_place_still_on_the_screen(self):
+        self.wm()
+        place = {"x": 300, "y": 200, "w": 900, "h": 600, "max": False}
+        self.assertTrue(xwindow.usable(place))
+        for bad in ({**place, "x": 5000}, {**place, "w": 50}, {**place, "x": 1.5}, None):
+            self.assertFalse(xwindow.usable(bad), bad)
+
+    def test_which_controls_the_window(self):
+        from wtftd import tray
+        for platform, shown, control in (("win32", None, tray), ("linux", 1, xwindow), ("linux", None, None), ("darwin", 1, None)):
+            with mock.patch.object(sys, "platform", platform), mock.patch.object(x11, "display", return_value=shown):
+                self.assertIs(server.window_control(), control, (platform, shown))
+
+    def test_the_browser_opens_where_it_was(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        path = Path(tmp.name) / "window.json"
+        path.write_text(json.dumps({"x": 300, "y": 200, "w": 900, "h": 600, "max": True}), encoding="utf-8")
+        with mock.patch.object(sys, "platform", "linux"), mock.patch.object(app, "PLACE", path), \
+                mock.patch.object(server, "window_control", return_value=mock.Mock(usable=lambda p: True)):
+            self.assertEqual(app.window_args(), ["--window-position=300,200", "--window-size=900,600"])  # keep_place maximizes it
 
 
 class Game(BaseHTTPRequestHandler):

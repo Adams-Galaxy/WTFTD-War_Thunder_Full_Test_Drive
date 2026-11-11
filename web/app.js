@@ -1841,7 +1841,8 @@ async function openSettings(part) {
   $('#setAirMethod').value = st.cdk?.airMethod || 'custom';
   $('#setAutoUpdate').checked = st.settings?.autoUpdate !== false;
   $('#setWindow').classList.toggle('hidden', !st.flight);  // where the game can be seen: Windows and Linux
-  ['#setStartMinimized', '#setTray', '#setCloseWithGame'].forEach(id => $(id).closest('label').classList.toggle('hidden', st.platform !== 'win32'));  // the app window's: Windows
+  ['#setStartMinimized', '#setCloseWithGame'].forEach(id => $(id).closest('label').classList.toggle('hidden', !st.windowControl));  // Windows, Linux with X
+  $('#setTray').closest('label').classList.toggle('hidden', st.platform !== 'win32');  // the notification area: Windows
   [['#setStartMinimized', 'startMinimized'], ['#setTray', 'trayMinimize'], ['#setCloseWithGame', 'closeWithGame'], ['#setLaunchGame', 'launchGame']].forEach(([id, key]) => { $(id).checked = st.settings?.[key] === true; });
   $('#setTheme').value = themePref();
   $('#dataVersion').textContent = st.data?.version ? `${t('settings.version', { version: st.data.version, date: new Date(st.data.built * 1000).toLocaleDateString(I18N.code) })} · ${t('source.from.' + (st.data.source || 'datamine'))}` : '';

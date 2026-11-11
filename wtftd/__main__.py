@@ -17,7 +17,7 @@ import urllib.request
 import webbrowser
 from pathlib import Path
 
-from .alarms import available, game_running, reader
+from .alarms import game_running, reader
 from .paths import CACHE, FROZEN, USER, WEB, prepare
 from . import server
 from .game import launch
@@ -67,6 +67,10 @@ def window_args() -> list[str]:
     1500x920, or maximized when the screen's work area is smaller (laptops, 1366x768...). keep_place then puts it exactly
     (shortcut: the browser's pixels are taken as the main screen's, a screen of another scale ends a little off until then)."""
     w, h = 1500, 920
+    if sys.platform != "win32":  # Linux: X's pixels are the browser's; keep_place maximizes it if it was
+        control, place = server.window_control(), read_json(PLACE, None)
+        if control and control.usable(place):
+            return [f"--window-position={place['x']},{place['y']}", f"--window-size={place['w']},{place['h']}"]
     if sys.platform == "win32":
         from . import tray
         place = read_json(PLACE, None)
@@ -136,7 +140,8 @@ def keep_place(tray, wanted, path: Path = PLACE):
 
 
 def window_options(tray) -> object | None:
-    """What the app window does on Windows, once it's open: start minimized, go to the notification area, close with the game."""
+    """What the app window does once it's open: start minimized, go to the notification area (Windows), close with the game.
+    tray: tray (Windows) or xwindow (Linux)."""
     wanted = lambda key: STATE.settings().get(key) is True
 
     def close_with_game():
@@ -266,14 +271,13 @@ def main():
                 except OSError:
                     pass
             no_translate(profile)
-            proc = subprocess.Popen([exe, f"--app={url}", f"--user-data-dir={profile}", *size, *STAY_AWAKE,
+            x_window = ["--ozone-platform=x11"] if sys.platform.startswith("linux") and os.environ.get("DISPLAY") else []  # one X can place
+            proc = subprocess.Popen([exe, f"--app={url}", f"--user-data-dir={profile}", *size, *STAY_AWAKE, *x_window,
                                      "--no-first-run", "--no-default-browser-check", "--disable-features=Translate"])
-            if sys.platform == "win32":
-                from . import tray
-                icon = window_options(tray)
-            if sys.platform == "win32":
-                from . import tray
-                server.SHOW_WINDOW = lambda: (icon.click() if icon else False) or tray.show()
+            control = server.window_control()
+            if control:
+                icon = window_options(control)
+                server.SHOW_WINDOW = lambda: (icon.click() if icon else False) or control.show()
             if sys.platform == "darwin":
                 # the browser outlives its closed window on macOS: quit when the page says bye
                 while proc.poll() is None and not page_closed():

@@ -23,7 +23,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
 from . import DONATE, REPO, __version__, alarms, battle, bench, builder, cdk, challenges, flightlog, game, hangar, hud, maptex, mission, models, mods, patches, replays, sights, \
-    terrain, uninstall, vromfs, waveout, xoverlay
+    terrain, uninstall, vromfs, waveout, x11, xoverlay
 from .paths import CACHE, DATA, FROZEN, HOME, USER, WEB
 
 ROOT = HOME
@@ -363,6 +363,18 @@ def app_command() -> list[str]:
     return [str(quiet if quiet.exists() else sys.executable), str(Path(__file__).resolve().parent.parent / "wtftd_app.py")]
 
 
+def window_control():
+    """What moves, minimizes and closes the app window here: Win32 (tray) on Windows, X11 (xwindow) on Linux with an X
+    display; None elsewhere."""
+    if sys.platform == "win32":
+        from . import tray
+        return tray
+    if sys.platform.startswith("linux") and x11.display():
+        from . import xwindow
+        return xwindow
+    return None
+
+
 def steam_launch_option(gd) -> str | None:
     """What to paste in Steam (War Thunder, Properties, Launch options) for WTFTD to open with the game: Steam then starts WTFTD
     with the game's own command line, and WTFTD starts the game (see __main__.with_game). Windows and Linux, a Steam install."""
@@ -410,6 +422,7 @@ def api_status():
         "alarms": alarms.available(),
         "flight": alarms.reader(),  # Flight data and the Test bench
         "overlayNote": xoverlay.note() if alarms.available() else None,  # Linux: what may keep the overlay off the screen
+        "windowControl": window_control() is not None,  # start minimized, close with the game
         "cdk": {"enabled": STATE.cdk_enabled(), "defaultHosts": cdk.DEFAULT_HOSTS,
                 "airMethod": STATE.settings().get("airMethod") or "custom",
                 **cdk.status(gd, USER)},

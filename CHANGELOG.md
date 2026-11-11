@@ -17,7 +17,9 @@ Versions follow `major.minor.patch`; "beta" until 1.0.
   HUD, the minimap and the cockpit window work there too: see-through X11 windows drawn with cairo (X11, or XWayland on
   a Wayland session, with a compositor), sounds through PulseAudio or PipeWire (else ALSA's `aplay`), keys from X and
   joystick buttons from `/dev/input/js*`. On a Wayland session My overlay warns that a full-screen game may stay above
-  it. The app window's other options stay Windows only for now.
+  it. The app window reopens where it was closed, can start minimized and close with the game, and a second WTFTD
+  started brings it forward (through X11: the browser opens on XWayland for it). The notification area stays Windows
+  only: its icon needs a D-Bus service the standard library can't offer.
 
 ## 0.28.2 - 2026-11-11
 
