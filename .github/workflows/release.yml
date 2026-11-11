@@ -1,8 +1,9 @@
 name: Build the apps
 
-# Publishing a release builds WTFTD-<version>.exe (Windows), WTFTD-<version>.zip (WTFTD.app, Apple silicon) and
-# WTFTD-<version>-linux.tar.gz (Linux, x86-64) from the tagged code on GitHub's servers and attaches them to the release with their SHA-256, so anyone
-# can check that the download comes from this source code.
+# Publishing a release builds WTFTD-<version>-windows.exe (Windows), WTFTD-<version>-macos.zip (WTFTD.app, Apple
+# silicon) and WTFTD-<version>-linux.tar.gz (Linux, x86-64) from the tagged code on GitHub's servers and attaches them to
+# the release with their SHA-256, so anyone can check that the download comes from this source code. Each name says its
+# system; the app's update check finds its own download by that ending (APP_ASSET in wtftd/server.py).
 on:
   release:
     types: [published]
@@ -37,14 +38,14 @@ jobs:
           if ($env:TAG -notlike "v$v*") { throw "Tag $env:TAG does not match wtftd.__version__ $v" }
       - name: Reading the game's files works (compression.zstd)
         run: python -c "import compression.zstd"
-      - name: Build WTFTD-<version>.exe
+      - name: Build WTFTD-<version>-windows.exe
         shell: cmd
         run: build_exe.bat < NUL
       - name: Attach the exe and its SHA-256 to the release
         shell: pwsh
         run: |
           $v = python -c "import wtftd; print(wtftd.__version__)"
-          $exe = "WTFTD-$v.exe"  # build_exe.bat's name (built from the tag: no branch in it)
+          $exe = "WTFTD-$v-windows.exe"  # build_exe.bat's name (built from the tag: no branch in it)
           $hash = (Get-FileHash dist\$exe -Algorithm SHA256).Hash.ToLower()
           "$hash  $exe" | Out-File -Encoding ascii dist\$exe.sha256
           gh release upload $env:TAG dist\$exe dist\$exe.sha256 --clobber
@@ -76,7 +77,7 @@ jobs:
         run: ./build_app.sh
       - name: Attach the app and its SHA-256 to the release
         run: |
-          zip="WTFTD-$(python3 -c "import wtftd; print(wtftd.__version__)").zip"  # build_app.sh's name (tag: no branch)
+          zip="WTFTD-$(python3 -c "import wtftd; print(wtftd.__version__)")-macos.zip"  # build_app.sh's name (tag: no branch)
           cd dist
           hash=$(shasum -a 256 "$zip" | cut -d' ' -f1)
           echo "$hash  $zip" > "$zip.sha256"

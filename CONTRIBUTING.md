@@ -85,5 +85,5 @@ from the game's own translations and don't need translating.
 
 1. Bump `__version__` in `wtftd/__init__.py` and add the version to `CHANGELOG.md`.
 2. Commit, push, then publish a release with the tag `v<version>-beta` (notes = the changelog entry).
-3. GitHub Actions builds `WTFTD-<version>.exe`, `WTFTD-<version>.zip` and `WTFTD-<version>-linux.tar.gz` from that tag and
-   attaches them to the release with their SHA-256.
+3. GitHub Actions builds `WTFTD-<version>-windows.exe`, `WTFTD-<version>-macos.zip` and `WTFTD-<version>-linux.tar.gz`
+   from that tag and attaches them to the release with their SHA-256.

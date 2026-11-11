@@ -1,6 +1,6 @@
 @echo off
-rem Builds dist\WTFTD-<version>.exe: a single-file Windows app (Python and UI; game data comes on first launch).
-rem Built from a branch other than main, the branch is added to the name: dist\WTFTD-<version>-<branch>.exe.
+rem Builds dist\WTFTD-<version>-windows.exe: a single-file Windows app (Python and UI; game data comes on first launch).
+rem Built from a branch other than main, the branch is added to the name: dist\WTFTD-<version>-<branch>-windows.exe.
 title WTFTD - build exe
 cd /d "%~dp0"
 rem The exe carries the Python it is built with: 3.14+ to read the installed game, with tkinter for the overlay
@@ -15,8 +15,8 @@ for /f "delims=" %%v in ('%PY% -c "import wtftd; print(wtftd.__version__)"') do 
 if not defined VER (echo Could not read the version from wtftd\__init__.py & exit /b 1)
 set "BRANCH="
 for /f "delims=" %%b in ('git rev-parse --abbrev-ref HEAD 2^>nul') do set "BRANCH=%%b"
-set "NAME=WTFTD-%VER%"
-if defined BRANCH if not "%BRANCH%"=="main" if not "%BRANCH%"=="HEAD" set "NAME=WTFTD-%VER%-%BRANCH:/=-%"
+set "NAME=WTFTD-%VER%-windows"
+if defined BRANCH if not "%BRANCH%"=="main" if not "%BRANCH%"=="HEAD" set "NAME=WTFTD-%VER%-%BRANCH:/=-%-windows"
 if exist ".cache\build-venv\Scripts\python.exe" (
   .cache\build-venv\Scripts\python -c "%NEEDS%" >nul 2>nul || rmdir /s /q .cache\build-venv
 )

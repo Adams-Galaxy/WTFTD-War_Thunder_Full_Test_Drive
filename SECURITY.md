@@ -53,7 +53,7 @@ Only the latest release is supported: fixes ship in a new version.
   [War Thunder wiki](https://wiki.warthunder.com/), and the release list of this repository (new version alert).
 - **What it sends:** nothing. No account, no telemetry, no analytics. The Feedback button only opens GitHub's form in
   your browser, with what it lists: you read it and send it with your own account.
-- **The apps** (WTFTD-<version>.exe, WTFTD-<version>.zip) are built by GitHub Actions from the released source code; each
-  release lists their SHA-256 (check with `Get-FileHash WTFTD-<version>.exe` in PowerShell or
-  `shasum -a 256 WTFTD-<version>.zip` in Terminal). They aren't code-signed yet, hence the SmartScreen / Gatekeeper
-  warnings.
+- **The apps** (WTFTD-<version>-windows.exe, WTFTD-<version>-macos.zip, WTFTD-<version>-linux.tar.gz) are built by
+  GitHub Actions from the released source code; each release lists their SHA-256 (check with `Get-FileHash
+  WTFTD-<version>-windows.exe` in PowerShell, `shasum -a 256 WTFTD-<version>-macos.zip` in Terminal or `sha256sum
+  WTFTD-<version>-linux.tar.gz` on Linux). They aren't code-signed yet, hence the SmartScreen / Gatekeeper warnings.

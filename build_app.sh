@@ -1,6 +1,6 @@
 #!/bin/sh
-# Builds dist/WTFTD.app and dist/WTFTD-<version>.zip: the macOS app (Python and UI; game data comes on first launch).
-# Built from a branch other than main, the branch is added to the zip's name: dist/WTFTD-<version>-<branch>.zip.
+# Builds dist/WTFTD.app and dist/WTFTD-<version>-macos.zip: the macOS app (Python and UI; game data comes on first launch).
+# Built from a branch other than main, the branch is added to the zip's name: dist/WTFTD-<version>-<branch>-macos.zip.
 set -e
 cd "$(dirname "$0")"
 command -v python3 >/dev/null || { echo "Python 3.10+ is required: https://www.python.org/downloads/"; exit 1; }
@@ -23,7 +23,7 @@ codesign --force --deep --sign - dist/WTFTD.app  # ad hoc signature (Info.plist 
 name="WTFTD-$version"
 branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)
 case "$branch" in ""|main|HEAD) ;; *) name="$name-$(echo "$branch" | tr / -)" ;; esac
-rm -f "dist/$name.zip"
-ditto -c -k --keepParent dist/WTFTD.app "dist/$name.zip"
+rm -f "dist/$name-macos.zip"
+ditto -c -k --keepParent dist/WTFTD.app "dist/$name-macos.zip"
 echo
-echo "Built dist/WTFTD.app and dist/$name.zip"
+echo "Built dist/WTFTD.app and dist/$name-macos.zip"

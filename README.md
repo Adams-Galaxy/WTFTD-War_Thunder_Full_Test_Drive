@@ -30,8 +30,8 @@ is, how to use it, how it works and its limits.
 
 ## Download
 
-**[⬇ Download WTFTD-&lt;version&gt;.exe](https://github.com/StonewarP/WTFTD-War_Thunder_Full_Test_Drive/releases)** (Windows 10/11),
-**WTFTD-&lt;version&gt;.zip** (macOS, Apple silicon) or **WTFTD-&lt;version&gt;-linux.tar.gz** (Linux, x86-64) - nothing to
+**[⬇ Download WTFTD-&lt;version&gt;-windows.exe](https://github.com/StonewarP/WTFTD-War_Thunder_Full_Test_Drive/releases)** (Windows 10/11),
+**WTFTD-&lt;version&gt;-macos.zip** (macOS, Apple silicon) or **WTFTD-&lt;version&gt;-linux.tar.gz** (Linux, x86-64) - nothing to
 install: double-click it (on Linux, unpack it and run `./WTFTD`), the app opens in its own window and finds your game by
 itself (Steam or standalone). Close the window to quit. On Linux the window needs Chrome, Chromium, Edge or Brave;
 without one, WTFTD opens in your default browser.
@@ -50,8 +50,8 @@ without one, WTFTD opens in your default browser.
   `~/Library/Application Support/WTFTD` (macOS) or `~/.local/share/WTFTD` (Linux, `$XDG_DATA_HOME/WTFTD` when set).
 - The apps are not code-signed: if Windows SmartScreen warns you, click **More info → Run anyway**. On macOS, allow it in
   **System Settings → Privacy & Security → Open Anyway**. All are built by GitHub Actions from the released source
-  code, and each release lists their **SHA-256**: check your download with `Get-FileHash WTFTD-<version>.exe` in
-  PowerShell, `shasum -a 256 WTFTD-<version>.zip` in Terminal or `sha256sum WTFTD-<version>-linux.tar.gz` on Linux.
+  code, and each release lists their **SHA-256**: check your download with `Get-FileHash WTFTD-<version>-windows.exe` in
+  PowerShell, `shasum -a 256 WTFTD-<version>-macos.zip` in Terminal or `sha256sum WTFTD-<version>-linux.tar.gz` on Linux.
 - When a new version is released, a *New version* button shows at the top: download it and replace the old one; your
   settings and missions are kept.
 
@@ -164,7 +164,7 @@ Needs Python 3.10+ (no extra packages); reading the installed game instead of th
 Python 3.14+. Double-click **`start.bat`** (Windows) or **`start.command`** (macOS), or run `python -m wtftd`
 (`python3 -m wtftd` on Linux; `--browser` uses your default browser instead of an app window).
 
-To build `WTFTD-<version>.exe`, `WTFTD.app` or the Linux `WTFTD` yourself, run **`build_exe.bat`** on Windows,
+To build `WTFTD-<version>-windows.exe`, `WTFTD.app` or the Linux `WTFTD` yourself, run **`build_exe.bat`** on Windows,
 **`./build_app.sh`** on a Mac or **`./build_linux.sh`** on Linux, with a full Python 3.14+. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Known limits
@@ -190,7 +190,7 @@ Every page of the [wiki](https://github.com/StonewarP/WTFTD-War_Thunder_Full_Tes
 ## Layout
 
 ```
-start.bat / build_exe.bat   run from source / build WTFTD-<version>.exe (Windows)
+start.bat / build_exe.bat   run from source / build WTFTD-<version>-windows.exe (Windows)
 start.command / build_app.sh run from source / build WTFTD.app (macOS)
 build_linux.sh              build WTFTD and WTFTD-<version>-linux.tar.gz (Linux)
 wtftd_app.py                entry point of the packaged app

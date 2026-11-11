@@ -20,6 +20,8 @@ Versions follow `major.minor.patch`; "beta" until 1.0.
   it. The app window reopens where it was closed, can start minimized and close with the game, and a second WTFTD
   started brings it forward (through X11: the browser opens on XWayland for it). The notification area stays Windows
   only: its icon needs a D-Bus service the standard library can't offer.
+- **Downloads named by their system**: `WTFTD-<version>-windows.exe`, `WTFTD-<version>-macos.zip` and
+  `WTFTD-<version>-linux.tar.gz`.
 
 ## 0.28.2 - 2026-11-11
 
