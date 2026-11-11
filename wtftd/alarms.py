@@ -34,7 +34,7 @@ from functools import lru_cache
 from pathlib import Path
 from statistics import linear_regression
 
-from . import battle, flightlog, hud, mappaint, minimap, sights, waveout
+from . import battle, flightlog, hud, mappaint, minimap, sights, waveout, x11
 from .paths import WEB
 
 # the aircraft's limits a line's alarm can follow, % of the limit: default threshold, beep in Hz
@@ -161,7 +161,10 @@ def units() -> dict:
 
 
 def screen() -> tuple:
-    """Screen size in real pixels, whatever this process' DPI awareness (not Windows: a 4K screen, only for sizes)."""
+    """Screen size in real pixels, whatever this process' DPI awareness (Linux: X11's main screen; without one, or on
+    macOS, a 4K screen, only for sizes)."""
+    if sys.platform != "win32":
+        return x11.screen_size() or (3840, 2160)
     try:
         import ctypes
         dc = ctypes.windll.user32.GetDC(0)
@@ -947,6 +950,11 @@ def _process_name(folder: Path) -> str:
 
 
 def game_focused() -> bool:
+    """The game's window is in front. Linux: its process owns the window in front (X11); where that can't be told
+    (no X display, a window without its process), as if it were: the overlay and sounds don't stay off for nothing."""
+    if sys.platform != "win32":
+        pid = x11.active_pid()
+        return pid is None or _process_name(Path(f"/proc/{pid}")) in GAME_PROCESS
     import ctypes
     name = ctypes.create_unicode_buffer(32)
     ctypes.windll.user32.GetClassNameW(ctypes.windll.user32.GetForegroundWindow(), name, len(name))

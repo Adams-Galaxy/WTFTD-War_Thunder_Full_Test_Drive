@@ -1821,7 +1821,7 @@ async function openSettings(part) {
     : linux ? '~/.local/share/Steam/steamapps/common/War Thunder' : 'D:\\SteamLibrary\\steamapps\\common\\War Thunder';
   $('#setOodle').placeholder = mac ? '…/liboo2coremac64.2.9.dylib' : linux ? '…/liboo2corelinux64.so.9' : '…\\oo2core_9_win64.dll';
   $('#setGameDirHint').textContent = st.gameDir ? t('settings.detected', { path: st.gameDir }) : t('settings.gameDirHint');
-  $('#rowSteam').classList.toggle('hidden', !st.steamLaunch);  // Steam on Windows: the line to paste in its launch options
+  $('#rowSteam').classList.toggle('hidden', !st.steamLaunch);  // Steam on Windows and Linux: the line to paste in its launch options
   $('#setSteam').value = st.steamLaunch || '';
   $('#setOodle').value = st.settings?.oodleDll || '';
   $('#setOodleFound').textContent = st.oodle ? t('settings.oodleFound', { path: st.oodle }) : t('settings.oodleNone');
@@ -1840,7 +1840,8 @@ async function openSettings(part) {
   $('#cdkFiles').textContent = t('settings.cdkFiles', { n: st.cdk?.present || 0 });
   $('#setAirMethod').value = st.cdk?.airMethod || 'custom';
   $('#setAutoUpdate').checked = st.settings?.autoUpdate !== false;
-  $('#setWindow').classList.toggle('hidden', !st.alarms);  // Windows only
+  $('#setWindow').classList.toggle('hidden', !st.flight);  // where the game can be seen: Windows and Linux
+  ['#setStartMinimized', '#setTray', '#setCloseWithGame'].forEach(id => $(id).closest('label').classList.toggle('hidden', !st.alarms));  // the app window's: Windows
   [['#setStartMinimized', 'startMinimized'], ['#setTray', 'trayMinimize'], ['#setCloseWithGame', 'closeWithGame'], ['#setLaunchGame', 'launchGame']].forEach(([id, key]) => { $(id).checked = st.settings?.[key] === true; });
   $('#setTheme').value = themePref();
   $('#dataVersion').textContent = st.data?.version ? `${t('settings.version', { version: st.data.version, date: new Date(st.data.built * 1000).toLocaleDateString(I18N.code) })} · ${t('source.from.' + (st.data.source || 'datamine'))}` : '';

@@ -3,6 +3,7 @@ game read in flight."""
 import importlib
 import json
 import math
+import os
 import re
 import shutil
 import subprocess
@@ -16,7 +17,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from unittest import mock
 
-from wtftd import __main__ as app, alarms, bench, flightlog, game, maptex, paths, server
+from wtftd import __main__ as app, alarms, bench, flightlog, game, maptex, paths, server, x11
 
 
 class GameFolder(unittest.TestCase):
@@ -223,6 +224,71 @@ class GameProcess(unittest.TestCase):
         finally:
             proc.kill()
             proc.wait()
+
+
+class GameOnLinux(unittest.TestCase):
+    """Linux: the game in front and the screen from X11, War Thunder launched with WTFTD, and from Steam's launch line."""
+
+    def test_the_game_in_front(self):
+        with mock.patch.object(sys, "platform", "linux"):
+            for pid, name, front in ((None, "", True), (42, "aces", True), (42, "aces.exe", True), (42, "chromium", False)):
+                with mock.patch.object(alarms.x11, "active_pid", return_value=pid), mock.patch.object(alarms, "_process_name", return_value=name):
+                    self.assertEqual(alarms.game_focused(), front, (pid, name))  # None: can't be told, as if it were
+
+    def test_the_screen(self):
+        with mock.patch.object(sys, "platform", "linux"):
+            with mock.patch.object(alarms.x11, "screen_size", return_value=(2560, 1440)):
+                self.assertEqual(alarms.screen(), (2560, 1440))
+            with mock.patch.object(alarms.x11, "screen_size", return_value=None):  # no X display
+                self.assertEqual(alarms.screen(), (3840, 2160))
+
+    def test_no_x_display(self):
+        with mock.patch.dict(x11._lib, {"x": None}), mock.patch.object(x11, "_local", threading.local()):
+            self.assertIsNone(x11.active_pid())
+            self.assertIsNone(x11.screen_size())
+
+    @unittest.skipUnless(sys.platform.startswith("linux") and os.environ.get("DISPLAY"), "an X display")
+    def test_a_real_display(self):
+        width, height = x11.screen_size()
+        self.assertTrue(width > 0 and height > 0)
+        pid = x11.active_pid()
+        self.assertTrue(pid is None or pid > 0)
+
+    def test_launched_with_wtftd(self):
+        with mock.patch.object(sys, "platform", "linux"), mock.patch.object(app.STATE, "settings", lambda: {"launchGame": True}), \
+                mock.patch.object(app.STATE, "game_dir", lambda: Path("wt")), mock.patch.object(app, "game_running", lambda: False), \
+                mock.patch.object(app.sys, "argv", ["WTFTD"]), mock.patch.object(app, "launch") as launch:
+            app.launch_on_start()
+        launch.assert_called_once_with(Path("wt"))
+
+    def from_steam(self, systemd: bool) -> list:
+        command = ["/home/u/.steam/steam/ubuntu12_32/reaper", "SteamLaunch", "AppId=236390", "--", "/home/u/War Thunder/launcher"]
+        with mock.patch.object(sys, "platform", "linux"), mock.patch.object(app.sys, "argv", ["WTFTD", "--with-game", *command]), \
+                mock.patch.object(app.subprocess, "Popen") as started, mock.patch.object(app, "already_running", return_value=False), \
+                mock.patch.object(app, "wait_game") as waited, mock.patch.dict(os.environ, {"DISPLAY": ":0"}), \
+                mock.patch.object(app.shutil, "which", lambda name: "/usr/bin/systemd-run" if systemd and name == "systemd-run" else None):
+            app.main()
+        waited.assert_called_once()
+        game_, wtftd = started.call_args_list
+        self.assertEqual((game_.args[0], game_.kwargs["cwd"]), (command, None))  # Steam's wrapper, in the folder Steam gave
+        self.assertEqual(wtftd.args[0][-1], "--game-started")
+        self.assertTrue(wtftd.kwargs["start_new_session"])
+        return wtftd.args[0]
+
+    def test_from_steam_wtftd_apart_from_the_game(self):
+        line = self.from_steam(systemd=True)
+        self.assertEqual(line[:4], ["systemd-run", "--user", "--quiet", "--collect"])
+        self.assertIn("--setenv=DISPLAY", line)
+        self.assertEqual(line[line.index("--") + 1:-1], app.server.app_command())
+        self.assertEqual(self.from_steam(systemd=False), [*app.server.app_command(), "--game-started"])
+
+    def test_the_line_for_steam(self):
+        steam = Path("/home/u/.local/share/Steam/steamapps/common/War Thunder")
+        with mock.patch.object(sys, "platform", "linux"):
+            self.assertTrue(server.steam_launch_option(steam).endswith(" --with-game %command%"))
+            self.assertIsNone(server.steam_launch_option(Path("/home/u/WarThunder")))  # Gaijin's launcher: no Steam
+        with mock.patch.object(sys, "platform", "darwin"):
+            self.assertIsNone(server.steam_launch_option(steam))
 
 
 class Game(BaseHTTPRequestHandler):

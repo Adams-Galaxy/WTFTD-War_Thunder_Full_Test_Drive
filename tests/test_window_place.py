@@ -166,6 +166,7 @@ class FromSteam(unittest.TestCase):
 
     def run_it(self, running: bool, argv=("WTFTD", "--with-game", r"D:\Steam\War Thunder\launcher.exe", "-x")):
         with mock.patch.object(app.sys, "argv", list(argv)), mock.patch.object(app.subprocess, "Popen") as started, \
+                mock.patch.object(app.sys, "platform", "win32"), \
                 mock.patch.object(app, "already_running", return_value=running), mock.patch.object(app, "wait_game") as waited:
             app.main()
         return started, waited
@@ -184,11 +185,11 @@ class FromSteam(unittest.TestCase):
 
     def test_waits_for_the_game_to_come_and_go(self):
         seen = iter([False, True, True, False, True])
-        with mock.patch.object(app, "available", lambda: True), mock.patch.object(app, "game_running", lambda: next(seen)), \
+        with mock.patch.object(app, "reader", lambda: True), mock.patch.object(app, "game_running", lambda: next(seen)), \
                 mock.patch.object(app.time, "sleep"):
             app.wait_game(appear=60, poll=0)
         self.assertEqual(next(seen), True)  # left at the first False after the game was seen
-        with mock.patch.object(app, "available", lambda: True), mock.patch.object(app, "game_running", lambda: False), \
+        with mock.patch.object(app, "reader", lambda: True), mock.patch.object(app, "game_running", lambda: False), \
                 mock.patch.object(app.time, "sleep"):
             app.wait_game(appear=0, poll=0)  # never came: gone at once
 
@@ -205,7 +206,7 @@ class LaunchOnStart(unittest.TestCase):
 
     def launched(self, on=True, running=False, argv=("WTFTD",)):
         with mock.patch.object(app.STATE, "settings", lambda: {"launchGame": on}), mock.patch.object(app.STATE, "game_dir", lambda: Path("wt")), \
-                mock.patch.object(app, "available", lambda: True), mock.patch.object(app, "game_running", lambda: running), \
+                mock.patch.object(app, "reader", lambda: True), mock.patch.object(app, "game_running", lambda: running), \
                 mock.patch.object(app.sys, "argv", list(argv)), mock.patch.object(app, "launch") as launch:
             app.launch_on_start()
         return launch.call_args_list
@@ -218,6 +219,7 @@ class LaunchOnStart(unittest.TestCase):
 
     def test_steam_says_the_game_is_on_its_way(self):
         with mock.patch.object(app.sys, "argv", ["WTFTD", "--with-game", "launcher.exe"]), mock.patch.object(app.subprocess, "Popen") as started, \
+                mock.patch.object(app.sys, "platform", "win32"), \
                 mock.patch.object(app, "already_running", return_value=False), mock.patch.object(app, "wait_game"):
             app.main()
         self.assertEqual(started.call_args_list[1].args[0][-1], "--game-started")

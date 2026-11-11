@@ -17,7 +17,7 @@ import urllib.request
 import webbrowser
 from pathlib import Path
 
-from .alarms import available, game_running
+from .alarms import available, game_running, reader
 from .paths import CACHE, FROZEN, USER, WEB, prepare
 from . import server
 from .game import launch
@@ -187,14 +187,14 @@ def already_running(path: Path = RUNNING, wait: float = CLOSING_S) -> bool:
 
 def launch_on_start():
     """Settings' option: War Thunder starts with WTFTD when it isn't running yet, nor on its way (started by Steam: the WTFTD
-    with_game starts says --game-started). Windows, where the game's window can be seen."""
-    if STATE.settings().get("launchGame") is True and "--game-started" not in sys.argv and available() and not game_running():
+    with_game starts says --game-started). Windows and Linux, where the game can be seen."""
+    if STATE.settings().get("launchGame") is True and "--game-started" not in sys.argv and reader() and not game_running():
         launch(STATE.game_dir())
 
 
 def wait_game(appear: float = GAME_APPEAR_S, poll: float = GAME_CHECK_S):
     """Until the game has come (its launcher may update it first) and gone again; at once where it can't be seen."""
-    if not available():
+    if not reader():
         return
     start, seen = time.monotonic(), False
     while True:
@@ -210,11 +210,21 @@ def with_game(command: list[str]):
     started it, WTFTD with it (the one running comes to the front), and this process lasts as long as the game, so that Steam
     sees it played."""
     if command:
-        folder = Path(command[0]).parent
-        subprocess.Popen(command, cwd=str(folder) if folder.is_dir() else None)
+        folder = Path(command[0]).parent  # Linux: Steam's own wrapper comes first, and Steam starts it in the game's folder
+        subprocess.Popen(command, cwd=str(folder) if folder.is_dir() and sys.platform == "win32" else None)
     if not already_running():
-        subprocess.Popen([*server.app_command(), "--game-started"], cwd=str(ROOT), creationflags=getattr(subprocess, "DETACHED_PROCESS", 0))
+        subprocess.Popen([*outside_steam(), *server.app_command(), "--game-started"], cwd=str(ROOT), creationflags=getattr(subprocess, "DETACHED_PROCESS", 0),
+                         start_new_session=sys.platform != "win32")
     wait_game()
+
+
+def outside_steam() -> list[str]:
+    """Linux: what starts WTFTD apart from the game. Steam counts a game played while any process it started lives (its
+    reaper adopts them all), so WTFTD runs as a user service; without systemd, it stays Steam's child."""
+    if sys.platform == "win32" or not shutil.which("systemd-run"):
+        return []
+    keep = [f"--setenv={k}" for k in ("DISPLAY", "WAYLAND_DISPLAY", "XAUTHORITY", "XDG_RUNTIME_DIR", "DBUS_SESSION_BUS_ADDRESS", "PULSE_SERVER") if k in os.environ]
+    return ["systemd-run", "--user", "--quiet", "--collect", f"--working-directory={ROOT}", *keep, "--"]
 
 
 def main():

@@ -365,8 +365,8 @@ def app_command() -> list[str]:
 
 def steam_launch_option(gd) -> str | None:
     """What to paste in Steam (War Thunder, Properties, Launch options) for WTFTD to open with the game: Steam then starts WTFTD
-    with the game's own command line, and WTFTD starts the game (see __main__.with_game). Windows, a Steam install."""
-    if sys.platform != "win32" or not gd or not game.is_steam_install(gd):
+    with the game's own command line, and WTFTD starts the game (see __main__.with_game). Windows and Linux, a Steam install."""
+    if not alarms.reader() or not gd or not game.is_steam_install(gd):
         return None
     return " ".join(f'"{x}"' for x in app_command()) + " --with-game %command%"
 

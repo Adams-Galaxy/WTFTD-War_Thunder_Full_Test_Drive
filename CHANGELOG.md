@@ -11,8 +11,10 @@ Versions follow `major.minor.patch`; "beta" until 1.0.
   Gaijin's launcher in `~/WarThunder`, keeps its files in `~/.local/share/WTFTD`, opens in its own window with Chrome,
   Chromium, Edge or Brave (in the default browser otherwise, Firefox included) and starts War Thunder through Steam or
   its launcher. Flight data and the Test bench work there too: they read the game's own page (port 8111) as on Windows,
-  and the game's button at the top says whether War Thunder is running (its `aces` process). My overlay, the alarms,
-  the cockpit window and the app window's options stay Windows only, as on macOS.
+  and the game's button at the top says whether War Thunder is running (its `aces` process). Settings' *Launch War
+  Thunder when WTFTD opens* and Steam's launch line work there too: from Steam, WTFTD runs as a user service
+  (`systemd-run`), apart from the game, so that Steam counts only the game's time. My overlay, the alarms, the cockpit
+  window and the app window's other options stay Windows only for now, as on macOS.
 
 ## 0.28.2 - 2026-11-11
 

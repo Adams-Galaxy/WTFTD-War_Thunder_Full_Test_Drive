@@ -175,8 +175,8 @@ WTFTD is in beta. The main limits:
   modifications, ground missiles on pylons other than the Aster-30, Challenges, the Test bench, the fighter HUD and the
   minimap. The [in-game checklist](docs/ingame-checklist.md) lists what's still open.
 - My overlay, the alarms, the cockpit window and the app window's options (start minimized, notification area, close
-  with the game) are Windows only. Flight data and the Test bench work on Windows and Linux. All were mostly flown on jets
-  in test flights.
+  with the game) are Windows only. Flight data, the Test bench, launching War Thunder with WTFTD and Steam's launch line
+  work on Windows and Linux. All were mostly flown on jets in test flights.
 - Missions and custom vehicles are local: they can't be played together online. Share the setup instead.
 - Stats come from the game's own stat cards or are computed from the vehicle files (tank top speed ±10 %); computed
   penetration is within 1 mm of the official wiki on the shells compared.
