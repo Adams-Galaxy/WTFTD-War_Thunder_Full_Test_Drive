@@ -1,21 +1,30 @@
-"""The overlay's text painted by GDI+ (Windows): laid out as the Tk overlay was, smooth letters with a dark halo when no
-outline is set, see-through backgrounds, blinking lines; no window, into memory."""
+"""The overlay's text painted by GDI+ (Windows) or cairo (Linux): laid out as the Tk overlay was, smooth letters with a
+dark halo when no outline is set, see-through backgrounds, blinking lines; no window, into memory."""
 import sys
 import unittest
 
 from tests.test_alarms import WORDS
-from wtftd import alarms
+from wtftd import alarms, cairopaint
+
+PAINTER = sys.platform == "win32" or (sys.platform.startswith("linux") and cairopaint.available())
+
+
+def painter():
+    """This system's painter: GDI+ on Windows, cairo on Linux."""
+    if sys.platform == "win32":
+        from wtftd import mappaint
+        return mappaint.Painter()
+    return cairopaint.Painter()
 
 
 def line(text, color="#E6E6E6", size=40, blinks=False, block=0, parts=None):
     return (text, color, size, blinks, block, parts or [(text, color)])
 
 
-@unittest.skipUnless(sys.platform == "win32", "Windows")
+@unittest.skipUnless(PAINTER, "GDI+ or cairo")
 class Text(unittest.TestCase):
     def setUp(self):
-        from wtftd import mappaint
-        self.painter = mappaint.Painter()
+        self.painter = painter()
         self.cfg = {**alarms.clean({}, WORDS), "x": 100, "y": 50, "font": "Consolas", "bold": True, "outline": 0}
 
     def alpha(self, px, box, x, y):

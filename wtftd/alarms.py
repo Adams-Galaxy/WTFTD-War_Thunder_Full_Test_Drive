@@ -145,8 +145,8 @@ GLOW_STEP = 4  # worked out one pixel in 4: a 4K screen has 8 million, too many 
 
 
 def available() -> bool:
-    """The overlay, its sounds and keys, the cockpit window and the app window's options: Windows."""
-    return sys.platform == "win32"
+    """The overlay, its sounds and keys, the cockpit window: Windows, and Linux (X11, see xoverlay)."""
+    return sys.platform == "win32" or sys.platform.startswith("linux")
 
 
 def reader() -> bool:
@@ -1727,7 +1727,11 @@ def paint_glow(hwnd: int, size: tuple, pixels: bytes):
 
 
 def run_overlay(watch: Watch):
-    """The overlay window. Runs in its own thread, with every Tk call: the main one waits for the app window."""
+    """The overlay window. Runs in its own thread, with every Tk call: the main one waits for the app window. Linux: X11
+    windows painted by cairo instead (xoverlay)."""
+    if sys.platform != "win32":
+        from . import xoverlay  # here: it imports this module
+        return xoverlay.run(watch)
     try:
         import ctypes
         import tkinter as tk

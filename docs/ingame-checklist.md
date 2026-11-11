@@ -579,6 +579,9 @@ are the ones picked): each one's test is in its description.
 - [ ] **Test bench: Bf 109 F-4, Stall speed, 2,000 m**: with mouse aim, then with instructor off: does the aircraft sink as expected, is the speed near the game's stall warning?
 - [ ] Linux, the game played there: the game's button at the top says *Game running* (its `aces` process), Flight data draws the flight and a test above
   gives its result as on Windows. Checked so far in Ubuntu 24.04 (WSL) against a stand-in for port 8111, and with a process named `aces`.
+- [ ] Linux, My overlay turned on, the game full screen: the text, the HUD, the minimap and the glow show over the game (X11 session, then
+  Wayland), clicks go through, the keys and a joystick button work, the beeps play on the output picked. Checked so far in WSL's XWayland:
+  the windows drawn and read back, sounds played silent; never over the game.
 - [ ] Linux, Steam's launch line from Settings pasted in War Thunder's launch options: the game starts, WTFTD opens, and once the game is closed
   Steam stops counting play time even with WTFTD still open (WTFTD runs through `systemd-run --user`). Checked only with the command line mocked.
 - [ ] A helicopter, **Test bench: <helicopter>, Top speed, 500 m**: air start at low speed, does `/state` send a throttle, and does the check make sense on a helicopter?

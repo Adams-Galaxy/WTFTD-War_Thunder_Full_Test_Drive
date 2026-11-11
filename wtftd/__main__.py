@@ -268,7 +268,7 @@ def main():
             no_translate(profile)
             proc = subprocess.Popen([exe, f"--app={url}", f"--user-data-dir={profile}", *size, *STAY_AWAKE,
                                      "--no-first-run", "--no-default-browser-check", "--disable-features=Translate"])
-            if available():
+            if sys.platform == "win32":
                 from . import tray
                 icon = window_options(tray)
             if sys.platform == "win32":

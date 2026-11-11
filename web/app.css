@@ -661,6 +661,7 @@ option { background: var(--surface); }
 .host-row span { display: inline-flex; gap: 6px; align-items: center; }
 .host-row select { width: 100%; }
 .host-warn { grid-column: 2; color: var(--warn); }
+.ov-note { margin: 0 0 12px; color: var(--warn); }
 
 /* ------------------------------------------------------------------ cheats */
 .cheats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }

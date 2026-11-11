@@ -23,7 +23,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
 from . import DONATE, REPO, __version__, alarms, battle, bench, builder, cdk, challenges, flightlog, game, hangar, hud, maptex, mission, models, mods, patches, replays, sights, \
-    terrain, uninstall, vromfs, waveout
+    terrain, uninstall, vromfs, waveout, xoverlay
 from .paths import CACHE, DATA, FROZEN, HOME, USER, WEB
 
 ROOT = HOME
@@ -409,6 +409,7 @@ def api_status():
         "settings": STATE.settings(),
         "alarms": alarms.available(),
         "flight": alarms.reader(),  # Flight data and the Test bench
+        "overlayNote": xoverlay.note() if alarms.available() else None,  # Linux: what may keep the overlay off the screen
         "cdk": {"enabled": STATE.cdk_enabled(), "defaultHosts": cdk.DEFAULT_HOSTS,
                 "airMethod": STATE.settings().get("airMethod") or "custom",
                 **cdk.status(gd, USER)},

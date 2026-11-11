@@ -37,7 +37,7 @@ then builds `data/`. Rebuild the data by hand with `python -m wtftd.builder --no
 | `wtftd/armament.py` | Weapons page data (missiles, bombs, rockets, torpedoes) |
 | `wtftd/mission.py` | Official scenario + your setup → `.blk` user mission |
 | `wtftd/cdk.py` | Custom vehicle files (`userVehicles` + `@override`) |
-| `wtftd/alarms.py` | In-flight values (Windows and Linux: `reader()`), alarms and overlay (Windows: `available()`): game's `/state` + flight model limits; UI in `web/overlay.js` |
+| `wtftd/alarms.py` | In-flight values (`reader()`), alarms and overlay (`available()`), Windows and Linux: game's `/state` + flight model limits; UI in `web/overlay.js`. Linux draws the overlay in `xoverlay.py` (X11 windows from `x11.py`, painted by `cairopaint.py`) |
 | `wtftd/flightlog.py` | CSV flight logs (`user/logs`); curves in `web/flight.js` |
 | `wtftd/battle.py` | The game's chat and battle log; UI in `web/battle.js` |
 | `wtftd/replays.py` | My battles: the player's own results from the game's replays, indexed in `.cache/battles.json`; UI in `web/history.js` |

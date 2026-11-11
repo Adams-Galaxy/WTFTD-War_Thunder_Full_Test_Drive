@@ -1,5 +1,5 @@
 """The minimap: your aircraft, the map's fixed objects and allies on request, never an enemy; round or square, north or nose
-up; gliding between readings; painted by GDI+ (Windows), and its settings."""
+up; gliding between readings; painted by GDI+ (Windows) or cairo (Linux), and its settings."""
 import json
 import math
 import sys
@@ -7,6 +7,7 @@ import unittest
 from unittest import mock
 
 from tests.test_alarms import WORDS, details, state
+from tests.test_overlay_text import PAINTER, painter
 from wtftd import alarms, minimap
 
 ME = {"type": "aircraft", "icon": "Player", "color": "#FAC81E", "x": 0.5, "y": 0.5, "dx": 0.7, "dy": -0.7}
@@ -214,15 +215,13 @@ class Read(unittest.TestCase):
         self.assertEqual(self.watch.sample_map(alarms.clean({}, WORDS)), [])
 
 
-@unittest.skipUnless(sys.platform == "win32", "Windows")
+@unittest.skipUnless(PAINTER, "GDI+ or cairo")
 class Painted(unittest.TestCase):
-    """GDI+ into memory, no window: what the corners and the middle come out as."""
+    """GDI+ or cairo into memory, no window: what the corners and the middle come out as."""
 
     def paint(self, **cfg):
-        from wtftd import mappaint
-        painter = mappaint.Painter()
         frame = minimap.draw(minimap.SAMPLE, minimap.SAMPLE_INFO, minimap.SAMPLE_TRAIL, {**CFG, "mapX": 10, "mapY": 10, "mapSize": 200, **cfg})
-        px = painter.pixels({**frame, "image": (None, None)}, 224, 254, 8, 8)
+        px = painter().pixels({**frame, "image": (None, None)}, 224, 254, 8, 8)
         return lambda x, y: px[(y * 224 + x) * 4: (y * 224 + x) * 4 + 4]  # B, G, R, A
 
     def test_square(self):
@@ -236,18 +235,17 @@ class Painted(unittest.TestCase):
         self.assertEqual(at(110, 110)[3], 255)  # the middle
 
 
-@unittest.skipUnless(sys.platform == "win32", "Windows")
+@unittest.skipUnless(PAINTER, "GDI+ or cairo")
 class Contrast(unittest.TestCase):
     """On a bright map (a white picture here): a dark edge round each mark, and the map darkened as set."""
 
     def setUp(self):
         import struct
         import zlib
-        from wtftd import mappaint
         rows = b"".join(b"\x00" + b"\xff\xff\xff" * 64 for _ in range(64))
         chunk = lambda t, d: struct.pack(">I", len(d)) + t + d + struct.pack(">I", zlib.crc32(t + d) & 0xffffffff)
         png = b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", 64, 64, 8, 2, 0, 0, 0)) + chunk(b"IDAT", zlib.compress(rows)) + chunk(b"IEND", b"")
-        self.painter = mappaint.Painter()
+        self.painter = painter()
         self.assertTrue(self.painter.load(png, "white"))
 
     def pixel(self, dim, x, y):

@@ -92,7 +92,49 @@ def argb(color: str, alpha: int = 255) -> int:
     return (alpha << 24) | int(color[1:7], 16)
 
 
-class Painter:
+class Layout:
+    """Where the overlay's text blocks go, for both painters (this one, cairopaint's): each needs _text_font(cfg, size)
+    -> (font, ..., line height) and _width(text, font)."""
+
+    def text_layout(self, cfg: dict, lines: list) -> tuple:
+        """Where each part of each line goes, as the Tk overlay laid them out: each block's lines in its columns, a column
+        as wide as its widest line. Returns ([(x, y, text, colour, size, blinks, colour out of its turn)...], [(block, box)...])
+        in screen pixels."""
+        from .alarms import columns_of  # here: alarms imports this module
+        parts, boxes = [], []
+        for index, spot in enumerate([cfg, *cfg["blocks"]]):
+            rows = [x for x in lines if x[4] == index]
+            left, low, high, top = spot["x"], None, None, spot["y"]
+            for column in columns_of(rows, spot["columns"]):
+                y, wide = spot["y"], 0.0
+                for _, color, size, blinks, _, row in column:
+                    font, _, _, height = self._text_font(cfg, size)
+                    x = left
+                    for text, tint, *flash in row or [(" ", color)]:  # each part flashes on its own, or with its line
+                        parts.append((x, y, text, tint, size, flash[0] if flash else blinks, flash[1] if len(flash) > 1 else None))
+                        x += self._width(text, font)
+                    y += height + cfg["spacing"]
+                    wide = max(wide, x - left)
+                    low = left if low is None else low
+                high = max(high or 0, left + wide)
+                left += wide + cfg["size"]
+                top = max(top, y)
+            if rows:
+                boxes.append((spot, (spot["x"], spot["y"], high, top - cfg["spacing"])))
+        return parts, boxes
+
+    def text_box(self, cfg: dict, lines: list) -> tuple | None:
+        """The window round all the blocks, with room for their frames, outlines and shadows: (x, y, width, height)."""
+        _, boxes = self.text_layout(cfg, lines)
+        if not boxes:
+            return None
+        margin = BLOCK_PAD + max(spot["frame"] for spot, _ in boxes) + 2 * cfg["outline"] + 4
+        x0, y0 = min(b[0] for _, b in boxes) - margin, min(b[1] for _, b in boxes) - margin
+        x1, y1 = max(b[2] for _, b in boxes) + margin, max(b[3] for _, b in boxes) + margin
+        return int(x0), int(y0), int(x1 - x0) + 1, int(y1 - y0) + 1
+
+
+class Painter(Layout):
     """GDI+ started once for the overlay's thread; the map picture read once per map (any format the game sends)."""
 
     def __init__(self):
@@ -324,33 +366,6 @@ class Painter:
                                   ctypes.byref(box), None, None)
         return box.w
 
-    def text_layout(self, cfg: dict, lines: list) -> tuple:
-        """Where each part of each line goes, as the Tk overlay laid them out: each block's lines in its columns, a column
-        as wide as its widest line. Returns ([(x, y, text, colour, size, blinks, colour out of its turn)...], [(block, box)...])
-        in screen pixels."""
-        from .alarms import columns_of  # here: alarms imports this module
-        parts, boxes = [], []
-        for index, spot in enumerate([cfg, *cfg["blocks"]]):
-            rows = [x for x in lines if x[4] == index]
-            left, low, high, top = spot["x"], None, None, spot["y"]
-            for column in columns_of(rows, spot["columns"]):
-                y, wide = spot["y"], 0.0
-                for _, color, size, blinks, _, row in column:
-                    font, _, _, height = self._text_font(cfg, size)
-                    x = left
-                    for text, tint, *flash in row or [(" ", color)]:  # each part flashes on its own, or with its line
-                        parts.append((x, y, text, tint, size, flash[0] if flash else blinks, flash[1] if len(flash) > 1 else None))
-                        x += self._width(text, font)
-                    y += height + cfg["spacing"]
-                    wide = max(wide, x - left)
-                    low = left if low is None else low
-                high = max(high or 0, left + wide)
-                left += wide + cfg["size"]
-                top = max(top, y)
-            if rows:
-                boxes.append((spot, (spot["x"], spot["y"], high, top - cfg["spacing"])))
-        return parts, boxes
-
     def draw_text(self, g, cfg: dict, lines: list, lit: bool, ox: float, oy: float):
         gp = self.gp
         gp.GdipSetSmoothingMode(g, SMOOTH)
@@ -397,16 +412,6 @@ class Painter:
             gp.GdipFillPath(g, brush, path)
             gp.GdipDeleteBrush(brush)
             gp.GdipDeletePath(path)
-
-    def text_box(self, cfg: dict, lines: list) -> tuple | None:
-        """The window round all the blocks, with room for their frames, outlines and shadows: (x, y, width, height)."""
-        _, boxes = self.text_layout(cfg, lines)
-        if not boxes:
-            return None
-        margin = BLOCK_PAD + max(spot["frame"] for spot, _ in boxes) + 2 * cfg["outline"] + 4
-        x0, y0 = min(b[0] for _, b in boxes) - margin, min(b[1] for _, b in boxes) - margin
-        x1, y1 = max(b[2] for _, b in boxes) + margin, max(b[3] for _, b in boxes) + margin
-        return int(x0), int(y0), int(x1 - x0) + 1, int(y1 - y0) + 1
 
     def text_pixels(self, cfg: dict, lines: list, lit: bool = True) -> tuple:
         """The text as premultiplied BGRA and its box: for the tests."""

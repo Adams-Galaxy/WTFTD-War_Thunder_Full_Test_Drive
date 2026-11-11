@@ -1,5 +1,7 @@
 """Windows / macOS / Linux differences: where the game files are, which Oodle runtime file names count, the alarms, the
 game read in flight."""
+import base64
+import ctypes
 import importlib
 import json
 import math
@@ -18,7 +20,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from unittest import mock
 
-from wtftd import __main__ as app, alarms, bench, flightlog, game, maptex, paths, server, waveout, x11
+from wtftd import __main__ as app, alarms, bench, cairopaint, flightlog, game, maptex, minimap, paths, server, waveout, x11, xoverlay
 
 
 class GameFolder(unittest.TestCase):
@@ -160,13 +162,19 @@ class Alarms(unittest.TestCase):
             with mock.patch.object(sys, "platform", platform):
                 self.assertEqual(alarms.reader(), on, platform)
 
-    def test_mac_and_linux_have_no_alarms(self):
-        for platform in ("darwin", "linux"):
-            with mock.patch.object(sys, "platform", platform):
-                self.assertFalse(alarms.available())
-                with mock.patch.object(server.WATCH, "set_enabled") as switch:
-                    server.apply_alarm_settings()
-                switch.assert_called_once_with(False)
+    def test_mac_has_no_alarms(self):
+        with mock.patch.object(sys, "platform", "darwin"):
+            self.assertFalse(alarms.available())
+            with mock.patch.object(server.WATCH, "set_enabled") as switch:
+                server.apply_alarm_settings()
+            switch.assert_called_once_with(False)
+
+    def test_linux_has_them_as_windows(self):
+        with mock.patch.object(sys, "platform", "linux"), mock.patch.object(server.STATE, "settings", return_value={"alarms": True}), \
+                mock.patch.object(server.WATCH, "set_enabled") as switch:
+            self.assertTrue(alarms.available())
+            server.apply_alarm_settings()
+        switch.assert_called_once_with(True)
 
     def test_off_until_the_player_turns_them_on(self):
         for saved, on in (({}, False), ({"alarms": False}, False), ({"alarms": True}, True)):
@@ -244,7 +252,7 @@ class GameOnLinux(unittest.TestCase):
                 self.assertEqual(alarms.screen(), (3840, 2160))
 
     def test_no_x_display(self):
-        with mock.patch.dict(x11._lib, {"x": None}), mock.patch.object(x11, "_local", threading.local()):
+        with mock.patch.dict(x11._lib, {"x": None}, clear=True):
             self.assertIsNone(x11.active_pid())
             self.assertIsNone(x11.screen_size())
 
@@ -412,6 +420,141 @@ class JoystickOnLinux(unittest.TestCase):
         self.events(0, (2, True, True))  # held already: doesn't count
         with mock.patch.object(alarms.time, "sleep", lambda s: self.events(0, (5, True, False))):
             self.assertEqual(alarms.joy_wait(1), alarms.JOY + 5)
+
+
+RED_JPEG = base64.b64decode(  # 16 x 16, all (200, 30, 30): a map the game sends as JPEG
+    "/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAMCAgMCAgMDAwMEAwMEBQgFBQQEBQoHBwYIDAoMDAsKCwsNDhIQDQ4RDgsLEBYQERMUFRUVDA8XGB"
+    "YUGBIUFRT/2wBDAQMEBAUEBQkFBQkUDQsNFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBT/wAARCAAQ"
+    "ABADASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhBy"
+    "JxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKT"
+    "lJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAA"
+    "AAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRom"
+    "JygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExc"
+    "bHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwDwKiiivzI/uM//2Q==")
+
+
+class FakeX:
+    """A stand-in for libX11's keyboard and pointer: these keycodes held, this pointer mask."""
+
+    def __init__(self, held: set, mask: int):
+        self.held_codes, self.mask, self.codes = held, mask, {0x61: 38, 0xFFE1: 50, 0xFFE2: 62, 0xFFBE: 67}
+
+    def XQueryKeymap(self, d, keymap):
+        for code in self.held_codes:
+            keymap[code >> 3] = bytes([keymap.raw[code >> 3] | 1 << (code & 7)])
+
+    def XKeysymToKeycode(self, d, sym):
+        return self.codes.get(sym, 0)
+
+    def XDefaultRootWindow(self, d):
+        return 1
+
+    def XQueryPointer(self, d, root, w1, w2, i1, i2, i3, i4, mask):
+        mask._obj.value = self.mask
+        return 1
+
+
+class OverlayOnLinux(unittest.TestCase):
+    """Linux: My overlay's keys read from X, what may keep the overlay off the screen, and cairo's pictures (the text and
+    the minimap have their own tests in test_overlay_text and test_minimap, run with both painters)."""
+
+    def test_keys_and_mouse_buttons_from_x(self):
+        with mock.patch.object(x11, "lib", return_value=FakeX({38, 62}, 1 << 9)), mock.patch.object(x11, "display", return_value=1), \
+                mock.patch.dict(x11._codes, clear=True):
+            held = x11.held([0x41, 0x10, 0x70, 4, 2, 5])  # A, Shift (the right one), F1; middle, right and side buttons
+        self.assertEqual(held, {0x41, 0x10, 4})  # the side buttons aren't in X's pointer mask
+        with mock.patch.object(x11, "display", return_value=None):
+            self.assertEqual(x11.held([0x41]), set())
+
+    def test_what_may_keep_it_off_the_screen(self):
+        with mock.patch.object(sys, "platform", "linux"):
+            for shown, composited, wayland, note in ((None, False, "", "x11"), (1, False, "", "compositor"),
+                                                     (1, True, "wayland-0", "wayland"), (1, True, "", None)):
+                with mock.patch.object(x11, "display", return_value=shown), mock.patch.object(x11, "composited", return_value=composited), \
+                        mock.patch.dict(os.environ, {"WAYLAND_DISPLAY": wayland}):
+                    self.assertEqual(xoverlay.note(), note)
+        with mock.patch.object(sys, "platform", "win32"):
+            self.assertIsNone(xoverlay.note())
+
+    def test_off_without_an_x_display(self):
+        watch = alarms.Watch(lambda path: None, dict, save=lambda: None)
+        with mock.patch.object(xoverlay, "note", return_value="x11"), mock.patch("builtins.print") as said:
+            xoverlay.run(watch)  # returns: the alarms go on without it
+        self.assertIn("no X display", said.call_args.args[0])
+
+    @unittest.skipUnless(sys.platform.startswith("linux") and cairopaint.available(), "cairo")
+    def test_the_hud_as_tk_draws_it(self):
+        cfg = alarms.clean({"hudColor": "#00FF00", "alert": "#FF0000"}, alarms.labels("en"))
+        line, alert = ("l", 10, 50, 90, 50, 3, False), ("l", 10, 80, 90, 80, 3, True)
+        px = cairopaint.Painter().hud_pixels(cfg, [line, alert], True, 100, 100)
+        at = lambda x, y: px[(y * 100 + x) * 4:(y * 100 + x) * 4 + 4]  # B, G, R, A
+        self.assertEqual(at(50, 50), b"\x00\xff\x00\xff")
+        self.assertEqual(at(50, 80), b"\x00\x00\xff\xff")  # an alarm on: the alert colour while lit
+        self.assertEqual(at(50, 20), b"\x00\x00\x00\x00")
+        self.assertEqual(cairopaint.hud_box([line]), (2, 42, 98, 58))
+
+    @unittest.skipUnless(sys.platform.startswith("linux") and cairopaint.available(), "cairo")
+    def test_a_jpeg_map(self):
+        try:
+            ctypes.CDLL("libgdk_pixbuf-2.0.so.0")
+        except OSError:
+            self.skipTest("no gdk-pixbuf")
+        painter = cairopaint.Painter()
+        self.assertTrue(painter.load(RED_JPEG, "jpeg"))
+        self.assertEqual(painter.image_size, (16, 16))
+        frame = minimap.draw({"me": None, "fixed": [], "allies": []}, minimap.SAMPLE_INFO, [],
+                             alarms.clean({"mapMode": "on", "mapX": 0, "mapY": 0, "mapSize": 100, "mapDim": 0}, alarms.labels("en")))
+        px = painter.pixels(frame, 104, 134, -2, -2)
+        b, g, r, a = px[(52 * 104 + 52) * 4:(52 * 104 + 52) * 4 + 4]
+        self.assertTrue(r > 180 and g < 60 and b < 60 and a == 255, (b, g, r, a))
+        self.assertFalse(painter.load(b"not a picture", "junk"))
+
+    @unittest.skipUnless(sys.platform.startswith("linux") and os.environ.get("WTFTD_X11_TEST") and cairopaint.available(),
+                         "real windows on the X display: WTFTD_X11_TEST=1 (in WSL they show on the Windows desktop)")
+    def test_real_windows(self):
+        made, real = [], x11.Layer
+
+        class Recorded(real):
+            def __init__(self, *args, **kwargs):
+                super().__init__(*args, **kwargs)
+                made.append(self)
+
+        watch = alarms.Watch(lambda path: None, dict, save=lambda: None)
+        cfg = alarms.clean({"hudMode": "on", "mapMode": "on", "blocks": []}, watch.words)
+        watch.preview = watch.base = cfg
+        watch.display, watch.hud = watch.sample(cfg), watch.sample_hud(cfg, "", "cockpit")
+        with mock.patch.object(x11, "Layer", Recorded):
+            thread = threading.Thread(target=xoverlay.run, args=(watch,), daemon=True)
+            thread.start()
+            time.sleep(1.5)
+            painter = cairopaint.Painter()
+            drawn = {x11.prop(layer.window, "WM_NAME"): (layer.shown, self.read(painter, layer)) for layer in made}
+            watch.stopping.set()
+            thread.join(3)
+        self.assertFalse(thread.is_alive())
+        for name in (b"WTFTD HUD", b"WTFTD text", b"WTFTD minimap"):  # drawn before they were shown: kept by their pixmaps
+            shown, pixels = drawn[name]
+            self.assertTrue(shown and pixels > 1000, (name, shown, pixels))
+        self.assertEqual(drawn[b"WTFTD glow"], (False, None))
+
+    @staticmethod
+    def read(painter, layer):
+        """How many pixels of a shown window aren't see-through, read back through its own connection."""
+        if not layer.shown:
+            return None
+        c, (w, h) = painter.c, layer.box[2:]
+        window = c.cairo_xlib_surface_create(layer.d, layer.window, layer.visual, w, h)
+        image = c.cairo_image_surface_create(cairopaint.ARGB32, w, h)
+        cr = c.cairo_create(image)
+        c.cairo_set_source_surface(cr, window, 0, 0)
+        c.cairo_set_operator(cr, cairopaint.SOURCE)
+        c.cairo_paint(cr)
+        c.cairo_surface_flush(image)
+        raw = ctypes.string_at(c.cairo_image_surface_get_data(image), c.cairo_image_surface_get_stride(image) * h)
+        c.cairo_destroy(cr)
+        c.cairo_surface_destroy(image)
+        c.cairo_surface_destroy(window)
+        return sum(1 for a in raw[3::4] if a)
 
 
 class Game(BaseHTTPRequestHandler):

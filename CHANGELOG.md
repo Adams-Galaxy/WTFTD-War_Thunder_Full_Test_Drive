@@ -13,8 +13,11 @@ Versions follow `major.minor.patch`; "beta" until 1.0.
   its launcher. Flight data and the Test bench work there too: they read the game's own page (port 8111) as on Windows,
   and the game's button at the top says whether War Thunder is running (its `aces` process). Settings' *Launch War
   Thunder when WTFTD opens* and Steam's launch line work there too: from Steam, WTFTD runs as a user service
-  (`systemd-run`), apart from the game, so that Steam counts only the game's time. My overlay, the alarms, the cockpit
-  window and the app window's other options stay Windows only for now, as on macOS.
+  (`systemd-run`), apart from the game, so that Steam counts only the game's time. My overlay, the alarms, the fighter
+  HUD, the minimap and the cockpit window work there too: see-through X11 windows drawn with cairo (X11, or XWayland on
+  a Wayland session, with a compositor), sounds through PulseAudio or PipeWire (else ALSA's `aplay`), keys from X and
+  joystick buttons from `/dev/input/js*`. On a Wayland session My overlay warns that a full-screen game may stay above
+  it. The app window's other options stay Windows only for now.
 
 ## 0.28.2 - 2026-11-11
 

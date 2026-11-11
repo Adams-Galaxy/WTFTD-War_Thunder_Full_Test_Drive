@@ -512,7 +512,9 @@ function ovDrag() {
 }
 
 function bindOverlay() {
-  $('[data-view="overlay"]').classList.toggle('hidden', !S.status?.alarms);  // Windows only
+  $('[data-view="overlay"]').classList.toggle('hidden', !S.status?.alarms);  // Windows and Linux
+  $('#ovNote').textContent = S.status?.overlayNote ? t('ov.note.' + S.status.overlayNote) : '';  // Linux: what may keep it off the screen
+  $('#ovNote').classList.toggle('hidden', !S.status?.overlayNote);
   OV.keys = new Map([...OV_TYPES.map(k => [t('ov.type.' + k), 'type:' + k]),
                      ...S.vehicles.filter(v => v.c === 'air' || v.c === 'heli').map(v => [I18N.unit(v.id), v.id])]);
   $('#ovNewList').innerHTML = [...OV.keys.keys()].map(n => `<option value="${esc(n)}">`).join('');

@@ -174,15 +174,16 @@ WTFTD is in beta. The main limits:
 - Several features haven't been checked in game yet: routes, waves and assets in the scenario editor, most
   modifications, ground missiles on pylons other than the Aster-30, Challenges, the Test bench, the fighter HUD and the
   minimap. The [in-game checklist](docs/ingame-checklist.md) lists what's still open.
-- My overlay, the alarms, the cockpit window and the app window's options (start minimized, notification area, close
-  with the game) are Windows only. Flight data, the Test bench, launching War Thunder with WTFTD and Steam's launch line
-  work on Windows and Linux. All were mostly flown on jets in test flights.
+- My overlay, the alarms, the fighter HUD, the minimap, the cockpit window, Flight data, the Test bench, launching War
+  Thunder with WTFTD and Steam's launch line work on Windows and Linux; the app window's options (start minimized,
+  notification area, close with the game) are Windows only. All were mostly flown on jets in test flights, on Windows.
 - Missions and custom vehicles are local: they can't be played together online. Share the setup instead.
 - Stats come from the game's own stat cards or are computed from the vehicle files (tank top speed ±10 %); computed
   penetration is within 1 mm of the official wiki on the shells compared.
 - macOS support is new and less tested than Windows; on an Intel Mac, [run from source](#run-from-source).
-- Linux support is newer still: checked on Ubuntu 24.04 with Chromium and the game's files, Flight data and the Test
-  bench against a stand-in for the game's port 8111, not yet with the game played on Linux. Ubuntu's own Chromium is a Snap and wasn't tried: if no window opens, start `./WTFTD --browser`.
+- Linux support is newer still: checked on Ubuntu 24.04 with Chromium and the game's files, the in-flight features
+  against a stand-in for the game's port 8111, not yet with the game played on Linux. The overlay needs X11 or XWayland
+  and a compositor; on a Wayland session a full-screen game may stay above it (play in a borderless window then). Ubuntu's own Chromium is a Snap and wasn't tried: if no window opens, start `./WTFTD --browser`.
 
 Every page of the [wiki](https://github.com/StonewarP/WTFTD-War_Thunder_Full_Test_Drive/wiki) ends with its own limits.
 
@@ -203,10 +204,12 @@ wtftd/                      Python backend (stdlib only)
   vromfs.py                 the game's own files: .vromfs.bin containers, binary BLK
   armament.py               Weapons page data (missiles, bombs, rockets, torpedoes)
   cdk.py + builder.py       sensors, engines, avionics, weapons on pylons of any kind
-  alarms.py / flightlog.py  in-flight values, alarms and overlay (Windows) / CSV flight logs, report, Tacview export
+  alarms.py / flightlog.py  in-flight values, alarms and overlay / CSV flight logs, report, Tacview export
   hud.py                    the fighter HUD's three styles, drawn as shapes for the overlay and the cockpit window
   minimap.py / mappaint.py  the minimap: what it shows (never an enemy) / the minimap and the overlay's text painted by
                             Windows (GDI+): the map turned and cut round, smooth letters with a halo
+  x11.py / xoverlay.py /    Linux: X11 through ctypes (the window in front, the screen, keys, see-through windows) /
+  cairopaint.py             the overlay's loop there / its HUD, text, minimap and glow painted by cairo
   battle.py                 the game's chat and battle log
   replays.py                My battles: the player's own results, from the game's replay files
   patches.py                What changed: the comparison of two game versions, kept in user/patches.json
@@ -214,7 +217,8 @@ wtftd/                      Python backend (stdlib only)
   bench.py                  Test bench: finds the valid stretches of a recorded test, results in user/bench.json
   mods.py                   Skins and sounds: untrusted archives, what WTFTD installed, config.blk's one line
   challenges.py             Challenges: what's where on each map, results in user/challenges.json
-  waveout.py / tray.py      sound on the output you pick / the app window: its place, minimized, notification area (Windows)
+  waveout.py / tray.py      sound on the output you pick (winmm, PulseAudio) / the app window: its place, minimized,
+                            notification area (Windows)
   uninstall.py              Settings → Uninstall
   blk.py, game.py, paths.py BLK writer, install detection, file locations
 web/                        UI (HTML/CSS/JS, no build step), web/locales = translations, stats.js = stats & search,
