@@ -4,7 +4,7 @@ What changed in each version of WTFTD. Downloads: [Releases](https://github.com/
 (only the latest version is kept there; from 0.19.0 on, each version's code stays available through its git tag).
 Versions follow `major.minor.patch`; "beta" until 1.0.
 
-## Not released yet
+## 0.28.2 - 2026-11-11
 
 - **Fixed: the overlay could stay under the game.** Started before War Thunder (with it from Steam), its windows were
   shown but the game, going full screen under DirectX 12, ended up above them: nothing on the screen. They now go back
