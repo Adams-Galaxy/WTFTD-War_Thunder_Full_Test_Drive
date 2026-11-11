@@ -53,6 +53,7 @@ MAP_FRAME_MS = 33  # and the window draws it about 30 times a second
 PICTURE_S = 2.0  # a map's picture not had yet (the game not ready, a battle joined with the app opening): asked again
 TRAIL_MAX = 600  # its trail's last places
 IDLE_S = 1.0  # not flying: nothing to read fast
+TOP_S = 1.0  # the overlay's windows put back on top of the others this often
 TRY_S = 60  # My overlay's Try, left alone this long, stops: the page that started it may be gone
 RING_S = 0.5  # what rings, not told again for this long (two readings at least), stops: muted, landed, the app gone
 HANGAR_IAS = 1  # km/h: the aircraft on show in the hangar reads 0 or 1
@@ -1703,6 +1704,12 @@ def run_overlay(watch: Watch):
         text_hwnd = user32.GetAncestor(textwin.winfo_id(), 2)
         WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TRANSPARENT, WS_EX_LAYERED, GWL_EXSTYLE = 0x08000000, 0x80, 0x20, 0x80000, -20
         SW_HIDE, SW_SHOWNOACTIVATE = 0, 4
+        # "always on top" is set once; a game going full screen (seen with DirectX 12, launched after WTFTD) can still push
+        # these windows under it, where they show to Windows and nobody: each second they go back on top
+        set_pos = ctypes.WINFUNCTYPE(ctypes.c_int, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int,
+                                     ctypes.c_int, ctypes.c_uint)(("SetWindowPos", user32))
+        HWND_TOPMOST, ON_TOP = ctypes.c_void_p(-1), 0x0001 | 0x0002 | 0x0010  # SWP_NOSIZE | SWP_NOMOVE | SWP_NOACTIVATE
+        raised = [0.0]
         click_through = WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW | WS_EX_TRANSPARENT  # clicks go through it
         user32.SetWindowLongW(hwnd, GWL_EXSTYLE, user32.GetWindowLongW(hwnd, GWL_EXSTYLE) | click_through)
         for h in (map_hwnd, text_hwnd):
@@ -1831,6 +1838,11 @@ def run_overlay(watch: Watch):
                 paint_glow(glow_hwnd, screen(), glow_pixels(screen(), *painted))
             shown_glow = spec and spec[:2] == painted and (watch.preview or watch.trial or (not watch.hidden and game_focused()))
             user32.ShowWindow(glow_hwnd, SW_SHOWNOACTIVATE if shown_glow and (not spec[2] or watch.lit(spec[2])) else SW_HIDE)
+            if time.monotonic() - raised[0] >= TOP_S:
+                raised[0] = time.monotonic()
+                for h in (hwnd, text_hwnd, map_hwnd, glow_hwnd):
+                    if user32.IsWindowVisible(h):
+                        set_pos(h, HWND_TOPMOST, 0, 0, 0, 0, ON_TOP)
             root.after(HUD_FRAME_MS if shapes or watch.ringing else MAP_FRAME_MS if frame else int(POLL_S * 1000), refresh)  # ringing: flashes on the beat
 
         refresh()

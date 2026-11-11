@@ -4,6 +4,12 @@ What changed in each version of WTFTD. Downloads: [Releases](https://github.com/
 (only the latest version is kept there; from 0.19.0 on, each version's code stays available through its git tag).
 Versions follow `major.minor.patch`; "beta" until 1.0.
 
+## Not released yet
+
+- **Fixed: the overlay could stay under the game.** Started before War Thunder (with it from Steam), its windows were
+  shown but the game, going full screen under DirectX 12, ended up above them: nothing on the screen. They now go back
+  on top every second.
+
 ## 0.28.1 - 2026-11-08
 
 - **A gauge's length and step**: with *Gauge* or *Value and gauge*, a line sets its gauge's **Blocks** (1 to 40) and
