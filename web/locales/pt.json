@@ -741,6 +741,7 @@
   "ov.or": "OU",
   "ov.device": "Saída de áudio",
   "ov.deviceDefault": "Padrão do Windows",
+  "ov.deviceSystem": "Padrão do sistema",
   "ov.type.jet": "Todos os jatos",
   "ov.type.prop": "Todos os aviões a hélice",
   "ov.soundBad": "Este som não pode ser lido.",

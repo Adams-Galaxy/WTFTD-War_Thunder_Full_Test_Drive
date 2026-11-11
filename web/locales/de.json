@@ -741,6 +741,7 @@
   "ov.or": "ODER",
   "ov.device": "Tonausgabe",
   "ov.deviceDefault": "Windows-Standard",
+  "ov.deviceSystem": "Systemstandard",
   "ov.type.jet": "Alle Düsenflugzeuge",
   "ov.type.prop": "Alle Propellerflugzeuge",
   "ov.soundBad": "Dieser Ton ist nicht lesbar.",

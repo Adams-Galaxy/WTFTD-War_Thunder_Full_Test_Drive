@@ -17,7 +17,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from unittest import mock
 
-from wtftd import __main__ as app, alarms, bench, flightlog, game, maptex, paths, server, x11
+from wtftd import __main__ as app, alarms, bench, flightlog, game, maptex, paths, server, waveout, x11
 
 
 class GameFolder(unittest.TestCase):
@@ -289,6 +289,93 @@ class GameOnLinux(unittest.TestCase):
             self.assertIsNone(server.steam_launch_option(Path("/home/u/WarThunder")))  # Gaijin's launcher: no Steam
         with mock.patch.object(sys, "platform", "darwin"):
             self.assertIsNone(server.steam_launch_option(steam))
+
+
+class Pulse:
+    """A stand-in for libpulse-simple: what each stream was opened with and given (functions, as ctypes' take a restype)."""
+
+    def __init__(self):
+        self.opened, self.written, self.calls = [], [], []
+
+        def pa_simple_new(server_, name, direction, sink, stream, spec, channels, attr, error):
+            self.opened.append((sink, spec._obj.format, spec._obj.rate, spec._obj.channels, attr._obj.tlength))
+            return 1234
+
+        def pa_simple_write(stream, data, size, error):
+            self.written.append(bytes(data[:size]))
+            return 0
+
+        def pa_simple_drain(stream, error):
+            self.calls.append("drain")
+
+        def pa_simple_flush(stream, error):
+            self.calls.append("flush")
+
+        def pa_simple_free(stream):
+            self.calls.append("free")
+
+        for fn in (pa_simple_new, pa_simple_write, pa_simple_drain, pa_simple_flush, pa_simple_free):
+            setattr(self, fn.__name__, fn)
+
+
+class SoundOnLinux(unittest.TestCase):
+    """Linux: the alarms' sounds through PulseAudio's simple API (PipeWire's too), else ALSA's aplay; outputs from pactl.
+    No sound reaches a speaker here: the libraries and programs are stand-ins, the real one plays silence."""
+
+    SINKS = json.dumps([{"name": "alsa_output.pci.analog-stereo", "description": "Built-in Audio"},
+                        {"name": "bluez_output.headset", "description": "Headset"}]).encode()
+
+    def setUp(self):
+        for p in (mock.patch.object(sys, "platform", "linux"), mock.patch.dict(waveout._SINKS, clear=True),
+                  mock.patch.object(waveout.subprocess, "run", return_value=mock.Mock(stdout=self.SINKS))):
+            p.start()
+            self.addCleanup(p.stop)
+        self.wav = alarms.tone(880, 200, 0)
+
+    def test_the_outputs_by_their_names(self):
+        self.assertEqual(waveout.devices(), ["Built-in Audio", "Headset"])
+        with mock.patch.object(waveout.subprocess, "run", side_effect=FileNotFoundError):  # no pactl: the default output only
+            self.assertEqual(waveout.devices(), [])
+
+    def test_played_on_the_output_picked(self):
+        pulse = Pulse()
+        with mock.patch.object(waveout.ctypes, "CDLL", return_value=pulse):
+            self.assertTrue(waveout.play(self.wav, "Headset"))
+            self.assertTrue(waveout.play(self.wav, "Gone"))  # unplugged since: the default one
+        self.assertEqual(pulse.opened, [(b"bluez_output.headset", 3, alarms.SOUND_RATE, 1, alarms.SOUND_RATE * 2 // 10),
+                                        (None, 3, alarms.SOUND_RATE, 1, alarms.SOUND_RATE * 2 // 10)])
+        self.assertEqual(len(pulse.written[0]), alarms.SOUND_RATE * 2 // 5)  # 200 ms of 16-bit mono, at once
+        self.assertEqual(pulse.calls, ["drain", "free"] * 2)
+
+    def test_aplay_without_pulseaudio(self):
+        proc = mock.Mock()
+        with mock.patch.object(waveout.ctypes, "CDLL", side_effect=OSError("no libpulse")), \
+                mock.patch.object(waveout.subprocess, "Popen", return_value=proc) as started:
+            self.assertTrue(waveout.play(self.wav, "Headset"))
+        self.assertEqual(started.call_args.args[0], ["aplay", "-q", "-t", "raw", "-f", "S16_LE", "-r", str(alarms.SOUND_RATE), "-c", "1"])
+        self.assertEqual(len(proc.stdin.write.call_args.args[0]), alarms.SOUND_RATE * 2 // 5)
+        proc.stdin.close.assert_called_once()
+        proc.kill.assert_not_called()  # played to its end
+        with mock.patch.object(waveout.ctypes, "CDLL", side_effect=OSError), mock.patch.object(waveout.subprocess, "Popen", side_effect=FileNotFoundError):
+            self.assertFalse(waveout.play(self.wav))  # nothing to play it with
+
+    def test_a_held_sound_until_stopped(self):
+        pulse = Pulse()
+        with mock.patch.object(waveout.ctypes, "CDLL", return_value=pulse):
+            loop = waveout.Loop(self.wav, "")
+            for _ in range(200):
+                if len(pulse.written) > 8:
+                    break
+                time.sleep(0.01)
+            loop.stop()
+        self.assertGreater(len(pulse.written), 8)  # 200 ms in chunks of 50, written again and again
+        self.assertEqual(len(pulse.written[0]), int(alarms.SOUND_RATE * waveout.CHUNK_S) * 2)  # whole 16-bit frames
+        self.assertEqual(pulse.calls, ["flush", "free"])  # what's left in the buffer dropped at once
+        self.assertFalse(loop.linux.is_alive())
+
+    @unittest.skipUnless(sys.platform.startswith("linux") and os.environ.get("PULSE_SERVER"), "a PulseAudio server")
+    def test_a_real_sound_server(self):
+        self.assertTrue(waveout.play(self.wav))  # silence: volume 0
 
 
 class Game(BaseHTTPRequestHandler):

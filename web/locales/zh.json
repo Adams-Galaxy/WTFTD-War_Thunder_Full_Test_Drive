@@ -741,6 +741,7 @@
   "ov.or": "或",
   "ov.device": "音频输出",
   "ov.deviceDefault": "Windows 默认",
+  "ov.deviceSystem": "系统默认",
   "ov.type.jet": "所有喷气机",
   "ov.type.prop": "所有螺旋桨飞机",
   "ov.soundBad": "无法读取此声音。",

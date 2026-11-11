@@ -741,6 +741,7 @@
   "ov.or": "または",
   "ov.device": "音声出力",
   "ov.deviceDefault": "Windowsの既定",
+  "ov.deviceSystem": "システムの既定",
   "ov.type.jet": "すべてのジェット機",
   "ov.type.prop": "すべてのプロペラ機",
   "ov.soundBad": "このサウンドは読み込めません。",

@@ -406,7 +406,7 @@ function ovRender(st) {
   OV.cfg = st.cfg;
   OV.sounds = st.sounds;
   OV.device = st.device;
-  $('#ovDevice').innerHTML = ovOpt('', t('ov.deviceDefault'), st.device) + st.devices.map(d => ovOpt(d, d, st.device)).join('');
+  $('#ovDevice').innerHTML = ovOpt('', t(S.status.platform === 'win32' ? 'ov.deviceDefault' : 'ov.deviceSystem'), st.device) + st.devices.map(d => ovOpt(d, d, st.device)).join('');
   ovRenderProfiles(st);
   $('#ovEnabled').checked = st.enabled;
   $('#ovOnScreen').checked = st.onScreen;

@@ -759,6 +759,7 @@
   "ov.or": "OU",
   "ov.device": "Sortie audio",
   "ov.deviceDefault": "Par défaut de Windows",
+  "ov.deviceSystem": "Par défaut du système",
   "ov.type.jet": "Tous les avions à réaction",
   "ov.type.prop": "Tous les avions à hélice",
   "ov.soundBad": "Ce son est illisible.",

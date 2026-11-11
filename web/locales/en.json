@@ -759,6 +759,7 @@
   "ov.or": "OR",
   "ov.device": "Sound output",
   "ov.deviceDefault": "Windows default",
+  "ov.deviceSystem": "System default",
   "ov.type.jet": "All jets",
   "ov.type.prop": "All propeller aircraft",
   "ov.soundBad": "This sound can't be read.",

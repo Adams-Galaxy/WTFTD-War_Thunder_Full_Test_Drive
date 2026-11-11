@@ -741,6 +741,7 @@
   "ov.or": "O",
   "ov.device": "Uscita audio",
   "ov.deviceDefault": "Predefinita di Windows",
+  "ov.deviceSystem": "Predefinita di sistema",
   "ov.type.jet": "Tutti i jet",
   "ov.type.prop": "Tutti gli aerei a elica",
   "ov.soundBad": "Questo suono non è leggibile.",

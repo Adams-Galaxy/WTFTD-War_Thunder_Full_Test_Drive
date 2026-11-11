@@ -741,6 +741,7 @@
   "ov.or": "LUB",
   "ov.device": "Wyjście dźwięku",
   "ov.deviceDefault": "Domyślne Windows",
+  "ov.deviceSystem": "Domyślne systemowe",
   "ov.type.jet": "Wszystkie odrzutowce",
   "ov.type.prop": "Wszystkie samoloty śmigłowe",
   "ov.soundBad": "Nie można odczytać tego dźwięku.",

@@ -741,6 +741,7 @@
   "ov.or": "NEBO",
   "ov.device": "Zvukový výstup",
   "ov.deviceDefault": "Výchozí ve Windows",
+  "ov.deviceSystem": "Výchozí v systému",
   "ov.type.jet": "Všechny proudové letouny",
   "ov.type.prop": "Všechny vrtulové letouny",
   "ov.soundBad": "Tento zvuk nelze přečíst.",

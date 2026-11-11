@@ -741,6 +741,7 @@
   "ov.or": "ИЛИ",
   "ov.device": "Аудиовыход",
   "ov.deviceDefault": "По умолчанию в Windows",
+  "ov.deviceSystem": "По умолчанию в системе",
   "ov.type.jet": "Все реактивные",
   "ov.type.prop": "Все винтовые",
   "ov.soundBad": "Не удаётся прочитать этот звук.",
