@@ -4,7 +4,7 @@ What changed in each version of WTFTD. Downloads: [Releases](https://github.com/
 (only the latest version is kept there; from 0.19.0 on, each version's code stays available through its git tag).
 Versions follow `major.minor.patch`; "beta" until 1.0.
 
-## Not released yet
+## 0.29.0 - 2026-11-11
 
 - **Linux**: WTFTD runs on Linux (x86-64). Download `WTFTD-<version>-linux.tar.gz`, unpack it and run `./WTFTD`, or run
   it from source with `python3 -m wtftd`. It finds the game installed by Steam (also the Flatpak or Snap Steam) or by
