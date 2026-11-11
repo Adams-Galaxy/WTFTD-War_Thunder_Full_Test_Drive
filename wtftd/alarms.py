@@ -22,8 +22,10 @@ import io
 import json
 import math
 import operator
+import os
 import queue
 import re
+import struct
 import sys
 import threading
 import time
@@ -1041,7 +1043,10 @@ def sheet(lim: dict, state: dict, words: dict, name: str | None) -> list:
 
 
 def joy_buttons(ids) -> set:
-    """The joystick buttons held, as key codes (JOY + 32 x joystick + button), on the joysticks asked: Windows' winmm."""
+    """The joystick buttons held, as key codes (JOY + 32 x joystick + button), on the joysticks asked: Windows' winmm,
+    Linux's joystick devices."""
+    if sys.platform != "win32":
+        return {JOY + 32 * joy + b for joy in ids for b in _js_held(joy) if b < 32}
     import ctypes
 
     class JOYINFOEX(ctypes.Structure):
@@ -1056,6 +1061,33 @@ def joy_buttons(ids) -> set:
         except (AttributeError, OSError):
             break
     return out
+
+
+JS_PATH = "/dev/input/js{}"
+_JS: dict = {}  # Linux: joystick number -> (its open device, the buttons held)
+
+
+def _js_held(joy: int) -> set:
+    """Linux: the buttons held on /dev/input/js<n>, from its events since the last look (8 bytes each: time, value, type,
+    number); opening it sends the state of every button first. Unplugged: forgotten, opened again when it's back."""
+    if joy not in _JS:
+        try:
+            _JS[joy] = (os.open(JS_PATH.format(joy), os.O_RDONLY | getattr(os, "O_NONBLOCK", 0) | getattr(os, "O_BINARY", 0)), set())
+        except OSError:
+            return set()
+    device, held = _JS[joy]
+    try:
+        while data := os.read(device, 8 * 64):
+            for _, value, kind, number in struct.iter_unpack("<IhBB", data[:len(data) // 8 * 8]):
+                if kind & 0x01:  # a button (0x80: its state when opened)
+                    (held.add if value else held.discard)(number)
+    except BlockingIOError:  # nothing new
+        pass
+    except OSError:
+        os.close(device)
+        del _JS[joy]
+        return set()
+    return held
 
 
 def joy_wait(seconds: float = 5.0) -> int | None:

@@ -6,6 +6,7 @@ import math
 import os
 import re
 import shutil
+import struct
 import subprocess
 import sys
 import tempfile
@@ -376,6 +377,41 @@ class SoundOnLinux(unittest.TestCase):
     @unittest.skipUnless(sys.platform.startswith("linux") and os.environ.get("PULSE_SERVER"), "a PulseAudio server")
     def test_a_real_sound_server(self):
         self.assertTrue(waveout.play(self.wav))  # silence: volume 0
+
+
+class JoystickOnLinux(unittest.TestCase):
+    """Linux: joystick buttons from /dev/input/js<n> (here files holding the same 8-byte events), as winmm gives them."""
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.folder = Path(tmp.name)
+        for p in (mock.patch.object(sys, "platform", "linux"), mock.patch.object(alarms, "JS_PATH", str(self.folder / "js{}")),
+                  mock.patch.dict(alarms._JS, clear=True)):
+            p.start()
+            self.addCleanup(p.stop)
+        self.addCleanup(lambda: [os.close(device) for device, _ in alarms._JS.values()])
+
+    def events(self, joy: int, *events):
+        """(button, pressed, at opening): what the device would send next."""
+        with open(self.folder / f"js{joy}", "ab") as f:
+            for button, pressed, init in events:
+                f.write(struct.pack("<IhBB", 1000, int(pressed), 0x01 | (0x80 if init else 0), button))
+
+    def test_held_buttons_as_key_codes(self):
+        self.events(1, (0, False, True), (3, True, True))  # its state when opened: button 3 held
+        self.assertEqual(alarms.joy_buttons([0, 1]), {alarms.JOY + 32 + 3})  # no js0: nothing from it
+        self.events(1, (0, True, False), (3, False, False))
+        with open(self.folder / "js1", "ab") as f:
+            f.write(struct.pack("<IhBB", 1001, 3000, 0x02, 1))  # an axis: not a button
+        self.assertEqual(alarms.joy_buttons([1]), {alarms.JOY + 32})
+        self.events(1, (40, True, False))  # past the 32 buttons a key code can tell apart
+        self.assertEqual(alarms.joy_buttons([1]), {alarms.JOY + 32})
+
+    def test_waiting_for_a_button(self):
+        self.events(0, (2, True, True))  # held already: doesn't count
+        with mock.patch.object(alarms.time, "sleep", lambda s: self.events(0, (5, True, False))):
+            self.assertEqual(alarms.joy_wait(1), alarms.JOY + 5)
 
 
 class Game(BaseHTTPRequestHandler):
