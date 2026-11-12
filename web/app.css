@@ -1059,6 +1059,14 @@ body.resizing .drawer, body.resizing .content { transition: none; }
 table.cmp { border-collapse: separate; border-spacing: 0; width: 100%; font-size: 13px; }
 table.cmp th, table.cmp td { padding: 7px 12px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: middle; }
 table.cmp tbody th { position: sticky; left: 0; background: var(--surface); color: var(--text-2); font-weight: 600; white-space: nowrap; z-index: 1; }
+/* vehicles: equal columns whatever their content, labels wrap in their own */
+#cmpTable table.cmp { table-layout: fixed; }
+#cmpTable table.cmp col.cmp-label { width: 200px; }
+#cmpTable table.cmp th, #cmpTable table.cmp td { overflow-wrap: anywhere; white-space: normal; }
+table.cmp tr.cmp-sec th { padding: 16px 12px 6px; color: var(--accent-2); font: 700 11.5px var(--font-display); letter-spacing: .06em; text-transform: uppercase; }
+table.cmp tr.cmp-diff th, .cmp-diff-mark { box-shadow: inset 3px 0 0 var(--accent); }
+.cmp-legend { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; font-size: 12px; }
+.cmp-diff-mark { display: inline-block; width: 12px; height: 14px; background: var(--surface-2); }
 table.cmp tbody th small { display: block; font-weight: 400; color: var(--muted); font-size: 10.5px; }
 table.cmp thead th { position: sticky; top: 0; background: var(--surface); z-index: 2; vertical-align: top; min-width: 180px; }
 table.cmp thead th:first-child { left: 0; z-index: 3; min-width: 150px; }

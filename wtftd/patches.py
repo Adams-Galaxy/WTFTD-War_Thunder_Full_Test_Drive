@@ -47,6 +47,7 @@ FIELDS = (
     ("armT", "perf", "v", ("s", "armT"), "stat.armT", "mm", 1, 0),
     ("armH", "perf", "v", ("s", "armH"), "stat.armH", "mm", 1, 0),
     ("trav", "perf", "v", ("s", "trav"), "stat.trav", "°/s", 1, 1),
+    ("vert", "perf", "v", ("s", "vert"), "stat.vert", "°/s", 1, 1),
     ("cal", "perf", "v", ("s", "cal"), "stat.cal", "mm", 0, 1),
     ("rel", "perf", "v", ("s", "rel"), "stat.rel", "s", -1, 1),
     ("turn", "perf", "v", ("s", "turn"), "stat.turn", "s", -1, 1),

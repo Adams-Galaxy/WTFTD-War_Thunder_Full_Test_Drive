@@ -37,7 +37,7 @@ from pathlib import Path
 from . import patches, vromfs
 from .paths import CACHE, DATA, HOME as ROOT
 DM = CACHE / "datamine"
-SCHEMA = 37  # bump when data/*.json gains fields the app needs: installed data gets rebuilt
+SCHEMA = 38  # bump when data/*.json gains fields the app needs: installed data gets rebuilt
 REPO = "https://github.com/gszabi99/War-Thunder-Datamine.git"
 SPARSE = [
     "aces.vromfs.bin_u/gamedata/flightmodels",
@@ -1012,6 +1012,8 @@ def vehicle_stats(cat: str, udata: dict, wp: dict, tags: dict, st: dict, ammo: l
         ts = wp.get("turretSpeed")
         if isinstance(ts, list) and ts and isinstance(ts[0], (int, float)) and ts[0] > 0:
             out["trav"] = _r1(ts[0])
+        if isinstance(ts, list) and len(ts) > 1 and isinstance(ts[1], (int, float)) and ts[1] > 0:
+            out["vert"] = _r1(ts[1])
         main = next((g for g in ammo if g.get("trig") == "gunner0" or g.get("wi") == 1), ammo[0] if ammo else None)
         if main:
             cal = _caliber_mm(main.get("p", ""))
@@ -1030,6 +1032,9 @@ def vehicle_stats(cat: str, udata: dict, wp: dict, tags: dict, st: dict, ammo: l
             out["spd"] = round(shop["maxSpeed"] * 3.6)
         if shop.get("displacement"):
             out["disp"] = round(shop["displacement"] / 1000)
+        hp = _numval(((udata.get("ShipPhys") or {}).get("engines") or {}).get("horsePowers")) if isinstance(udata.get("ShipPhys"), dict) else None
+        if hp:
+            out["hp"] = round(hp)
         main = ammo[0] if ammo else None
         cal = _caliber_mm(main.get("p", "")) if main else None
         if cal:
@@ -1470,6 +1475,9 @@ def build_vehicles(lang: Lang, progress=None):
             "am": vehicle_ammo(udata, cat, mods, wc),
             "st": base_stats(vid, udata, cat),
         }
+        systems = systems_with_stock(cat, udata, mods)
+        if systems:
+            details[vid]["sy"] = systems
         if cat in ("air", "heli"):
             sl = weapon_slots(udata, wc)
             if sl:
@@ -1601,15 +1609,358 @@ def gun_rounds(d) -> int:
 
 def build_sensors(lang) -> dict:
     """{file: kind} of every aircraft sensor of the game (radar, rwr, mlws, lws), for the vehicle panel."""
-    out = {}
-    for f in sorted((DM / "aces.vromfs.bin_u" / "gamedata" / "sensors").glob("*.blkx")):
-        kind = first_str((load(f) or {}).get("type"))
+    out, folder = {}, DM / "aces.vromfs.bin_u" / "gamedata" / "sensors"
+    for f in sorted(folder.rglob("*.blkx")):  # naval/: ships' radars, named for the comparison, not offered to aircraft
+        d = load(f) or {}
+        kind = first_str(d.get("type"))
         if kind in ("radar", "rwr", "mlws", "lws"):
-            out[f.stem] = kind
-            lang.put("sensors", f.stem, f"sensors/{f.stem}", fallback=humanize(f.stem))
+            if f.parent == folder:
+                out[f.stem] = kind
+            # the game's name: sensors/<nameLocId or file>, else the file's own name (modexraylib.nut getPartLocNameByBlkFile)
+            lang.put("sensors", f.stem, f"sensors/{first_str(d.get('nameLocId')) or f.stem}",
+                     fallback=first_str(d.get("name")) or humanize(f.stem))
     with open(DATA / "sensors.json", "w", encoding="utf-8") as fw:
         json.dump(out, fw, separators=(",", ":"))
     return out
+
+
+# --------------------------------------------------------------------------- systems, for the comparison
+# Summed up as the game's X-ray card does: gui.vromfs.bin globalscripts/modexraylib.nut (mkRadarTexts, mkRwrTexts,
+# mkMlwsTexts, mkApsTexts, getNVDSightGen) and scripts/unit/unitsystems.nut.
+
+def _blocks(node, name: str):
+    """Every block called name below node, at any depth (the game's findBlockByName / countBlocksByName)."""
+    for k, v in (node.items() if isinstance(node, dict) else ()):
+        for x in aslist(v):
+            if isinstance(x, dict):
+                if k == name:
+                    yield x
+                yield from _blocks(x, name)
+
+
+def _has(node, name: str) -> bool:
+    return next(_blocks(node, name), None) is not None
+
+
+def _params(node, name: str):
+    """Every value of the parameter called name below node, at any depth (the game's findParamValue)."""
+    for k, v in (node.items() if isinstance(node, dict) else ()):
+        for x in aslist(v):
+            if isinstance(x, dict):
+                yield from _params(x, name)
+            elif k == name:
+                yield x
+
+
+def _children(node) -> list:
+    return [x for v in node.values() for x in aslist(v) if isinstance(x, dict)] if isinstance(node, dict) else []
+
+
+def radar_summary(d: dict, surface_unit: bool = False) -> dict:
+    """A radar / IRST / TV sensor file: k kind (radar, irst, radar_irst, tv, esm...), ro s search / t track / st both /
+    rf range finder, r range (m), b bands, z search zone [azimuth, elevation] (deg), ld look-down (ho head-on, hov head-on
+    by velocity, aa all aspects, lu look-up too), sf surface search (gtm ground, sea, gmti moving, gs ground and sea),
+    iff, tws [tws | plus | esa, targets], ram, bvr, acm, hms, nctr (target types), sarh, mg (command guidance),
+    dl (datalink channels), pm (missiles predicted). surface_unit: tanks and ships, whose card shows all aspects only."""
+    found, rng, bands, az, el = set(), 0.0, set(), 0.0, 0.0
+    for t in _children(d.get("transivers")):
+        rng = max(rng, _numval(t.get("range")) or 0)
+        kind = {"infraRed": "irst", "optic": "tv", "radarIntercept": "esm"}.get(
+            first_str(t.get("targetSignatureType")) or first_str(t.get("visibilityType")), "radar")
+        found.add(kind)
+        if kind in ("radar", "esm"):
+            bands.update(b for b in aslist(t.get("band")) if isinstance(b, int) and not isinstance(b, bool))
+        a = t.get("antenna") if isinstance(t.get("antenna"), dict) else {}
+        if isinstance(a.get("azimuth"), dict) and isinstance(a.get("elevation"), dict):
+            az = max(az, 2 * (_numval(a["azimuth"].get("angleHalfSens")) or 0))
+            el = max(el, 2 * (_numval(a["elevation"].get("angleHalfSens")) or 0))
+        else:
+            w = 2 * (_numval(a.get("angleHalfSens")) or 0)
+            az, el = max(az, w), max(el, w)
+    search, track = _has(d, "addTarget"), _has(d, "updateActiveTargetOfInterest")
+    angles = iff = look_up = False
+    ld, sf = set(), set()
+    for s in _children(d.get("signals")):
+        if search and s.get("track"):
+            continue
+        ground, ships = bool(s.get("groundVehiclesAsTarget")), bool(s.get("shipsAsTarget"))
+        angles = angles or s.get("anglesFinder", True) is not False
+        iff = iff or bool(s.get("friendFoeId"))
+        dop = s.get("dopplerSpeed") if isinstance(s.get("dopplerSpeed"), dict) else {}
+        if ground or ships:
+            if dop.get("presents") and (_numval(dop.get("minValue")) or 0) > 0.2:
+                sf.add("gmti")
+            else:
+                sf.add("gs" if ground == ships else "gtm" if ground else "sea")
+        elif s.get("aircraftAsTarget", True) is not False:
+            if dop.get("presents"):
+                lo, hi = _numval(dop.get("minValue")) or 0, _numval(dop.get("maxValue")) or 0
+                if (s.get("mainBeamDopplerSpeed") and not s.get("absDopplerSpeed") and hi > 0 and (lo > 0 or hi > -lo * 0.25)) \
+                        or s.get("groundClutter"):
+                    ld.add("hov" if s.get("rangeFinder", True) is False and s.get("dopplerSpeedFinder") else "ho")
+                else:
+                    ld.add("aa")
+            elif (s.get("distance") or {}).get("presents") if isinstance(s.get("distance"), dict) else False:
+                look_up = True
+    if surface_unit:
+        ld &= {"aa"}
+    elif ld and look_up:
+        ld.add("lu")
+    for p in _children(d.get("scanPatterns")):  # the widest pattern, if wider than the beam
+        kind, row = first_str(p.get("type")), p.get("rowMajor", True) is not False
+        bars = (_numval(p.get("barHeight")) or 0) * num(p.get("barsCount"))
+        major, minor = {"cylinder": (360.0, bars), "pyramide": (2 * (_numval(p.get("width")) or 0), bars),
+                        "cone": (2 * (_numval(p.get("width")) or 0),) * 2}.get(kind, (0.0, 0.0))
+        if major * minor > az * el:
+            az, el = (major, minor) if row else (minor, major)
+    out = {"k": "esm" if "esm" in found else "_".join(k for k in ("radar", "irst", "tv") if k in found) or "radar",
+           "ro": "st" if search and track else "s" if search else ("t" if angles else "rf") if track else "",
+           "r": round(rng)}
+    if bands and out["k"] in ("radar", "radar_irst", "radar_tv", "radar_irst_tv", "esm"):
+        out["b"] = sorted(bands)
+    if search and az * el > 0:
+        out["z"] = [round(az), round(el)]
+    for key, val in (("ld", sorted(ld)), ("sf", sorted(sf)), ("iff", iff)):
+        if val:
+            out[key] = val if isinstance(val, list) else 1
+    if search and _has(d, "ram"):
+        out["ram"] = 1
+    elif search:  # track while scan: ESA, then TWS+, then plain TWS
+        att = next(_blocks(d, "addTargetTrack"), None) or {}
+        acts = att.get("actions") if isinstance(att.get("actions"), dict) else {}
+        for kind, b in (("esa", next(iter(_children({"u": acts.get("updateTargetOfInterest")})), None)),
+                        ("plus", next(_blocks(d, "matchTargetsOfInterest"), None)),
+                        ("tws", next(_blocks(d, "updateTargetOfInterest"), None))):
+            if b is not None:
+                out["tws"] = [kind, num(b.get("limit"))]
+                break
+    if track:
+        gates = [first_str(b.get("source")) for b in _blocks(d, "setDistGatePos")]
+        for key, on in (("bvr", "targetDesignation" in gates), ("acm", "constRange" in gates),
+                        ("hms", _has(d, "designateHelmetTarget")), ("nctr", sum(1 for _ in _blocks(d, "targetTypeId"))),
+                        ("sarh", _has(d, "setIllumination")), ("mg", _has(d, "setWeaponRcTransmissionTimeOut")),
+                        ("dl", num(d.get("weaponTargetsMax"))), ("pm", num(d.get("launchedMissilesPredictedPositionsMax")))):
+            if on:
+                out[key] = on if isinstance(on, int) and not isinstance(on, bool) else 1
+    return {k: v for k, v in out.items() if v}
+
+
+def rwr_summary(d: dict) -> dict:
+    """A radar warning receiver: r range (m), b bands, dg / pg threat types told apart by direction / presence,
+    trk targets tracked, lk lock warning, ln launch warning (1 any, else the number of threat types), ss signal
+    strength (rough range), iff."""
+    out = {"r": round(_numval(d.get("range")) or 0), "b": [b for b in range(16) if d.get(f"band{b}") is True]}
+    direction, presence = _children(d.get("targetsDirectionGroups")), _children(d.get("targetsPresenceGroups"))
+    texts = {first_str(g.get("text")) for g in direction}
+    if len(texts) > 1:
+        out["dg"] = len(texts)
+    if len(presence) > 1:
+        out["pg"] = len(presence)
+    if d.get("targetTracking"):
+        out["trk"] = num(d.get("trackedTargetsMax"), 16)
+    if d.get("detectTracking", True) is not False:
+        out["lk"] = 1
+    if d.get("detectLaunch"):
+        out["ln"] = 1
+    else:
+        launching = {first_str(g.get("name")) for g in _children(d.get("groups")) if g.get("detectLaunch")}
+        n = len({first_str(t.get("text")) for t in direction + presence
+                 if any(x in launching for x in aslist(t.get("group")) if isinstance(x, str))})
+        if n > 1:
+            out["ln"] = n
+    if any(d.get(k) for k in ("targetRangeFinder", "searchRangeFinder", "trackRangeFinder", "launchRangeFinder")):
+        out["ss"] = 1
+    if d.get("friendFoeId"):
+        out["iff"] = 1
+    return out
+
+
+def _auto_cm(sensor: dict, kind: str, flags: set) -> bool:
+    """Does this warning receiver fire countermeasures by itself (modexraylib.nut isAutoCM)?"""
+    if sensor.get("automaticCountermeasures", sensor.get("automaticFlares", False)):
+        return True
+    if kind == "rwr":
+        return any(f in flags for g in _blocks(sensor, "group") for f in aslist(g.get("threatFlag")))
+    return any(f in flags for f in _params(sensor, "threatFlag"))
+
+
+def _mod_effects(udata: dict, mods) -> list:
+    """Effects of the modifications a vehicle has: its own block's, else the shared table's (findEnabledModEffectsBlks)."""
+    local = udata.get("modifications") if isinstance(udata.get("modifications"), dict) else {}
+    out = []
+    for name in [m for m in local if m in mods] + sorted(m for m in mods if m not in local):
+        own = local.get(name)
+        eff = own.get("effects") if isinstance(own, dict) and isinstance(own.get("effects"), dict) else \
+            (_global_mods().get(name) or {}).get("effects") if isinstance(_global_mods().get(name), dict) else None
+        if isinstance(eff, dict):
+            out.append(eff)
+    return out
+
+
+def _zoom(out_fov, in_fov) -> list:
+    """A sight's magnification, as the game's card gives it: sin(40 deg) / sin(fov / 2), widest then narrowest."""
+    zoom = [round(math.sin(math.radians(40)) / math.sin(math.radians(f / 2)), 1)
+            for f in (_numval(out_fov) or 0, _numval(in_fov) or 0) if 0 < f < 180]
+    return zoom[1:] if len(zoom) == 2 and abs(zoom[0] - zoom[1]) < 0.1 else zoom
+
+
+NV_ROLES = {"gunner": "g", "commanderView": "c", "driver": "d", "pilot": "p", "sight": "s"}
+
+
+def night_vision(nv) -> dict:
+    """{role: [kind, generation]}: g gunner, c commander, d driver, p pilot, s targeting sight; kind t thermal or ir;
+    generation from the picture's width, as the game's card (500 -> 1, 800 -> 2, 1200 -> 3)."""
+    out = {}
+    for key, v in (nv.items() if isinstance(nv, dict) else ()):
+        m = re.fullmatch(r"(gunner|commanderView|driver|pilot|sight)(Ir|Thermal)", key)
+        if not m or not isinstance(v, dict):
+            continue
+        width = _numval(v.get("resolution")) or 0
+        val = ["t" if m[2] == "Thermal" else "ir", 3 if width >= 1200 else 2 if width >= 800 else 1]
+        role = NV_ROLES[m[1]]
+        if role not in out or (val[0] == "t", val[1]) > (out[role][0] == "t", out[role][1]):
+            out[role] = val  # thermal beats IR, then the newer generation
+    return out
+
+
+_SMOKE: dict = {}
+
+
+def _smoke_launcher(blk: str) -> bool:
+    """A smoke grenade launcher (Tucha, Wegmann...): a rocket gun firing smoke grenades."""
+    if blk and blk not in _SMOKE:
+        d = load(blk_to_path(blk)) or {}
+        _SMOKE[blk] = bool(d.get("rocketGun")) and any(first_str(r.get("bulletType")).startswith("smoke")
+                                                         for r in aslist(d.get("rocket")) if isinstance(r, dict))
+    return _SMOKE.get(blk, False)
+
+
+def _weapons(udata: dict) -> list:
+    """A vehicle's fitted weapons: commonWeapons, and the weapon-slot preset it names (modern aircraft)."""
+    slots = {sl.get("index"): {p.get("name"): p for p in aslist(sl.get("WeaponPreset")) if isinstance(p, dict)}
+             for sl in aslist((udata.get("WeaponSlots") or {}).get("WeaponSlot")) if isinstance(sl, dict)} \
+        if isinstance(udata.get("WeaponSlots"), dict) else {}
+    out = []
+    for w in aslist((udata.get("commonWeapons") or {}).get("Weapon")):
+        if isinstance(w, dict) and "slot" in w and "preset" in w:
+            out += [x for x in aslist(slots.get(w["slot"], {}).get(w["preset"], {}).get("Weapon")) if isinstance(x, dict)]
+        elif isinstance(w, dict):
+            out.append(w)
+    return out
+
+
+def vehicle_systems(cat: str, udata: dict, mods) -> dict:
+    """What a vehicle is fitted with, for the comparison, with the given modifications researched. Keys:
+      se   sensors [[file, kind, summary], ...]: kind radar (radar_summary), rwr (rwr_summary), mlws {r, rd: radar}, lws
+      att  automatic target tracker;  acm  automatic countermeasures [[rwr / mlws...], programs];  cm  countermeasure charges
+      nv   night vision (night_vision);  zg / zc  gunner / commander sight zoom [widest, narrowest];  rf  rangefinder laser / optic
+      stab main gun stabilizer [v 0/1, h 0/1, up to km/h];  el  main gun elevation [down, up] (deg);  al  autoloader
+      sg   smoke grenades;  ess  engine smoke screens;  aps  active protection [shots, horizontal sector (deg)]
+      crew {seat: count};  gr  gears [forward, reverse];  ml  max weapon load (kg);  fd  fire directors (ships)"""
+    effects = _mod_effects(udata, mods)
+    out: dict = {}
+    seen, sensors = set(), []
+    for se in [udata.get("sensors")] + [e.get("sensors") for e in effects]:  # a modification lists the whole set
+        for s in aslist((se or {}).get("sensor")) if isinstance(se, dict) else []:
+            blk = first_str(s.get("blk")) if isinstance(s, dict) else ""
+            if blk and s.get("human", True) is not False and blk.lower() not in seen:
+                seen.add(blk.lower())
+                sensors.append(blk)
+    cm_flags = {first_str(t.get("threatFlag")) for t in _blocks(udata.get("countermeasure") or {}, "threatId")} - {""}
+    auto = set()
+    for blk in sensors:
+        d = load(blk_to_path(blk)) or {}
+        kind, key = first_str(d.get("type")), basename(blk)
+        if kind == "radar" and first_str(d.get("name")) == "Auto tracker":
+            out["att"] = 1
+        elif kind == "radar":
+            out.setdefault("se", []).append([key, kind, radar_summary(d, cat in ("ground", "boat", "ship"))])
+        elif kind == "rwr":
+            out.setdefault("se", []).append([key, kind, rwr_summary(d)])
+        elif kind == "mlws":
+            out.setdefault("se", []).append([key, kind, {"r": round(_numval(d.get("range")) or 0),
+                                                         **({"rd": 1} if first_str(d.get("targetSignatureType")) == "radar" else {})}])
+        elif kind == "lws":
+            out.setdefault("se", []).append([key, kind, {}])
+        if kind in ("rwr", "mlws") and _auto_cm(d, kind, cm_flags):
+            auto.add(kind)
+    if auto:
+        out["acm"] = [sorted(auto), sum(1 for _ in _blocks(udata.get("countermeasure") or {}, "program"))]
+    weapons = _weapons(udata)
+    cm = sum(num(w.get("bullets")) for w in weapons if first_str(w.get("trigger")) == "countermeasures")
+    if cm:
+        out["cm"] = cm
+    nv = night_vision(next((e["nightVision"] for e in effects if isinstance(e.get("nightVision"), dict)), udata.get("nightVision")))
+    if nv:
+        out["nv"] = nv
+    cockpit = udata.get("cockpit") if isinstance(udata.get("cockpit"), dict) else {}
+    if cat in ("ground", "heli"):
+        zg = _zoom(cockpit.get("zoomOutFov"), cockpit.get("zoomInFov")) if cat == "ground" else \
+            _zoom(cockpit.get("sightOutFov"), cockpit.get("sightInFov"))
+        if zg:
+            out["zg"] = zg
+    if cat == "ground":
+        view = udata.get("commanderView") if isinstance(udata.get("commanderView"), dict) else {}
+        zc = _zoom(view.get("zoomOutFov"), view.get("zoomInFov"))
+        if zc:
+            out["zc"] = zc
+        rf = [e for e in effects if e.get("rangefinderMounted")]
+        if rf:
+            out["rf"] = "laser" if any(e.get("isLaser") for e in rf) else "optic"
+        main = next((w for w in weapons if first_str(w.get("trigger")) == "gunner0" and not w.get("dummy")), None) or {}
+        st = main.get("gunStabilizer") if isinstance(main.get("gunStabilizer"), dict) else {}
+        if st.get("hasVertical") or st.get("hasHorizontal"):
+            limits = [x for a in ("vertical", "horizontal") if st.get("has" + a.title())
+                      for x in [_numval(st.get(f"{a}SpeedLimitKPH"))] if x]
+            out["stab"] = [int(bool(st.get("hasVertical"))), int(bool(st.get("hasHorizontal"))), round(min(limits)) if limits else 0]
+        pitch = (main.get("limits") or {}).get("pitch") if isinstance(main.get("limits"), dict) else None
+        if isinstance(pitch, list) and len(pitch) == 2 and all(isinstance(x, (int, float)) for x in pitch):
+            out["el"] = [round(pitch[0]), round(pitch[1])]
+        if any(s.get("autoLoad") and first_str(s.get("weaponTrigger")) == "gunner0" for s in _children(udata.get("ammoStowages"))):
+            out["al"] = 1
+        smoke = [sum(num(w.get("bullets")) for w in aslist(ws.get("Weapon")) if isinstance(w, dict) and _smoke_launcher(first_str(w.get("blk"))))
+                 for ws in [udata.get("commonWeapons")] + [e.get("commonWeapons") for e in effects] if isinstance(ws, dict)] or [0]
+        if max(smoke):
+            out["sg"] = max(smoke)
+        ess = max((num(e.get("smokeScreenCount")) for e in effects), default=0)
+        if ess:
+            out["ess"] = ess
+        aps = next((e["ActiveProtectionSystem"] for e in effects if isinstance(e.get("ActiveProtectionSystem"), dict)),
+                   udata.get("ActiveProtectionSystem"))
+        if isinstance(aps, dict):
+            hor = aps.get("horAngles") if isinstance(aps.get("horAngles"), list) else [0, 0]
+            shots = num(aps.get("shotCount")) or sum(num(m.get("shotCount")) for m in _children(aps))
+            out["aps"] = [shots, round(min(360, hor[1] - hor[0]))]
+        crew = {}  # by seat (commander, gunner, loader, driver, machine_gunner): a seat's roles say who can stand in
+        for key, v in (udata.get("tank_crew").items() if isinstance(udata.get("tank_crew"), dict) else ()):
+            for c in aslist(v):
+                if isinstance(c, dict) and c.get("dmPart"):
+                    seat = re.sub(r"_?\d+$", "", key)
+                    crew[seat] = crew.get(seat, 0) + 1
+        if crew:
+            out["crew"] = crew
+        try:
+            gears = [g for g in aslist(udata["VehiclePhys"]["mechanics"]["gearRatios"]["ratio"]) if isinstance(g, (int, float))]
+            if any(g > 0 for g in gears):
+                out["gr"] = [sum(g > 0 for g in gears), sum(g < 0 for g in gears)]
+        except (KeyError, TypeError):
+            pass
+    if cat in ("air", "heli"):
+        ml = _numval((udata.get("WeaponSlots") or {}).get("maxloadMass")) if isinstance(udata.get("WeaponSlots"), dict) else None
+        if ml:
+            out["ml"] = round(ml)
+    if cat in ("boat", "ship"):
+        fd = len(_children({"f": (udata.get("sensors") or {}).get("fireDirecting")})) if isinstance(udata.get("sensors"), dict) else 0
+        if fd:
+            out["fd"] = fd
+    return out
+
+
+def systems_with_stock(cat: str, udata: dict, mods) -> dict:
+    """vehicle_systems with every modification, and under su what a stock vehicle has instead (None: nothing)."""
+    full, stock = vehicle_systems(cat, udata, mods), vehicle_systems(cat, udata, ())
+    su = {k: stock.get(k) for k in sorted(full.keys() | stock.keys()) if full.get(k) != stock.get(k)}
+    return {**full, "su": su} if su else full
 
 
 DIFFICULTIES = ("arcade", "realistic", "hardcore")

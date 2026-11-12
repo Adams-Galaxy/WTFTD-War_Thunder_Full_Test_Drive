@@ -16,6 +16,19 @@ Versions follow `major.minor.patch`; "beta" until 1.0.
   flight, and a wreck reading 0 km/h now and then started one over. It now hides once you're shot down or crash, until
   the next spawn; to keep it on the wreck as before: My overlay → Behaviour → **Keep the overlay once shot down or
   crashed**.
+- **Vehicle comparison: everything the game files give.** The table now reads in sections (Battle rating, Performance,
+  Flight model, Firepower, Protection, Optics and night vision, Radar, Warning and countermeasures, Avionics, Crew,
+  Economy), a bar marks the rows where the vehicles differ, the best value is highlighted only where values differ, and
+  the vehicle columns share the width equally. New rows: search and tracking radars (detection range, scan zone,
+  look-down, track while scan, surface search, modes such as IFF, BVR lock, SARH, datalink, frequency bands), IRST and
+  ESM, radar warning receiver (range, bands, lock and launch warnings), missile and laser warning, countermeasure charges
+  and automatic countermeasures, sight zoom and night vision of each seat (thermal or infrared, generation), rangefinder,
+  automatic target tracker, stabilizer, gun depression / elevation, autoloader, main gun ammunition, guns with their
+  count and rounds, active protection, smoke grenades and engine smoke screens, crew seats, gears, the airframe's limits
+  (speed, Mach, gear, angle of attack, empty mass, fuel, engines), maximum weapon load and ships' fire directors. They
+  are summed up as the game's own X-ray card does, and follow **Stock / All upgrades** (a module's thermal sight or
+  rangefinder is left out of a stock vehicle). New stat on vehicle cards: vertical aiming speed (tanks); ships show
+  their engine power. Ships' radars are named. The game database is rebuilt once to add them.
 
 ## 0.29.0 - 2026-11-11
 
