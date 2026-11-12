@@ -8,6 +8,7 @@ from collections import deque
 from pathlib import Path
 from unittest import mock
 
+from tests.test_alarms import setUpModule  # one reading flies (Watch.moving)
 from tests.test_vromfs import blk_body, f32
 from wtftd import alarms, battle, builder, game, paths, replays, server, vromfs
 

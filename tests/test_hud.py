@@ -3,7 +3,7 @@ import json
 import unittest
 from unittest import mock
 
-from tests.test_alarms import WORDS, details, state
+from tests.test_alarms import WORDS, details, setUpModule, state  # setUpModule: one reading flies, as there
 from wtftd import alarms, hud, server
 
 CFG = alarms.clean({}, WORDS)

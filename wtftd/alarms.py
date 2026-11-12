@@ -74,6 +74,9 @@ TURN_G = 1.05  # below, a turn of several minutes is only level flight's noise
 RUNNING_RPM = 500  # an engine really running, not one winding down
 LOG_EVERY = 3  # readings between two looks at the battle log
 BREAK_UP_S = 5  # a break-up in the air: silent this long, the next spawn comes within it
+SPAWN_SCREEN = "dummy_plane"  # /indicators' type while choosing a vehicle in a battle: /state flies a stand-in (2.60)
+LIVE_READINGS = 3  # a battle's flight starts after this many readings in a row that differ (see Watch.moving)
+MARKER_S = 1.0  # your marker on the game's map, looked for this often in a battle (see Watch.moving)
 G = 9.80665
 SAVED_MODEL = re.compile(r'selectedAir\s*\{\s*current_model:t="([^"]+)"')
 
@@ -236,7 +239,7 @@ def defaults(words: dict) -> dict:
             **HUD_DEFAULTS, "mapMode": "off", "mapZoom": 1, "mapTrail": True, "mapOpacity": 85, "mapShape": "square", "mapUp": "north", "mapAllies": False, "mapAlliesGround": False, "mapDim": 30,
             **{f"mapMark{k}": 100 for k in minimap.MARKS},  # the minimap: off until the player turns it on
             "mapSize": round(560 * scale), "mapX": round(40 * scale), "mapY": round(1100 * scale),
-            "logKey": [], "logKeyName": "", "hideCrash": False, "hideUnknown": False,
+            "logKey": [], "logKeyName": "", "showWreck": False, "hideUnknown": False,
             "sheetKey": [], "sheetKeyName": "", "profileKey": [], "profileKeyName": "",
             "lines": [*lines, _line({"text": "REC", "when": "log", "color": "#FF0000"})]}
 
@@ -430,7 +433,7 @@ def clean(cfg, words: dict) -> dict:
            "size": _num(cfg.get("size"), base["size"], 6, 400), "bold": _flag(cfg.get("bold"), base["bold"]),
            "color": _color(cfg.get("color"), base["color"]), "alert": _color(cfg.get("alert"), base["alert"]),
            "opacity": _num(cfg.get("opacity"), base["opacity"], 10, 100), "show": _flag(cfg.get("show"), base["show"]),
-           "hideCrash": _flag(cfg.get("hideCrash"), base["hideCrash"]), "hideUnknown": _flag(cfg.get("hideUnknown"), base["hideUnknown"]),
+           "showWreck": _flag(cfg.get("showWreck"), base["showWreck"]), "hideUnknown": _flag(cfg.get("hideUnknown"), base["hideUnknown"]),
            "valueColor": _color(cfg.get("valueColor"), ""), "unitColor": _color(cfg.get("unitColor"), ""), **_look(cfg),
            "pctAlways": _flag(cfg.get("pctAlways"), base["pctAlways"]),
            "italic": _flag(cfg.get("italic"), base["italic"]), "spacing": _num(cfg.get("spacing"), base["spacing"], -50, 200),
@@ -773,9 +776,9 @@ def read_indicators(raw: bytes | None) -> dict:
 def flying(raw: bytes | None, in_mission=lambda: True) -> dict | None:
     """/state while in the air, else None. In the hangar it is valid too, the aircraft on show flickering between 0 and
     1 km/h, mostly without fuel, but not always (the Swiss F/A-18C has 925 kg there, 2026-11-08): standing still or with
-    empty tanks, only a loaded map tells a real flight."""
+    empty tanks, only a loaded map tells a real flight; in a battle, stopped on the ground still is one."""
     state = answer(raw)
-    if "Mfuel0, kg" not in state or not state.get("IAS, km/h"):
+    if "Mfuel0, kg" not in state or not isinstance(state.get("IAS, km/h"), (int, float)):
         return None
     hangar_like = state.get("Mfuel, kg") == 0 or state["IAS, km/h"] <= HANGAR_IAS
     return None if hangar_like and not in_mission() else state
@@ -1136,6 +1139,8 @@ class Watch:
         self.preview_key = ""  # the overlay shown by preview: an aircraft's own gives its HUD style
         self.on = []  # the alarms on, for the cockpit window's HUD
         self.flying = False
+        self._seen, self._moves, self._live = None, 0, False  # see moving
+        self._marked, self._here, self._looked = False, None, -MARKER_S  # your marker: seen in this battle, there now
         self.crash = False  # in the wreck, until the next spawn
         self.warn = False  # an alarm is on
         self.glow = None  # the glow it lights, see glow_of
@@ -1457,11 +1462,50 @@ class Watch:
         self.pick()
         print(f"Alarms: Mfuel0={key[0]}, reported={reported}, saved model={model}, limits={self._lim}", flush=True)
 
+    def moving(self, state: dict | None) -> dict | None:
+        """/state in a battle, from the spawn to the death or the aircraft left. Your marker on the game's map tells it
+        (2.60: there a second after the spawn, gone at the death, at the battle's end, and while choosing a vehicle) once
+        it has shown in this battle; until then (and if a mode hides it), the numbers: having chosen a vehicle, the game
+        shows it frozen (17 s at 266 km/h and 2,836 m, RPM 7000, throttle 0), while in flight every reading differs (37 of
+        37 at 10 a second), so a life starts after LIVE_READINGS changes in a row. Stopped or paused, it goes on."""
+        if state is None:
+            self._seen, self._moves, self._live = None, 0, False
+            if self._marked and not self.in_mission():  # the battle is over
+                self._marked, self._here = False, None
+            return None
+        now = time.monotonic()
+        if now - self._looked >= MARKER_S:
+            self._looked = now
+            here = self.on_map()
+            if here is not None:
+                self._here, self._marked = here, self._marked or here
+        rpm = _engines(state)[0]
+        if self.crash and rpm and not any(rpm):  # the wreck: shown as such (showWreck), the next life starts over
+            self._seen, self._moves, self._live = state, 0, False
+            return state
+        self._moves = self._moves + 1 if state != self._seen else 0
+        self._seen = state
+        gone = self._marked and not self._here
+        self._live = not gone and (self._live or self._moves >= LIVE_READINGS or bool(self._marked and self._here))
+        return state if self._live else None
+
+    def on_map(self) -> bool | None:
+        """Is your marker on the game's map? None when the game doesn't say."""
+        try:
+            return any(isinstance(o, dict) and o.get("icon") == "Player" for o in json.loads(self.get("/map_obj.json")))
+        except (TypeError, ValueError):
+            return None
+
     def tick(self) -> float:
         """One reading of /state; returns the time until the next one."""
         wanted = self.enabled or self.log or time.monotonic() - self.viewed < VIEW_S
         state = flying(self.get("/state"), self.in_mission) if wanted else None
-        vehicle = driving(self.get("/indicators")) if wanted and state is None else None
+        raw = self.get("/indicators") if wanted else None
+        if state and reported_type(read_indicators(raw)) == SPAWN_SCREEN:
+            state = None
+        if state is None or self.in_mission():
+            state = self.moving(state)
+        vehicle = driving(raw) if state is None else None
         self.flying = state is not None or vehicle is not None
         self.follow_battle()
         if vehicle:
@@ -1480,13 +1524,15 @@ class Watch:
             self.trend, self.wep, self.broken, self._since = Trend(), Wep(), set(), {}
             self.current, self.forced = None, None
             self.pick()
-            self.crash, self._before, self._log_id = False, None, None  # a game started again numbers its log from 1
+            # self.crash stays until the next spawn's engines: the wreck must not start a life (moving)
+            self._before, self._log_id = None, None  # a game started again numbers its log from 1
             return self.shown_cfg()["pollMs"] / 1000 if self.trial else IDLE_S
-        self.crash = crashed(self._before, state) or (self.crash and not any(_engines(state)[0]))
+        rpm = _engines(state)[0]
+        self.crash = crashed(self._before, state) or (self.crash and bool(rpm) and not any(rpm))
         self._before = state
         self.read_log()
         wreck = self.crash or time.monotonic() < self._silent
-        indicators = read_indicators(self.get("/indicators"))  # every time: it may only start answering mid-flight
+        indicators = read_indicators(raw)  # every reading: it may only start answering mid-flight
         reported = reported_type(indicators)
         self.aircraft(state, reported)
         cfg, lim = self.preview or self.cfg, self._lim
@@ -1518,7 +1564,7 @@ class Watch:
         note = self.words["unknown"] if not lim else self.words["unbreakable"] if self._unbreakable else None
         tint = cfg["alert"] if not lim else cfg["color"]
         status = [(note, tint, cfg["size"], False, 0, [(note, tint, False)])] if note else []
-        hidden = (wreck and cfg["hideCrash"]) or (not lim and cfg["hideUnknown"])
+        hidden = (wreck and not cfg["showWreck"]) or (not lim and cfg["hideUnknown"])
         self.read_feeds(cfg)
         if trying:
             self.display = self.trial_frame(self._real)  # its lines, its glow, its beeps

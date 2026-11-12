@@ -657,7 +657,7 @@
   "ov.bgRemove": "移除截图",
   "ov.bgHint": "在飞行中截图并在此选择,或用 Ctrl+V 粘贴:即可将文字放在真实的 HUD 上。没有截图时,这里是 16:9 屏幕上的 HUD 轮廓。",
   "ov.show": "飞行时显示窗口(否则仅蜂鸣)",
-  "ov.hideCrash": "坠毁后隐藏叠加层(蜂鸣总会停止)",
+  "ov.showWreck": "被击落或坠毁后保留叠加层(蜂鸣总会停止)",
   "ov.hideUnknown": "飞机未知时隐藏叠加层",
   "ov.glow": "光晕",
   "ov.italic": "斜体",

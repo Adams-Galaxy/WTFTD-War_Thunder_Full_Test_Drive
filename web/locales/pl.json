@@ -657,7 +657,7 @@
   "ov.bgRemove": "Usuń zrzut ekranu",
   "ov.bgHint": "Zrób zrzut ekranu w locie i wybierz go tutaj albo wklej przez Ctrl+V: umieścisz tekst na prawdziwym HUD. Bez zrzutu to zarys HUD na ekranie 16:9.",
   "ov.show": "Pokazuj okno w locie (inaczej tylko sygnały)",
-  "ov.hideCrash": "Ukryj nakładkę po rozbiciu (sygnały zawsze cichną)",
+  "ov.showWreck": "Zostaw nakładkę po zestrzeleniu lub rozbiciu (sygnały zawsze cichną)",
   "ov.hideUnknown": "Ukryj nakładkę, dopóki samolot jest nieznany",
   "ov.glow": "Poświata",
   "ov.italic": "Kursywa",

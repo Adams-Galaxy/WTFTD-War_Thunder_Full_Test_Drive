@@ -13,6 +13,12 @@ from unittest import mock
 
 from wtftd import alarms, battle, blk, builder, cdk, flightlog, server
 
+
+def setUpModule():  # a battle's flight waits for its numbers to move (Watch.moving, tested in Crash): here one reading flies
+    patcher = mock.patch.object(alarms, "LIVE_READINGS", 1)
+    patcher.start()
+    unittest.addModuleCleanup(patcher.stop)
+
 SU30 = {"v": 1540, "m": 2.1, "gear": 700, "flaps": [[0.2, 1018], [1, 600]], "fuel": [9400, 9400], "eng": 2}
 J10 = {"v": 1543, "m": 2.1, "gear": 620, "flaps": [[0.1, 550], [1, 400]], "fuel": [5945, 6220.02], "eng": 1}
 PLANES = {"su_30mkk": SU30, "j_10c": J10, "j_10_twin": dict(J10, v=900), "j_10a": dict(J10)}
@@ -735,10 +741,11 @@ class Watching(unittest.TestCase):
 
     def test_wep_left(self):
         self.data = details({"j_10c": dict(J10, wep=[60, 0.5])})  # 120 s of WEP
-        times = iter([10.0, 10.0, 10.0, 11.0, 11.0, 11.0, 12.0, 12.0, 12.0, 13.0, 13.0, 13.0])
-        with mock.patch.object(alarms.time, "monotonic", side_effect=lambda: next(times, 13.0)):
+        clock = [10.0]  # a reading a second
+        with mock.patch.object(alarms.time, "monotonic", lambda: clock[0]):
             for throttle in (110, 110, 100, 100):
                 self.fly(**{"throttle 1, %": throttle})
+                clock[0] += 1
         self.assertAlmostEqual(self.watch.wep.left(self.watch._lim)["wep_s"], 118, delta=1)
 
     def test_g_load_and_aoa_alarms(self):
@@ -1066,13 +1073,15 @@ class Watching(unittest.TestCase):
         self.assertFalse(self.watch.warn)
 
     def test_not_flying(self):
-        for reply in (None, b"", b"not json", b"[]", b'{"valid": false}', b'{"valid": true}',
-                      json.dumps(state(**{"IAS, km/h": 0})).encode()):
+        for reply in (None, b"", b"not json", b"[]", b'{"valid": false}', b'{"valid": true}'):
             self.watch.display = [("x", "#000000", 40)]
             self.reply = reply
             self.assertEqual(self.watch.tick(), alarms.IDLE_S, reply)
             self.assertEqual(self.watch.display, [], reply)
         self.beep.assert_not_called()
+        stopped = state(**{"IAS, km/h": 0})
+        self.assertIsNone(alarms.flying(json.dumps(stopped).encode(), lambda: False))  # the hangar
+        self.assertEqual(alarms.flying(json.dumps(stopped).encode(), lambda: True), stopped)  # stopped in a battle
 
     def test_disabled(self):
         self.watch.enabled = False
@@ -1785,14 +1794,15 @@ class Crash(unittest.TestCase):
         self.assertEqual(self.beep.call_count, 1)
         self.assertNotIn(self.watch.cfg["alert"], [x[1] for x in self.watch.display])
 
-    def test_the_overlay_stays_unless_asked(self):
+    def test_the_overlay_hides_unless_kept(self):
         self.fly()
-        self.fly(**{"throttle 1, %": 0, "RPM 1": 0})
         self.assertTrue(self.watch.display)
-        self.watch.set_config(alarms.clean({"hideCrash": True}, WORDS), {})
         self.fly(**{"throttle 1, %": 0, "RPM 1": 0})
         self.assertTrue(self.watch.crash)
         self.assertEqual(self.watch.display, [])
+        self.watch.set_config(alarms.clean({"showWreck": True}, WORDS), {})
+        self.fly(**{"throttle 1, %": 0, "RPM 1": 0})
+        self.assertTrue(self.watch.display)
 
     def test_the_next_spawn_ends_it(self):
         self.fly()
@@ -1802,12 +1812,91 @@ class Crash(unittest.TestCase):
         self.fly(**{"throttle 1, %": 100, "RPM 1": 13008, "IAS, km/h": 527})
         self.assertFalse(self.watch.crash)
 
-    def test_a_wreck_at_rest_ends_it(self):  # IAS 0: /state stops counting as flying
+    def test_a_wreck_at_rest_stays_a_wreck(self):  # 2.60, shot down: the wreck reads 3 or 4 km/h until the next spawn
+        self.fly()
+        self.fly(**{"throttle 1, %": 0, "RPM 1": 0, "IAS, km/h": 463})
+        self.fly(**{"throttle 1, %": 0, "RPM 1": 0, "IAS, km/h": 0})  # not flying for that reading
+        self.fly(**{"throttle 1, %": 0, "RPM 1": 0, "IAS, km/h": 3})  # used to start a flight over: the overlay came back
+        self.assertTrue(self.watch.crash)
+        self.assertEqual(self.watch.display, [])
+
+    def test_an_aircraft_without_engine_numbers_ends_it(self):
         self.fly()
         self.fly(**{"throttle 1, %": 0, "RPM 1": 0})
-        self.fly(**{"throttle 1, %": 0, "RPM 1": 0, "IAS, km/h": 0})
+        self.reply = json.dumps({k: v for k, v in state().items() if not k.startswith("throttle")}).encode()
+        self.watch.tick()
         self.assertFalse(self.watch.crash)
-        self.assertEqual(self.watch.display, [])
+
+    def test_the_vehicle_choice_is_no_flight(self):  # a battle's start on 2.60, F/A-18C, as recorded on 2026-11-11
+        replies = {"/state": json.dumps(state(**{"IAS, km/h": 266, "H, m": 2836, "RPM 1": 2550})).encode(),
+                   "/indicators": json.dumps({"valid": True, "army": "air", "type": "dummy_plane"}).encode(),
+                   "/map_info.json": json.dumps({"valid": True}).encode()}
+        self.watch.get = replies.get
+        clock = [100.0]
+        chosen = json.dumps(state(**{"IAS, km/h": 266, "H, m": 2836, "RPM 1": 7000, "throttle 1, %": 0})).encode()
+
+        def ticks(n=1):
+            for _ in range(n):
+                self.watch.tick()
+                clock[0] += 0.1
+
+        def spawn():
+            for i in range(3):  # every reading differs
+                replies["/state"] = json.dumps(state(**{"IAS, km/h": 855 - i, "H, m": 4016, "RPM 1": 7647 + i})).encode()
+                ticks()
+
+        with mock.patch.object(alarms, "LIVE_READINGS", 3), mock.patch.object(alarms.time, "monotonic", lambda: clock[0]):
+            ticks()  # the game's stand-in first
+            self.assertFalse(self.watch.flying)
+            replies["/indicators"] = json.dumps({"valid": True, "army": "air", "type": "j_10c"}).encode()
+            replies["/state"] = chosen
+            for _ in range(170):  # then the aircraft chosen, frozen for 17 s
+                ticks()
+                self.assertFalse(self.watch.flying)
+                self.assertEqual(self.watch.display, [])
+            spawn()
+            self.assertTrue(self.watch.flying)
+            self.assertTrue(self.watch.display)
+            replies["/state"] = json.dumps(state(**{"IAS, km/h": 0, "H, m": 32, "RPM 1": 2400, "throttle 1, %": 0})).encode()
+            ticks(300)  # landed and stopped, 30 s with nothing moving: still shown, until the death
+            self.assertTrue(self.watch.flying)
+            self.assertTrue(self.watch.display)
+            spawn()
+            replies["/state"] = json.dumps(state(**{"IAS, km/h": 463, "RPM 1": 0, "throttle 1, %": 0})).encode()
+            ticks()  # shot down
+            replies["/state"] = json.dumps(state(**{"IAS, km/h": 4, "H, m": 1347, "RPM 1": 0, "throttle 1, %": 0})).encode()
+            ticks(50)
+            self.assertEqual(self.watch.display, [])
+            replies["/state"] = chosen  # the next aircraft chosen: no life yet
+            ticks(50)
+            self.assertFalse(self.watch.flying)
+            self.assertEqual(self.watch.display, [])
+            spawn()
+            self.assertTrue(self.watch.display)
+
+    def test_your_marker_on_the_map_tells_a_life(self):  # modes with respawns: an aircraft left or switched, no death
+        mine = json.dumps([{"type": "aircraft", "icon": "Player", "x": 0.5, "y": 0.5, "dx": 0, "dy": -1}]).encode()
+        replies = {"/map_info.json": json.dumps({"valid": True}).encode(),
+                   "/indicators": json.dumps({"valid": True, "army": "air", "type": "j_10c"}).encode()}
+        self.watch.get = replies.get
+        clock, n = [100.0], [0]
+
+        def ticks(k, marker):
+            replies["/map_obj.json"] = mine if marker else b"[]"
+            for _ in range(k):
+                n[0] += 1
+                replies["/state"] = json.dumps(state(**{"IAS, km/h": 500 + n[0] % 7, "RPM 1": 13000})).encode()  # moving
+                self.watch.tick()
+                clock[0] += 0.1
+
+        with mock.patch.object(alarms, "LIVE_READINGS", 3), mock.patch.object(alarms.time, "monotonic", lambda: clock[0]):
+            ticks(20, True)
+            self.assertTrue(self.watch.display)
+            ticks(20, False)  # gone from the map: the aircraft left may still move, its overlay goes within a second
+            self.assertFalse(self.watch.flying)
+            self.assertEqual(self.watch.display, [])
+            ticks(20, True)  # spawned again
+            self.assertTrue(self.watch.display)
 
     def test_recording_goes_on(self):
         self.watch.viewed = time.monotonic()

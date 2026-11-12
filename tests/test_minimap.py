@@ -6,7 +6,7 @@ import sys
 import unittest
 from unittest import mock
 
-from tests.test_alarms import WORDS, details, state
+from tests.test_alarms import WORDS, details, setUpModule, state  # setUpModule: one reading flies, as there
 from tests.test_overlay_text import PAINTER, painter
 from wtftd import alarms, minimap
 
@@ -147,7 +147,8 @@ class Read(unittest.TestCase):
         self.objects = list(OBJECTS)
         self.picture = b"\xff\xd8 a map" * 200
         planes = {"f_15a": {"v": 1480, "m": 2.5, "gear": 460, "fuel": [5945], "eng": 2, "jet": True}}
-        answers = {"/state": lambda: json.dumps(state()).encode(), "/indicators": lambda: json.dumps({"valid": True, "type": "f_15a"}).encode(),
+        climb = iter(range(10 ** 6))  # in flight every reading differs (alarms.Watch.moving)
+        answers = {"/state": lambda: json.dumps(state(**{"Vy, m/s": next(climb)})).encode(), "/indicators": lambda: json.dumps({"valid": True, "type": "f_15a"}).encode(),
                    "/map_info.json": lambda: json.dumps(INFO).encode(), "/map_obj.json": lambda: json.dumps(self.objects).encode(),
                    "/map.img?gen=3": lambda: self.picture}
         self.watch = alarms.Watch(lambda path: answers.get(path, lambda: None)(), lambda: details(planes), lambda: False, lambda: None)

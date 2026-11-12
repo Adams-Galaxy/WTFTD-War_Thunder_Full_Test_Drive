@@ -418,7 +418,20 @@ counts. Replayed on the same flight: the name learnt 0.4 s after the first impac
 - [ ] **Propeller aircraft and multi-engine ones**: single engine, four engines.
 - [ ] **Helicopter**: does `RPM` read above 500 at all? Below that nothing is detected.
 - [ ] **Engine shot out, then gliding to the ground**: no engine left to fall to 0, so no detection: acceptable?
-- [ ] **Hide the overlay after a crash** on: gone at the impact, back at the next spawn.
+- [x] **Shot down** (F/A-18C, 2.60, 2026-11-11): RPM and throttle to 0 in one reading, the player's marker gone from
+  `/map_obj.json`, then the wreck in `/state` at 3 or 4 km/h until the battle's end. The overlay used to stay on it.
+- [ ] **After a death** (the overlay hides by default since): gone at the impact, still gone while the wreck reads
+  0 km/h now and then, back at the next spawn. **Keep the overlay once shot down or crashed** on: stays on the wreck.
+- [ ] **Choosing a vehicle in a battle** (2026-11-11: `/indicators` type `dummy_plane` 3 s, then the aircraft chosen,
+  its real type, `/state` frozen 17 s at 266 km/h, 2,836 m, RPM 7000, throttle 0, no `Player` on `/map_obj.json`): no
+  overlay until the spawn, then within 0.3 s (the first life of a battle) or a second (the next ones, by the marker).
+  Switching aircraft on that screen: still none.
+- [x] **Battle's end** (2026-11-12): throttle 0, the marker gone, then the hangar 5 s later.
+- [ ] **Landed and stopped** on an airfield, and **the game paused** in a test flight: the overlay stays.
+- [ ] **A mode with respawns**: leave the aircraft or switch it without dying: the overlay goes within a second, back
+  after the next spawn.
+- [ ] **Simulator**: is your marker on `/map_obj.json`? Without it the overlay follows the numbers only, and the
+  marker's checks (leaving an aircraft, the battle's end) don't apply.
 - [ ] **Hide the overlay while the aircraft is unknown** on: nothing at a spawn the app can't recognise, the lines back as soon as it does.
 - [ ] **Break-up in the air** as the first crash of the session: with a replay on the PC the beeps stop at once; without one, no
   name yet, so they go on for those few seconds.

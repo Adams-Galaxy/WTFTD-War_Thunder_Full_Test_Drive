@@ -657,7 +657,7 @@
   "ov.bgRemove": "Rimuovi lo screenshot",
   "ov.bgHint": "Fai uno screenshot in volo e sceglilo qui, o incollalo con Ctrl+V: così posizioni il testo sul tuo vero HUD. Senza screenshot, è un contorno dell'HUD su uno schermo 16:9.",
   "ov.show": "Mostra la finestra in volo (altrimenti solo segnali)",
-  "ov.hideCrash": "Nascondi l'overlay dopo uno schianto (i segnali si fermano sempre)",
+  "ov.showWreck": "Mantieni l'overlay dopo un abbattimento o uno schianto (i segnali si fermano sempre)",
   "ov.hideUnknown": "Nascondi l'overlay finché l'aereo è sconosciuto",
   "ov.glow": "Alone",
   "ov.italic": "Corsivo",

@@ -657,7 +657,7 @@
   "ov.bgRemove": "Remover a captura",
   "ov.bgHint": "Faça uma captura em voo e escolha-a aqui, ou cole com Ctrl+V: assim você posiciona o texto no seu HUD real. Sem captura, é um contorno do HUD em uma tela 16:9.",
   "ov.show": "Mostrar a janela em voo (senão: só bipes)",
-  "ov.hideCrash": "Ocultar o overlay após uma queda (os bipes sempre param)",
+  "ov.showWreck": "Manter o overlay após ser abatido ou cair (os bipes sempre param)",
   "ov.hideUnknown": "Ocultar o overlay enquanto a aeronave for desconhecida",
   "ov.glow": "Halo",
   "ov.italic": "Itálico",

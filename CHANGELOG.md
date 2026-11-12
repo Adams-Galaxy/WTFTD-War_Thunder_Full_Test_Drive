@@ -4,6 +4,19 @@ What changed in each version of WTFTD. Downloads: [Releases](https://github.com/
 (only the latest version is kept there; from 0.19.0 on, each version's code stays available through its git tag).
 Versions follow `major.minor.patch`; "beta" until 1.0.
 
+## Not released yet
+
+- **The overlay in a battle: from your spawn to your death.** It shows from the spawn and stays, stopped on an airfield or
+  the game paused, until you're shot down or crash, leave or switch your aircraft (modes with respawns), or the battle
+  ends. Your marker on the game's map tells it, read once a second; until it has shown in the battle (and if a mode
+  hides it), a flight starts when its numbers move.
+- **Fixed: the overlay showed before a spawn.** While you choose a vehicle, the game first flies a stand-in aircraft
+  (`dummy_plane`), then shows the one you chose, its numbers frozen until the spawn: WTFTD took them for your flight.
+- **Fixed: the overlay hid when stopped, and stayed or came back blinking after a death.** A stop at 0 km/h ended the
+  flight, and a wreck reading 0 km/h now and then started one over. It now hides once you're shot down or crash, until
+  the next spawn; to keep it on the wreck as before: My overlay → Behaviour → **Keep the overlay once shot down or
+  crashed**.
+
 ## 0.29.0 - 2026-11-11
 
 - **Linux**: WTFTD runs on Linux (x86-64). Download `WTFTD-<version>-linux.tar.gz`, unpack it and run `./WTFTD`, or run

@@ -657,7 +657,7 @@
   "ov.bgRemove": "Quitar la captura",
   "ov.bgHint": "Haz una captura en vuelo y elígela aquí, o pégala con Ctrl+V: así colocas el texto sobre tu HUD real. Sin captura, es un contorno del HUD en una pantalla 16:9.",
   "ov.show": "Mostrar la ventana en vuelo (si no: solo pitidos)",
-  "ov.hideCrash": "Ocultar el overlay tras un accidente (los pitidos siempre paran)",
+  "ov.showWreck": "Mantener el overlay tras ser derribado o estrellarse (los pitidos siempre paran)",
   "ov.hideUnknown": "Ocultar el overlay mientras el avión sea desconocido",
   "ov.glow": "Halo",
   "ov.italic": "Cursiva",
