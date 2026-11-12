@@ -4,7 +4,7 @@ What changed in each version of WTFTD. Downloads: [Releases](https://github.com/
 (only the latest version is kept there; from 0.19.0 on, each version's code stays available through its git tag).
 Versions follow `major.minor.patch`; "beta" until 1.0.
 
-## Not released yet
+## 0.30.0 - 2026-11-12
 
 - **The overlay in a battle: from your spawn to your death.** It shows from the spawn and stays, stopped on an airfield or
   the game paused, until you're shot down or crash, leave or switch your aircraft (modes with respawns), or the battle
