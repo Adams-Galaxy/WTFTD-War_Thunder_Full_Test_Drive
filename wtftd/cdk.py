@@ -1,7 +1,7 @@
 """Custom vehicles for user missions (War Thunder CDK "userVehicles" mechanism).
 
 A user mission can use `unit_class:t="userVehicles/<host>"`: the game loads
-content/pkg_local/gameData/<units folder>/userVehicles/<host>.blk. We write that file as
+content/pkg_local/<game data>/<units folder>/userVehicles/<host>.blk. We write that file as
 `include` of the real vehicle + `@override:` lines for the user's modifications.
 <host> is a reserve vehicle every account owns (US reserves by default).
 
@@ -16,6 +16,7 @@ from __future__ import annotations
 import json
 import re
 import shutil
+import sys
 import time
 from pathlib import Path
 
@@ -33,16 +34,9 @@ DEFAULT_HOSTS = {
     "boat": "us_pt6",
     "ship": "us_destroyer_clemson_litchfield",
 }
-UNIT_DIRS = {
-    "ground": "gameData/units/tankModels",
-    "air": "gameData/flightModels",
-    "heli": "gameData/flightModels",
-    "boat": "gameData/units/ships",
-    "ship": "gameData/units/ships",
-}
 CUSTOM_PRESET = "wtftd_custom"
 # How aircraft / helicopters are loaded:
-#   "custom"       - new aircraft file content/pkg_user/gameData/flightModels/wtftd_<id>.blk (CDK docs);
+#   "custom"       - new aircraft file content/pkg_user/<game data>/flightModels/wtftd_<id>.blk (CDK docs);
 #                    the ownership check only applies to shop vehicles.
 #   "userVehicles" - same as ground vehicles (tested: the game loads the real host aircraft instead).
 AIR_METHODS = ("custom", "userVehicles")
@@ -51,6 +45,30 @@ PACKAGES = ("pkg_local", "pkg_user")
 
 class CdkError(Exception):
     pass
+
+
+def game_data_root() -> str:
+    """Game-data path used for locally written CDK assets.
+
+    The Linux client looks up custom files in the lower-case ``gamedata`` tree.
+    Keep the spelling documented by the CDK on Windows and macOS, whose usual
+    file systems are case-insensitive.
+    """
+    return "gamedata" if sys.platform.startswith("linux") else "gameData"
+
+
+def _unit_dir(category: str) -> str:
+    folders = {
+        "ground": "units/tankModels",
+        "air": "flightModels",
+        "heli": "flightModels",
+        "boat": "units/ships",
+        "ship": "units/ships",
+    }
+    try:
+        return f"{game_data_root()}/{folders[category]}"
+    except KeyError:
+        raise CdkError("Unsupported vehicle type") from None
 
 
 def _r(v) -> str:
@@ -650,12 +668,11 @@ def build_files(vid: str, cat: str, details: dict, mods: dict, host: str, pylons
     name = tag or vid
     if not SAFE.match(vid) or not SAFE.match(name) or (not custom_name and not SAFE.match(host or "")):
         raise CdkError("Invalid vehicle or host id")
-    if cat not in UNIT_DIRS:
-        raise CdkError("Unsupported vehicle type")
     mods = mods or {}
     st = details.get("st") or {}
     files: dict[str, str] = {}
-    unit_dir = UNIT_DIRS[cat]
+    unit_dir = _unit_dir(cat)
+    game_data = game_data_root()
     if custom_name:
         unit_class = f"wtftd_{name}".lower()
         host_path = f"{unit_dir}/{unit_class}.blk"
@@ -713,7 +730,7 @@ def build_files(vid: str, cat: str, details: dict, mods: dict, host: str, pylons
         wfile = ""
         if (reload_s or shells) and g.get("p"):
             wname = f"{name}_w{g['wi']}".lower()
-            wfile = f"gameData/Weapons/wtftd/{wname}.blk"
+            wfile = f"{game_data}/Weapons/wtftd/{wname}.blk"
             wb = _header(f"{vid} weapon {g['wi']}", g["p"])
             if reload_s:
                 wb.real("shotFreq", 1.0 / reload_s)
@@ -758,7 +775,7 @@ def build_files(vid: str, cat: str, details: dict, mods: dict, host: str, pylons
         # fmFile could otherwise be looked up next to it and not be found
         if st.get("fm"):
             fm_name = f"wtftd_{name}".lower()
-            fb = _header(f"{vid} flight model", f"gameData/flightModels/{st['fm']}")
+            fb = _header(f"{vid} flight model", f"{game_data}/flightModels/{st['fm']}")
             tree: dict = {}  # {path: (type, value)}, one block per section
             if isinstance(fm_data, dict) and isinstance(engine_fm, dict):
                 tree.update(_engine_overrides(fm_data, engine_fm))
@@ -791,9 +808,9 @@ def build_files(vid: str, cat: str, details: dict, mods: dict, host: str, pylons
             _write_tree(fb, tree)
             text = str(fb)
             # fmFile may be resolved from flightModels/ or next to the unit file: provide both
-            files[f"gameData/flightModels/fm/{fm_name}.blk"] = text
+            files[f"{game_data}/flightModels/fm/{fm_name}.blk"] = text
             if not custom_name:
-                files[f"gameData/flightModels/userVehicles/fm/{fm_name}.blk"] = text
+                files[f"{game_data}/flightModels/userVehicles/fm/{fm_name}.blk"] = text
             b.text("fmFile", f"fm/{fm_name}.blk")
 
         # aircraft with fixed presets only: "lp" = their attachment points (emitters), taken from those presets
@@ -829,7 +846,7 @@ def build_files(vid: str, cat: str, details: dict, mods: dict, host: str, pylons
                             key = (w["p"], custom.split("\n", 1)[1])  # without the header line (its time)
                             if key not in variants:
                                 stem = w["p"].replace("\\", "/").rsplit("/", 1)[-1]
-                                variants[key] = f"gameData/Weapons/wtftd/{name.lower()}_{len(variants) + 1}/{stem}"
+                                variants[key] = f"{game_data}/Weapons/wtftd/{name.lower()}_{len(variants) + 1}/{stem}"
                                 files[variants[key]] = custom
                                 tube = _in_tube(variants[key], custom) if w.get("air") else None
                                 if tube:
@@ -874,11 +891,11 @@ def build_files(vid: str, cat: str, details: dict, mods: dict, host: str, pylons
                         b.line("}")
                         b.close()
                     b.close()
-                files[f"gameData/flightModels/weaponPresets/{pname}.blk"] = str(pb)
+                files[f"{game_data}/flightModels/weaponPresets/{pname}.blk"] = str(pb)
                 b.line('"@override:weapon_presets"{')
                 b.line("  preset{")
                 b.line(f'    name:t="{CUSTOM_PRESET}"')
-                b.line(f'    blk:t="gameData/flightModels/weaponPresets/{pname}.blk"')
+                b.line(f'    blk:t="{game_data}/flightModels/weaponPresets/{pname}.blk"')
                 b.line("  }")
                 b.line("}")
                 preset = CUSTOM_PRESET

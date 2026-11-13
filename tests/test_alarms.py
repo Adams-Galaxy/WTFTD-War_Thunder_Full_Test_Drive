@@ -447,9 +447,9 @@ class SurfaceMissiles(unittest.TestCase):
         with mock.patch.object(cdk, "_air_copy", return_value=self.aster()):
             files = cdk.build_files("x", "air", details, {}, "", {"1": {"w": "aster", "n": 1}, "2": {"w": "aster", "n": 1}}, "custom", None, catalog)[0]
         self.assertEqual(sorted(k for k in files if "Weapons/wtftd" in k),
-                         ["gameData/Weapons/wtftd/x_1/aster.blk", "gameData/Weapons/wtftd/x_1_missile/aster.blk"])
+                         [f"{cdk.game_data_root()}/Weapons/wtftd/x_1/aster.blk", f"{cdk.game_data_root()}/Weapons/wtftd/x_1_missile/aster.blk"])
         text = next(v for k, v in files.items() if "weaponPresets" in k)
-        self.assertEqual(text.count('blk:t="gameData/Weapons/wtftd/x_1/aster.blk"'), 2)
+        self.assertEqual(text.count(f'blk:t="{cdk.game_data_root()}/Weapons/wtftd/x_1/aster.blk"'), 2)
         self.assertNotIn("bullets", text)  # a container says how many it holds
 
     def test_an_atgm_keeps_its_type(self):

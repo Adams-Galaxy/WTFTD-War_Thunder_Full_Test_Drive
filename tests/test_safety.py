@@ -2,6 +2,7 @@
 only answers its own page."""
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 from wtftd import cdk, mission, server
@@ -110,7 +111,7 @@ class JetThrust(unittest.TestCase):
         fm = {"EngineType0": {"Main": {"Thrust": 6000.0, "ThrustMax": {"ThrustMax0": 6260.0, "ThrustMaxCoeff_0_0": 0.99}}},
               "Engine0": {"Main": {"FuelSystemNum": 0}}}
         files = cdk.build_files("x", "air", det, {"thrustMul": 3}, "", None, "custom", None, {}, fm_data=fm)[0]
-        text = files["gameData/flightModels/fm/wtftd_x.blk"]
+        text = files[f"{cdk.game_data_root()}/flightModels/fm/wtftd_x.blk"]
         self.assertIn('"@override:ThrustMax0":r=18780', text)  # what the game uses for a jet's maximum thrust
         self.assertNotIn("Engine0", text)
 
@@ -130,7 +131,7 @@ class SuperMobility(unittest.TestCase):
                                 ("Engine0", "Compressor", "PowerAtCeiling0"): ("r", 1500.0)})
         det = {"st": {"fm": "fm/x.blk", "mass": 1000.0}}
         files = cdk.build_files("x", "air", det, {"superMobility": True}, "", None, "custom", None, {}, fm_data=fm)[0]
-        self.assertIn('"@override:EmptyMass":r=600', files["gameData/flightModels/fm/wtftd_x.blk"])  # 40 % lighter
+        self.assertIn('"@override:EmptyMass":r=600', files[f"{cdk.game_data_root()}/flightModels/fm/wtftd_x.blk"])  # 40 % lighter
 
 
 class CustomPylonWeapons(unittest.TestCase):
@@ -157,6 +158,20 @@ class CustomPylonWeapons(unittest.TestCase):
         self.assertIsNone(cdk._custom_weapon(dict(bomb, pod=6), {"e": 1}, "x"))  # launchers: not yet
         with self.assertRaises(cdk.CdkError):
             cdk._custom_weapon(bomb, {"e": -1}, "x")
+
+
+class CustomAssetRoot(unittest.TestCase):
+    def test_linux_uses_the_case_sensitive_asset_root(self):
+        with mock.patch.object(cdk.sys, "platform", "linux"):
+            self.assertEqual(cdk.game_data_root(), "gamedata")
+            files = cdk.build_files("x", "air", {"st": {"fm": "fm/x.blk"}}, {}, "", None, "custom")[0]
+        self.assertIn("gamedata/flightModels/wtftd_x.blk", files)
+        self.assertIn("gamedata/flightModels/fm/wtftd_x.blk", files)
+
+    def test_other_platforms_keep_cdk_spelling(self):
+        for platform in ("win32", "darwin"):
+            with self.subTest(platform=platform), mock.patch.object(cdk.sys, "platform", platform):
+                self.assertEqual(cdk.game_data_root(), "gameData")
 
 
 class MyWeapons(unittest.TestCase):
